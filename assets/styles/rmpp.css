@@ -1,0 +1,14 @@
+@page {
+    /* reMarkable Paper Pro Size: */
+    size: 1620px 2160px;
+    margin: 1cm 2.5cm 0.75cm;
+}
+
+@media print {
+    body {
+        /* Base font size suitable for general reading. Fairly small. */
+        font-size: 8pt !important;
+        /* Increases spacing between lines for easier readability */
+        line-height: 1.8;
+    }
+}

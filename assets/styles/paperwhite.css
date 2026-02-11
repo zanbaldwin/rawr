@@ -1,0 +1,9 @@
+@page {
+    /* Kindle Paperwhite (11th Gen) */
+    size: 10.4cm 13.8cm;
+    margin: 0.5cm 0.5cm;
+}
+body {
+    /* Good default size for Kindle; I'm not good enough at CSS to figure out what this is in absolute units */
+    font-size: 60%;
+}

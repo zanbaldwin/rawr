@@ -1,0 +1,23 @@
+[alias]
+# Use string instead of array to guarantee alias replaces whatever is in
+# global config or errors, rather than concatenating.
+deploy = "build --profile deploy --target x86_64-unknown-linux-musl"
+
+[profile.deploy]
+inherits = "release"
+opt-level = "s"
+debug = "none"
+strip = true
+debug-assertions = false
+overflow-checks = false
+lto = "fat"
+codegen-units = 1
+
+# Needs: `apt install musl-tools` or `dnf install musl-gcc`.
+[target.x86_64-unknown-linux-musl]
+rustflags = [
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "link-self-contained=yes",
+]

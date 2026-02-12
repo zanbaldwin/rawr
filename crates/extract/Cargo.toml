@@ -1,0 +1,20 @@
+[package]
+name = "rawr-extract"
+description = "HTML parsing and metadata extraction for AO3 work downloads"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+fast_html2md = { workspace = true, features = ["rewriter"] }
+regex = { workspace = true }
+scraper = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true, features = ["formatting", "parsing"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }

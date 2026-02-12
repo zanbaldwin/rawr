@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [".", "crates/*"]
+
+[workspace.package]
+rust-version = "1.92"
+authors = ["Zan Baldwin"]
+edition = "2024"
+license = "MIT"
+version = "0.1.0-beta"
+
+[workspace.dependencies]
+brotli = "^8.0"
+bzip2 = "^0.6.0"
+derive_more = "^2.1"
+exn = "^0.3"
+flate2 = "^1.1"
+rstest = "^0.26"
+serde = "^1.0"
+thiserror = "^2.0"
+tracing = "^0.1.0"
+xz2 = "^0.1.0"
+zstd = "^0.13"

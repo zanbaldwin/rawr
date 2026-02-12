@@ -1,0 +1,26 @@
+[package]
+name = "rawr-compress"
+description = "Compression and decompression utilities for rawr"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+brotli = ["dep:brotli"]
+xz = ["dep:xz2"]
+zstd = ["dep:zstd"]
+
+[dependencies]
+brotli = { workspace = true, optional = true }
+bzip2 = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+flate2 = { workspace = true }
+tracing = { workspace = true }
+xz2 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest = { workspace = true }

@@ -20,6 +20,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Display, Error, Clone, PartialEq, Eq)]
 pub enum ErrorKind {
     /// Failed to initialize an encoder/decoder for requested compression format.
+    #[display("failed to initialize encoder/decoder")]
     Encoder,
     /// Data is corrupt or malformed. Don't retry with the same input. Used for reading/decoding.
     #[display("invalid or corrupted data")]
@@ -49,14 +50,8 @@ mod tests {
 
     #[test]
     fn error_kind_display() {
-        assert_eq!(
-            ErrorKind::InvalidData.to_string(),
-            "invalid or corrupted data"
-        );
-        assert_eq!(
-            ErrorKind::UnsupportedFormat("lz4".to_string()).to_string(),
-            "unsupported format: lz4"
-        );
+        assert_eq!(ErrorKind::InvalidData.to_string(), "invalid or corrupted data");
+        assert_eq!(ErrorKind::UnsupportedFormat("lz4".to_string()).to_string(), "unsupported format: lz4");
         assert_eq!(ErrorKind::Io.to_string(), "I/O error");
     }
 
@@ -69,10 +64,8 @@ mod tests {
 
     #[test]
     fn error_from_result() {
-        let result: std::result::Result<(), std::io::Error> = Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "file not found",
-        ));
+        let result: std::result::Result<(), std::io::Error> =
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "file not found"));
 
         let err: Result<()> = result.or_raise(|| ErrorKind::Io);
         assert!(err.is_err());

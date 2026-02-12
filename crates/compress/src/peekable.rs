@@ -22,10 +22,7 @@ pub struct PeekableReader<R> {
 impl<R: Read> PeekableReader<R> {
     /// Wrap any reader for peeking.
     pub fn new(decoder: R) -> Self {
-        Self {
-            decoder,
-            buffer: Vec::new(),
-        }
+        Self { decoder, buffer: Vec::new() }
     }
 
     /// Read up to `limit` bytes of the decompressed content.
@@ -39,10 +36,7 @@ impl<R: Read> PeekableReader<R> {
             return Ok(&self.buffer[..limit]);
         }
         let needed = (limit - self.buffer.len()) as u64;
-        (&mut self.decoder)
-            .take(needed)
-            .read_to_end(&mut self.buffer)
-            .or_raise(|| ErrorKind::InvalidData)?;
+        (&mut self.decoder).take(needed).read_to_end(&mut self.buffer).or_raise(|| ErrorKind::InvalidData)?;
         Ok(&self.buffer[..self.buffer.len().min(limit)])
     }
 
@@ -59,9 +53,7 @@ impl<R: Read> PeekableReader<R> {
 
     /// Read all remaining data and return the complete buffer.
     pub fn into_bytes(mut self) -> Result<Vec<u8>> {
-        self.decoder
-            .read_to_end(&mut self.buffer)
-            .or_raise(|| ErrorKind::InvalidData)?;
+        self.decoder.read_to_end(&mut self.buffer).or_raise(|| ErrorKind::InvalidData)?;
         Ok(self.buffer)
     }
 
@@ -100,10 +92,7 @@ impl Compression {
     /// }
     /// // Else, discard.
     /// ```
-    pub fn peekable_reader<'a, R: Read + 'a>(
-        &self,
-        reader: R,
-    ) -> Result<PeekableReader<Box<dyn Read + 'a>>> {
+    pub fn peekable_reader<'a, R: Read + 'a>(&self, reader: R) -> Result<PeekableReader<Box<dyn Read + 'a>>> {
         Ok(PeekableReader::new(self.wrap_reader(reader)?))
     }
 

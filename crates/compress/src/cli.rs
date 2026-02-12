@@ -86,24 +86,14 @@ mod tests {
         Some(Compression::None),
         Compression::Bzip2
     )]
-    #[case(
-        Preference::Explicit(Compression::Gzip),
-        Compression::Bzip2,
-        None,
-        Compression::Gzip
-    )]
+    #[case(Preference::Explicit(Compression::Gzip), Compression::Bzip2, None, Compression::Gzip)]
     #[case(
         Preference::Implicit,
         Compression::Bzip2,
         Some(Compression::None),
         Compression::Bzip2
     )]
-    #[case(
-        Preference::Implicit,
-        Compression::None,
-        Some(Compression::Gzip),
-        Compression::None
-    )]
+    #[case(Preference::Implicit, Compression::None, Some(Compression::Gzip), Compression::None)]
     #[case(
         Preference::NotSpecified,
         Compression::Bzip2,

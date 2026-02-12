@@ -77,47 +77,42 @@ impl Compression {
             Compression::None => {
                 output.extend_from_slice(input);
                 input.len()
-            }
+            },
             #[cfg(feature = "brotli")]
             Compression::Brotli => {
-                let mut encoder = BrotliEncoder::new(
-                    &mut *output,
-                    BROTLI_BUFFER_SIZE,
-                    BROTLI_LEVEL,
-                    BROTLI_LG_WINDOW_SIZE,
-                );
+                let mut encoder =
+                    BrotliEncoder::new(&mut *output, BROTLI_BUFFER_SIZE, BROTLI_LEVEL, BROTLI_LG_WINDOW_SIZE);
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 // Brotli doesn't have some sort of finish/flush method?!
                 drop(encoder);
                 output.len()
-            }
+            },
             Compression::Bzip2 => {
                 let mut encoder = BzEncoder::new(&mut *output, BZIP2_LEVEL);
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 output.len()
-            }
+            },
             Compression::Gzip => {
                 let mut encoder = GzEncoder::new(&mut *output, GZIP_LEVEL);
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 output.len()
-            }
+            },
             #[cfg(feature = "xz")]
             Compression::Xz => {
                 let mut encoder = XzEncoder::new(&mut *output, XZ_LEVEL);
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 output.len()
-            }
+            },
             #[cfg(feature = "zstd")]
             Compression::Zstd => {
-                let mut encoder =
-                    ZstdEncoder::new(&mut *output, ZSTD_LEVEL).or_raise(|| ErrorKind::Encoder)?;
+                let mut encoder = ZstdEncoder::new(&mut *output, ZSTD_LEVEL).or_raise(|| ErrorKind::Encoder)?;
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 output.len()
-            }
+            },
         };
         tracing::Span::current().record("output_size", size);
         Ok(size)
@@ -133,40 +128,30 @@ impl Compression {
             Compression::None => {
                 output.extend_from_slice(input);
                 input.len()
-            }
+            },
             #[cfg(feature = "brotli")]
             Compression::Brotli => {
                 let mut decoder = BrotliDecoder::new(input, BROTLI_BUFFER_SIZE);
-                decoder
-                    .read_to_end(output)
-                    .or_raise(|| ErrorKind::InvalidData)?
-            }
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
             Compression::Bzip2 => {
                 let mut decoder = BzDecoder::new(input);
-                decoder
-                    .read_to_end(output)
-                    .or_raise(|| ErrorKind::InvalidData)?
-            }
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
             Compression::Gzip => {
                 let mut decoder = GzDecoder::new(input);
-                decoder
-                    .read_to_end(output)
-                    .or_raise(|| ErrorKind::InvalidData)?
-            }
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
             #[cfg(feature = "xz")]
             Compression::Xz => {
                 let mut decoder = XzDecoder::new(input);
-                decoder
-                    .read_to_end(output)
-                    .or_raise(|| ErrorKind::InvalidData)?
-            }
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
             #[cfg(feature = "zstd")]
             Compression::Zstd => {
                 let mut decoder = ZstdDecoder::new(input).or_raise(|| ErrorKind::Encoder)?;
-                decoder
-                    .read_to_end(output)
-                    .or_raise(|| ErrorKind::InvalidData)?
-            }
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
         };
         tracing::Span::current().record("output_size", size);
         Ok(size)
@@ -200,9 +185,7 @@ impl Compression {
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzDecoder::new(reader)),
             #[cfg(feature = "zstd")]
-            Compression::Zstd => {
-                Box::new(ZstdDecoder::new(reader).or_raise(|| ErrorKind::Encoder)?)
-            }
+            Compression::Zstd => Box::new(ZstdDecoder::new(reader).or_raise(|| ErrorKind::Encoder)?),
         })
     }
 
@@ -225,22 +208,17 @@ impl Compression {
         Ok(match self {
             Compression::None => Box::new(writer),
             #[cfg(feature = "brotli")]
-            Compression::Brotli => Box::new(BrotliEncoder::new(
-                writer,
-                BROTLI_BUFFER_SIZE,
-                BROTLI_LEVEL,
-                BROTLI_LG_WINDOW_SIZE,
-            )),
+            Compression::Brotli => {
+                Box::new(BrotliEncoder::new(writer, BROTLI_BUFFER_SIZE, BROTLI_LEVEL, BROTLI_LG_WINDOW_SIZE))
+            },
             Compression::Bzip2 => Box::new(BzEncoder::new(writer, BZIP2_LEVEL)),
             Compression::Gzip => Box::new(GzEncoder::new(writer, GZIP_LEVEL)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzEncoder::new(writer, XZ_LEVEL)),
             #[cfg(feature = "zstd")]
-            Compression::Zstd => Box::new(
-                ZstdEncoder::new(writer, ZSTD_LEVEL)
-                    .or_raise(|| ErrorKind::Encoder)?
-                    .auto_finish(),
-            ),
+            Compression::Zstd => {
+                Box::new(ZstdEncoder::new(writer, ZSTD_LEVEL).or_raise(|| ErrorKind::Encoder)?.auto_finish())
+            },
         })
     }
 
@@ -260,11 +238,7 @@ impl Compression {
     /// let bytes = Compression::Gzip.compress_stream(input, &mut output).unwrap();
     /// assert!(bytes > 0);
     /// ```
-    pub fn compress_stream<'a, R: Read, W: Write + 'a>(
-        &self,
-        mut reader: R,
-        writer: W,
-    ) -> Result<u64> {
+    pub fn compress_stream<'a, R: Read, W: Write + 'a>(&self, mut reader: R, writer: W) -> Result<u64> {
         let mut writer = self.wrap_writer(writer)?;
         std::io::copy(&mut reader, &mut writer).or_raise(|| ErrorKind::Io)
     }
@@ -289,11 +263,7 @@ impl Compression {
     /// assert_eq!(output, original);
     /// assert_eq!(bytes, original.len() as u64);
     /// ```
-    pub fn decompress_stream<'a, R: Read + 'a, W: Write>(
-        &self,
-        reader: R,
-        mut writer: W,
-    ) -> Result<u64> {
+    pub fn decompress_stream<'a, R: Read + 'a, W: Write>(&self, reader: R, mut writer: W) -> Result<u64> {
         let mut reader = self.wrap_reader(reader)?;
         std::io::copy(&mut reader, &mut writer).or_raise(|| ErrorKind::Io)
     }
@@ -401,16 +371,12 @@ mod tests {
         let original: &[u8] = b"";
         let input = Cursor::new(original);
         let mut compressed = Vec::new();
-        let bytes = Compression::Gzip
-            .compress_stream(input, &mut compressed)
-            .unwrap();
+        let bytes = Compression::Gzip.compress_stream(input, &mut compressed).unwrap();
         assert_eq!(bytes, 0);
 
         let input = Cursor::new(compressed);
         let mut decompressed = Vec::new();
-        let bytes = Compression::Gzip
-            .decompress_stream(input, &mut decompressed)
-            .unwrap();
+        let bytes = Compression::Gzip.decompress_stream(input, &mut decompressed).unwrap();
         assert_eq!(bytes, 0);
         assert!(decompressed.is_empty());
     }

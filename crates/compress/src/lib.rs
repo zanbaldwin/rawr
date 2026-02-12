@@ -7,9 +7,11 @@ pub mod cli;
 mod construct;
 pub mod error;
 mod ops;
+mod peekable;
 mod util;
 
 pub use crate::error::{Error, ErrorKind, Result};
+pub use crate::peekable::PeekableReader;
 
 /// Compression format enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

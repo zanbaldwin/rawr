@@ -21,7 +21,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum ErrorKind {
     /// Failed to initialize an encoder/decoder for requested compression format.
     Encoder,
-    /// Data is corrupt or malformed. Don't retry with the same input.
+    /// Data is corrupt or malformed. Don't retry with the same input. Used for reading/decoding.
     #[display("invalid or corrupted data")]
     InvalidData,
     /// The requested format is not supported.
@@ -30,7 +30,7 @@ pub enum ErrorKind {
     /// The requested format is supported but not enabled.
     #[display("disabled format: {_0}")]
     DisabledFormat(#[error(not(source))] String),
-    /// An I/O operation failed.
+    /// An I/O operation failed. Used for writing/encoding.
     #[display("I/O error")]
     Io,
 }

@@ -19,10 +19,15 @@ use zstd::stream::{read::Decoder as ZstdDecoder, write::Encoder as ZstdEncoder};
 // too resource-intensive, choose a different format.
 const BZIP2_LEVEL: BzCompression = BzCompression::best();
 const GZIP_LEVEL: GzCompression = GzCompression::best();
+#[cfg(feature = "xz")]
 const XZ_LEVEL: u32 = 9;
+#[cfg(feature = "zstd")]
 const ZSTD_LEVEL: i32 = 22;
+#[cfg(feature = "brotli")]
 const BROTLI_LEVEL: u32 = 11;
-pub(crate) const BROTLI_BUFFER_SIZE: usize = 4096;
+#[cfg(feature = "brotli")]
+const BROTLI_BUFFER_SIZE: usize = 4096;
+#[cfg(feature = "brotli")]
 const BROTLI_LG_WINDOW_SIZE: u32 = 22;
 
 impl Compression {

@@ -5,11 +5,9 @@
 //! indicating success on return.
 
 use async_trait::async_trait;
-use futures::Stream;
 use std::path::Path;
-use std::pin::Pin;
 
-use crate::{BackendHandle, FileInfo, StorageBackend, error::Result};
+use crate::{BackendHandle, FileInfo, StorageBackend, backend::FileInfoStream, error::Result};
 
 /// Read-only storage backend.
 #[derive(Clone)]
@@ -28,10 +26,7 @@ impl StorageBackend for ReadOnlyBackend {
         self.inner.name()
     }
 
-    fn list_stream<'a>(
-        &'a self,
-        prefix: Option<&'a Path>,
-    ) -> Pin<Box<dyn Stream<Item = Result<FileInfo>> + Send + 'a>> {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
         self.inner.list_stream(prefix)
     }
 

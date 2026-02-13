@@ -1,0 +1,31 @@
+[package]
+name = "rawr-storage"
+description = "Storage types and utilities for rawr"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+s3 = ["dep:aws-sdk-s3"]
+
+[dependencies]
+async-stream = { workspace = true }
+# TODO: When `dyn async trait` stabilizes, migrate to native 2024 Edition async traits.
+async-trait = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+blake3 = { workspace = true }
+crc32fast = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+futures = { workspace = true }
+rawr-compress = { path = "../compress" }
+time = { workspace = true, features = ["formatting", "parsing"] }
+tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+aws-smithy-mocks = "0.2"
+tempfile = "3.13"
+tokio = { workspace = true, features = ["macros", "rt"] }

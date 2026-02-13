@@ -3,14 +3,13 @@
 //! Wraps another backend and restricts all operations to files with
 //! `.html` base extension (after stripping any compression suffix).
 
-use async_trait::async_trait;
-use futures::{Stream, StreamExt};
-use rawr_compress::Compression;
-use std::path::Path;
-use std::pin::Pin;
-
+use crate::backend::FileInfoStream;
 use crate::error::ErrorKind;
 use crate::{BackendHandle, FileInfo, StorageBackend, error::Result};
+use async_trait::async_trait;
+use futures::StreamExt;
+use rawr_compress::Compression;
+use std::path::Path;
 
 /// The required base extension (after stripping compression).
 const HTML_EXTENSION: &str = "html";
@@ -57,10 +56,7 @@ impl StorageBackend for HtmlOnlyBackend {
         self.inner.name()
     }
 
-    fn list_stream<'a>(
-        &'a self,
-        prefix: Option<&'a Path>,
-    ) -> Pin<Box<dyn Stream<Item = Result<FileInfo>> + Send + 'a>> {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
         Box::pin(self.inner.list_stream(prefix).filter(|item| {
             std::future::ready(match item {
                 Ok(info) => is_html_path(&info.path),

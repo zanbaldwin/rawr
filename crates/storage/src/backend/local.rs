@@ -69,7 +69,6 @@ impl LocalBackend {
         if !root.is_absolute() {
             exn::bail!(ErrorKind::InvalidPath(root));
         }
-
         // TODO: What if this is decorated by ReadonlyBackend? Is it even possible to detect that?
         if root.exists() {
             if !root.is_dir() {
@@ -80,7 +79,6 @@ impl LocalBackend {
             // and it's not worth the hassle of making the constructor async.
             sync_create_dir(&root).map_err(|e| Self::map_io_error(e, &root))?;
         }
-
         Ok(Self { name: name.into(), root })
     }
 
@@ -107,7 +105,7 @@ impl LocalBackend {
             ErrorKind::BackendError(format!("path `{:?}` is not within root `{:?}`", absolute, self.root))
         })?;
         // Validate path will also canonicalize it.
-        Ok(validate_path(relative)?)
+        validate_path(relative)
     }
 
     /// Re-use same data collection from file metadata for both list and stat functions

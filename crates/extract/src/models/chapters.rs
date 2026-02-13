@@ -9,9 +9,22 @@ pub struct Chapters {
     pub total: Option<u32>,
 }
 impl Chapters {
+    pub fn new(written: u32, total: Option<u32>) -> Self {
+        Self { written, total }
+    }
     /// Returns true if the work is complete (planned chapters have been written).
     pub fn is_complete(&self) -> bool {
-        self.total.map(|t| self.written >= t).unwrap_or(false)
+        self.total.is_some_and(|t| self.written >= t)
+    }
+}
+impl From<(u32, u32)> for Chapters {
+    fn from((written, total): (u32, u32)) -> Self {
+        Chapters::new(written, Some(total))
+    }
+}
+impl From<(u32, Option<u32>)> for Chapters {
+    fn from((written, total): (u32, Option<u32>)) -> Self {
+        Chapters::new(written, total)
     }
 }
 impl Display for Chapters {

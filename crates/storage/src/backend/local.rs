@@ -4,17 +4,23 @@
 //! Files are stored in a configured directory and accessed using standard filesystem
 //! operations via `tokio::fs` for async I/O.
 
+use crate::backend::FileInfoStream;
 use crate::error::ErrorKind;
 use crate::{FileInfo, StorageBackend, error::Result, path::validate as validate_path};
+use async_stream::stream;
 use async_trait::async_trait;
 use exn::ResultExt;
-use futures::Stream;
 use rawr_compress::Compression;
-use std::fs::Metadata;
+use std::fs::{Metadata, create_dir_all as sync_create_dir};
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use tokio::fs;
+use tokio::fs::{self, DirEntry};
 use tokio::io::AsyncReadExt;
+
+enum WalkEntry {
+    File(FileInfo),
+    Descend(PathBuf),
+    Skip,
+}
 
 /// Local filesystem storage backend.
 ///
@@ -72,7 +78,7 @@ impl LocalBackend {
         } else {
             // Use non-async here; it'll only happen once on library initialization
             // and it's not worth the hassle of making the constructor async.
-            std::fs::create_dir_all(&root).map_err(|e| Self::map_io_error(e, &root))?;
+            sync_create_dir(&root).map_err(|e| Self::map_io_error(e, &root))?;
         }
 
         Ok(Self { name: name.into(), root })
@@ -100,7 +106,8 @@ impl LocalBackend {
         let relative = absolute.strip_prefix(&self.root).or_raise(|| {
             ErrorKind::BackendError(format!("path `{:?}` is not within root `{:?}`", absolute, self.root))
         })?;
-        Ok(PathBuf::from(relative))
+        // Validate path will also canonicalize it.
+        Ok(validate_path(relative)?)
     }
 
     /// Re-use same data collection from file metadata for both list and stat functions
@@ -117,6 +124,29 @@ impl LocalBackend {
             _ => ErrorKind::Io(e),
         }
     }
+
+    /// Writing this helper function is the only way I could find to stay sane
+    /// inside that stream loop where you can't `?` errors. You have to convert
+    /// them to the right type, yield them, then continue the loop. It was
+    /// driving me crazy.
+    async fn process_entry(&self, entry: DirEntry, prefix: Option<&Path>) -> Result<WalkEntry> {
+        let path = entry.path();
+        let metadata = entry.metadata().await.map_err(|e| Self::map_io_error(e, &path))?;
+        let relative = self.relative_path(&path)?;
+        if let Some(pfx) = prefix
+            && !relative.starts_with(pfx)
+        {
+            return Ok(WalkEntry::Skip);
+        }
+        if metadata.is_dir() {
+            return Ok(WalkEntry::Descend(path));
+        }
+        if metadata.is_file() {
+            return Ok(WalkEntry::File(Self::metadata(&relative, metadata)?));
+        }
+        // Note: silently drop what is most likely a broken symlink.
+        Ok(WalkEntry::Skip)
+    }
 }
 
 #[async_trait]
@@ -125,16 +155,69 @@ impl StorageBackend for LocalBackend {
         &self.name
     }
 
-    fn list_stream<'a>(
-        &'a self,
-        prefix: Option<&'a Path>,
-    ) -> Pin<Box<dyn Stream<Item = Result<FileInfo>> + Send + 'a>> {
-        todo!()
+    // I know two things:
+    // 1. Async streams are really hard to wrap my head around, and
+    // 2. I do not know of a better way to get performant code.
+    // Did I mention that async streams are really fucking hard?!
+    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
+        let validated_prefix = match prefix.map(validate_path).transpose() {
+            Ok(pfx) => pfx,
+            // TODO: or.raise() to its own prefix error instead of "this
+            //       generic path that could be about a listed file".
+            Err(e) => return Box::pin(futures::stream::once(async { Result::Err(e) })),
+        };
+
+        let start_dir = validated_prefix
+            .as_ref()
+            // Walk from the parent directory of the prefix path. Ensures
+            // prefix is a directory and avoids erroring on prefixes where
+            // the leaf component doesn't exist yet or is a file.
+            // So the prefix "FandomA/Sub" would become a starting
+            // directory of "FandomA" and match:
+            // - [MATCH] "FandomA/Sub/file.html"
+            // - [MATCH] "FandomA/Sub" (could be file)
+            // - [NOT MATCH] "FandomA/Subdir/file.html" (Path::starts_with is component-based)
+            .map(|prefix| self.root.join(prefix).parent().unwrap_or_else(|| &self.root).to_path_buf())
+            .unwrap_or_else(|| self.root.clone());
+        let mut stack = vec![start_dir];
+
+        Box::pin(stream! {
+            'dirs: while let Some(current) = stack.pop() {
+                let mut entries = match fs::read_dir(&current).await {
+                    Ok(entries) => entries,
+                    // To stay consistent with the behaviour of S3-compatible
+                    // backends, asking for the contents of a directory that
+                    // doesn't exist results in an empty list not an error.
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(err) => {
+                        yield Err(exn::Exn::from(Self::map_io_error(err, &current)));
+                        continue 'dirs;
+                    }
+                };
+
+                'entries: loop {
+                    let entry = match entries.next_entry().await {
+                        Ok(Some(entry)) => entry,
+                        Ok(None) => break 'entries,
+                        // This stupid error? These were littered all over this
+                        // function before I extracted the main logic out to
+                        // Self::process_entry. It was hell.
+                        Err(e) => { yield Err(exn::Exn::from(Self::map_io_error(e, &current))); continue 'entries; },
+                    };
+                    match self.process_entry(entry, validated_prefix.as_deref()).await {
+                        Ok(WalkEntry::File(f)) => yield Ok(f),
+                        Ok(WalkEntry::Descend(d)) => stack.push(d),
+                        Ok(WalkEntry::Skip) => {},
+                        Err(e) => yield Err(e),
+                    };
+                }
+            }
+        })
     }
 
     async fn exists(&self, path: &Path) -> Result<bool> {
         let abs_path = self.absolute_path(path)?;
-        Ok(tokio::fs::try_exists(&abs_path).await.map_err(ErrorKind::Io)?)
+        Ok(fs::try_exists(&abs_path).await.map_err(ErrorKind::Io)?)
     }
 
     async fn read(&self, path: &Path) -> Result<Vec<u8>> {
@@ -172,7 +255,7 @@ impl StorageBackend for LocalBackend {
         if let Some(parent) = to_path.parent() {
             fs::create_dir_all(parent).await.map_err(|e| Self::map_io_error(e, to))?;
         }
-        Ok(fs::rename(&from_path, &to_path).await.map_err(|e| Self::map_io_error(e, from))?)
+        Ok(fs::rename(&from_path, &to_path).await.map_err(|e| Self::map_io_error(e, to))?)
     }
 
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
@@ -226,6 +309,19 @@ mod tests {
         backend.write(Path::new("test.txt"), data).await.unwrap();
         let read_data = backend.read(Path::new("test.txt")).await.unwrap();
         assert_eq!(read_data, data);
+    }
+
+    #[tokio::test]
+    async fn test_prefix() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let data = b"Hello, world!";
+        backend.write(Path::new("FandomA/Sub/file.html"), data).await.unwrap();
+        backend.write(Path::new("FandomA/Subdir/file.html"), data).await.unwrap();
+        backend.write(Path::new("FandomA/Subfile.html"), data).await.unwrap();
+        let mut files = backend.list(Some(Path::new("FandomA/Sub"))).await.unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files.pop().unwrap().path, Path::new("FandomA/Sub/file.html"));
     }
 
     #[tokio::test]

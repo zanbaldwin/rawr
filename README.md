@@ -73,6 +73,35 @@ cargo build --release
 3. `rawr import "Downloads/"`
 4. Go outside for a walk, you haven't left the apartment in days.
 
+## Vision
+```
+Using config file: /home/zan/.config/rawr/config.yaml
+Using cache database: /home/zan/.local/share/rawr/cache.db
+Library root: /home/zan/Books/AO3
+Files in cache: 5884
+
+AO3 fan-fiction library manager
+
+Usage: rawr [OPTIONS] [COMMAND]
+
+Commands:
+  scan      Scan library and update cache
+  import    Import HTML files into library
+  organize  Organize files by path template [aliases: defrag]
+  export    Export works as PDFs
+  push      Push files from local library to a remote target
+  pull      Pull files from a remote target to local library
+  stats     Show library statistics
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -c, --config <CONFIG>    Path to configuration file
+  -w, --working-dir <CWD>  Change working directory before change config/cache/files
+  -d, --dry-run            Preview changes without executing [aliases: --read-only]
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
 ### License
 This project will remain proprietary, yet source-available, until a version
 `1.0` release (read: I haven't decided which open-source license I want to use yet)

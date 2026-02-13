@@ -36,7 +36,7 @@ pub struct Metadata {
 }
 impl Metadata {
     /// Returns metadata fields as a HashMap for CSS variable injection.
-    pub fn to_hashmap(&self) -> HashMap<&'static str, String> {
+    pub fn to_css_variables(&self) -> HashMap<&'static str, String> {
         /// Format a number with comma separators: 21837 → "21,837"
         fn human_number(n: u64) -> String {
             let s = n.to_string();

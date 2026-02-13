@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::{convert::Infallible, str::FromStr};
 
 /// An AO3 user who authored a work.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Author {
     /// AO3 username
     pub username: String,

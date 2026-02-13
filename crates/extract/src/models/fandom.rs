@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::{convert::Infallible, str::FromStr};
 
 /// A fandom tag associated with a work.
@@ -25,5 +26,10 @@ impl From<Fandom> for String {
 impl AsRef<str> for Fandom {
     fn as_ref(&self) -> &str {
         &self.name
+    }
+}
+impl Display for Fandom {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", self.name)
     }
 }

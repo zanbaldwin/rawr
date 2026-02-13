@@ -28,10 +28,6 @@ impl StorageBackend for ReadOnlyBackend {
         self.inner.name()
     }
 
-    async fn list(&self, prefix: Option<&Path>) -> Result<Vec<FileInfo>> {
-        self.inner.list(prefix).await
-    }
-
     fn list_stream<'a>(
         &'a self,
         prefix: Option<&'a Path>,

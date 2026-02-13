@@ -4,7 +4,7 @@
 //! `.html` base extension (after stripping any compression suffix).
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt};
 use rawr_compress::Compression;
 use std::path::Path;
 use std::pin::Pin;
@@ -55,10 +55,6 @@ impl HtmlOnlyBackend {
 impl StorageBackend for HtmlOnlyBackend {
     fn name(&self) -> &str {
         self.inner.name()
-    }
-
-    async fn list(&self, prefix: Option<&Path>) -> Result<Vec<FileInfo>> {
-        self.list_stream(prefix).try_collect().await
     }
 
     fn list_stream<'a>(

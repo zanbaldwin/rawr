@@ -4,13 +4,17 @@
 //! Files are stored in a configured directory and accessed using standard filesystem
 //! operations via `tokio::fs` for async I/O.
 
-use async_trait::async_trait;
-use futures::Stream;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-
 use crate::error::ErrorKind;
 use crate::{FileInfo, StorageBackend, error::Result, path::validate as validate_path};
+use async_trait::async_trait;
+use exn::ResultExt;
+use futures::Stream;
+use rawr_compress::Compression;
+use std::fs::Metadata;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use tokio::fs;
+use tokio::io::AsyncReadExt;
 
 /// Local filesystem storage backend.
 ///
@@ -55,21 +59,63 @@ impl LocalBackend {
     /// # }
     /// ```
     pub fn new(name: impl Into<String>, root: impl AsRef<Path>) -> Result<Self> {
-        todo!()
+        let root = root.as_ref().to_path_buf();
+        if !root.is_absolute() {
+            exn::bail!(ErrorKind::InvalidPath(root));
+        }
+
+        // TODO: What if this is decorated by ReadonlyBackend? Is it even possible to detect that?
+        if root.exists() {
+            if !root.is_dir() {
+                exn::bail!(ErrorKind::InvalidPath(root));
+            }
+        } else {
+            // Use non-async here; it'll only happen once on library initialization
+            // and it's not worth the hassle of making the constructor async.
+            std::fs::create_dir_all(&root).map_err(|e| Self::map_io_error(e, &root))?;
+        }
+
+        Ok(Self { name: name.into(), root })
     }
 
     /// Get the absolute path for a relative storage path.
     ///
     /// Validates the path and joins it with the root directory.
     fn absolute_path(&self, path: impl AsRef<Path>) -> Result<PathBuf> {
-        todo!()
+        let validated = validate_path(path.as_ref())?;
+        Ok(self.root.join(validated))
     }
 
     /// Convert an absolute path back to a relative storage path.
     ///
     /// Strips the root prefix and converts to a string.
     fn relative_path(&self, absolute: impl AsRef<Path>) -> Result<PathBuf> {
-        todo!()
+        let absolute = absolute.as_ref();
+        if !absolute.is_absolute() {
+            exn::bail!(ErrorKind::BackendError(format!(
+                "attempting to get relative path of non-absolute path `{:?}`",
+                absolute
+            )))
+        }
+        let relative = absolute.strip_prefix(&self.root).or_raise(|| {
+            ErrorKind::BackendError(format!("path `{:?}` is not within root `{:?}`", absolute, self.root))
+        })?;
+        Ok(PathBuf::from(relative))
+    }
+
+    /// Re-use same data collection from file metadata for both list and stat functions
+    fn metadata(path: &Path, metadata: Metadata) -> Result<FileInfo> {
+        let modified = metadata.modified().map_err(ErrorKind::Io)?.into();
+        let compression = Compression::from_path(path);
+        Ok(FileInfo::new(PathBuf::from(path), metadata.len(), modified, compression))
+    }
+
+    fn map_io_error(e: std::io::Error, path: &Path) -> ErrorKind {
+        match e.kind() {
+            std::io::ErrorKind::NotFound => ErrorKind::NotFound(path.to_path_buf()),
+            std::io::ErrorKind::PermissionDenied => ErrorKind::PermissionDenied(path.to_path_buf()),
+            _ => ErrorKind::Io(e),
+        }
     }
 }
 
@@ -92,27 +138,47 @@ impl StorageBackend for LocalBackend {
     }
 
     async fn read(&self, path: &Path) -> Result<Vec<u8>> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        Ok(fs::read(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?)
     }
 
     async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        let file = fs::File::open(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?;
+        let mut buffer = Vec::with_capacity(bytes);
+        file.take(bytes as u64).read_to_end(&mut buffer).await.map_err(ErrorKind::Io)?;
+        Ok(buffer)
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        // Create parent directories if needed, to keep behaviour
+        // consistent with S3-compatible storage.
+        if let Some(parent) = abs_path.parent() {
+            fs::create_dir_all(parent).await.map_err(|e| Self::map_io_error(e, path))?;
+        }
+        Ok(fs::write(&abs_path, data).await.map_err(|e| Self::map_io_error(e, path))?)
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        Ok(fs::remove_file(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?)
     }
 
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        todo!()
+        let from_path = self.absolute_path(from)?;
+        let to_path = self.absolute_path(to)?;
+        // Create parent directories for destination if needed
+        if let Some(parent) = to_path.parent() {
+            fs::create_dir_all(parent).await.map_err(|e| Self::map_io_error(e, to))?;
+        }
+        Ok(fs::rename(&from_path, &to_path).await.map_err(|e| Self::map_io_error(e, from))?)
     }
 
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        let metadata = fs::metadata(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?;
+        Self::metadata(path, metadata)
     }
 }
 
@@ -125,26 +191,27 @@ mod tests {
 
     #[test]
     fn test_new_requires_absolute_path() {
-        assert!(LocalBackend::new("name", "/absolute/path").is_ok());
+        let temp_dir = tempfile::tempdir().unwrap();
+        assert!(LocalBackend::new("name", temp_dir.path()).is_ok());
         assert!(LocalBackend::new("name", "relative/path").is_err());
         assert!(LocalBackend::new("name", "./relative").is_err());
     }
 
     #[test]
     fn test_absolute_path() {
-        let backend = LocalBackend::new("name", "/library").unwrap();
-        assert_eq!(
-            backend.absolute_path(Path::new("Fandom/work.html.bz2")).unwrap(),
-            PathBuf::from("/library/Fandom/work.html.bz2")
-        );
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let expected = temp_dir.path().join("Fandom/work.html.bz2");
+        assert_eq!(backend.absolute_path(Path::new("Fandom/work.html.bz2")).unwrap(), expected);
         // Path traversal is prevented
         assert!(backend.absolute_path(Path::new("../etc/passwd")).is_err());
     }
 
     #[test]
     fn test_relative_path() {
-        let backend = LocalBackend::new("name", "/library").unwrap();
-        let abs = PathBuf::from("/library/Fandom/work.html.bz2");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let abs = temp_dir.path().join("Fandom/work.html.bz2");
         assert_eq!(backend.relative_path(&abs).unwrap(), Path::new("Fandom/work.html.bz2"));
         // Path outside root fails
         let outside = PathBuf::from("/other/file.html");

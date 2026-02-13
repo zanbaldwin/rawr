@@ -5,6 +5,13 @@
 //! S3-compatible services, etc.).
 //!
 
+mod html;
+mod local;
+mod ro;
+
+pub use self::html::HtmlOnlyBackend;
+pub use self::local::LocalBackend;
+pub use self::ro::ReadOnlyBackend;
 use crate::{FileInfo, error::Result};
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};

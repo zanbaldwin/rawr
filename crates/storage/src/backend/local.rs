@@ -4,9 +4,9 @@
 //! Files are stored in a configured directory and accessed using standard filesystem
 //! operations via `tokio::fs` for async I/O.
 
-use crate::backend::FileInfoStream;
-use crate::error::ErrorKind;
-use crate::{FileInfo, StorageBackend, error::Result, path::validate as validate_path};
+use super::{FileInfoStream, WalkEntry};
+use crate::error::{ErrorKind, Result};
+use crate::{FileInfo, StorageBackend, path::validate as validate_path};
 use async_stream::stream;
 use async_trait::async_trait;
 use exn::ResultExt;
@@ -15,12 +15,6 @@ use std::fs::{Metadata, create_dir_all as sync_create_dir};
 use std::path::{Path, PathBuf};
 use tokio::fs::{self, DirEntry};
 use tokio::io::AsyncReadExt;
-
-enum WalkEntry {
-    File(FileInfo),
-    Descend(PathBuf),
-    Skip,
-}
 
 /// Local filesystem storage backend.
 ///

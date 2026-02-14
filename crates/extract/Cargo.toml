@@ -6,10 +6,14 @@ edition.workspace = true
 license.workspace = true
 version.workspace = true
 
+[features]
+default = ["markdown"]
+markdown = ["dep:fast_html2md"]
+
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
-fast_html2md = { workspace = true, features = ["rewriter"] }
+fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 regex = { workspace = true }
 scraper = { workspace = true }
 thiserror = { workspace = true }

@@ -12,6 +12,7 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::models::{Author, Metadata};
 use crate::{ESTIMATED_HEADER_SIZE_BYTES, consts, safe_html_truncate};
 use exn::{OptionExt, ResultExt};
+#[cfg(feature = "markdown")]
 use html2md::rewrite_html as html_to_markdown;
 use scraper::Html;
 use tracing::instrument;
@@ -133,7 +134,16 @@ impl Extractor {
         self.document
             .select(&consts::SUMMARY_SELECTOR)
             .next()
-            .map(|el| html_to_markdown(el.inner_html().as_str(), true))
+            .map(|el| {
+                #[cfg(feature = "markdown")]
+                {
+                    html_to_markdown(el.inner_html().as_str().trim(), true)
+                }
+                #[cfg(not(feature = "markdown"))]
+                {
+                    el.text().collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")
+                }
+            })
             .unwrap_or_default()
     }
 

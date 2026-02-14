@@ -18,7 +18,9 @@
 use super::{FileInfoStream, WalkEntry};
 use crate::error::{ErrorKind, Result};
 use crate::{FileInfo, StorageBackend, validate_path};
+use async_stream::stream;
 use async_trait::async_trait;
+use aws_sdk_s3::types::Object;
 use aws_sdk_s3::{
     Client,
     config::{BehaviorVersion, Credentials, Region, retry::RetryConfig},
@@ -166,6 +168,34 @@ impl S3Backend {
         OffsetDateTime::from_unix_timestamp_nanos(dt.as_nanos())
             .or_raise(|| ErrorKind::BackendError("S3 datetime out of range".to_string()))
     }
+
+    fn process_entry(&self, entry: Object, prefix: Option<impl AsRef<str>>) -> Result<WalkEntry> {
+        let Some(ref key) = entry.key else {
+            return Ok(WalkEntry::Skip);
+        };
+        if key.ends_with('/') {
+            // Directories are discarded, so being semantically correct
+            // `Ok(WalkEntry::Descend(PathBuf::from(key)))` just results
+            // in a wasted allocation.
+            return Ok(WalkEntry::Skip);
+        }
+        let relative = self.relative_path(key)?;
+        // Filter by the requested prefix if provided
+        if let Some(ref pfx) = prefix
+            && !relative.starts_with(pfx.as_ref())
+        {
+            return Ok(WalkEntry::Skip);
+        }
+        // It makes no sense for the object size to be a
+        // signed integer. AWS, you cray.
+        let size = entry.size.unwrap_or(0).max(0) as u64;
+        let modified = match entry.last_modified {
+            Some(ref dt) => Self::parse_datetime(dt)?,
+            None => OffsetDateTime::UNIX_EPOCH,
+        };
+        let compression = Compression::from_path(&relative);
+        Ok(WalkEntry::File(FileInfo::new(relative, size, modified, compression)))
+    }
 }
 
 #[async_trait]
@@ -175,7 +205,61 @@ impl StorageBackend for S3Backend {
     }
 
     fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
-        todo!()
+        let validated_prefix = match prefix.map(validate_path).transpose() {
+            Ok(pfx) => {
+                // TODO: Stop being lazy and refactor this into something that doesn't look so ugly.
+                let prefix = pfx
+                    .map(|p| p.to_str().map(|s| s.to_string()).ok_or_raise(|| ErrorKind::InvalidPath(p)))
+                    .transpose();
+                match prefix {
+                    Ok(r) => r,
+                    Err(e) => return Box::pin(futures::stream::once(async { Result::Err(e) })),
+                }
+            },
+            // TODO: or.raise() to its own prefix error instead of "this
+            //       generic path that could be about a listed file".
+            Err(e) => return Box::pin(futures::stream::once(async { Result::Err(e) })),
+        };
+
+        let s3_prefix = match (&self.prefix, &validated_prefix) {
+            (Some(library), Some(list)) => Some(format!("{}/{}", library.trim_matches('/'), list.trim_matches('/'))),
+            (Some(library), None) => Some(library.trim_matches('/').to_string()),
+            (None, Some(list)) => Some(list.trim_matches('/').to_string()),
+            _ => None,
+        };
+
+        Box::pin(stream! {
+            let mut continuation_token: Option<String> = None;
+            loop {
+                let _permit = self.acquire_permit().await;
+                let request = self.client
+                    .list_objects_v2()
+                    .bucket(&self.bucket)
+                    .set_prefix(s3_prefix.clone())
+                    .set_continuation_token(continuation_token);
+
+                let response = match request.send().await.map_err(map_sdk_error) {
+                    Ok(r) => r,
+                    Err(e) => { yield Err(e.into()); return; },
+                };
+                // Process objects in this page
+                if let Some(contents) = response.contents {
+                    'entries: for object in contents {
+                        match self.process_entry(object, validated_prefix.as_ref()) {
+                            Ok(WalkEntry::File(f)) => yield Ok(f),
+                            // S3's flat structure means we don't need to descend into directories.
+                            Ok(WalkEntry::Descend(_)) | Ok(WalkEntry::Skip) => continue 'entries,
+                            Err(e) => yield Err(e),
+                        };
+                    }
+                }
+                // Check for more pages
+                continuation_token = response.next_continuation_token;
+                if !response.is_truncated.unwrap_or(false) {
+                    break;
+                }
+            }
+        })
     }
 
     async fn exists(&self, path: &Path) -> Result<bool> {
@@ -243,10 +327,7 @@ impl StorageBackend for S3Backend {
         //       for compressed HTML files but may need optimization for
         //       larger content.
         let body = ByteStream::from(data.to_vec());
-        self.client.put_object().bucket(&self.bucket).key(&key).body(body).send().await.map_err(|e| match &e {
-            SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
-            _ => ErrorKind::BackendError(e.to_string()),
-        })?;
+        self.client.put_object().bucket(&self.bucket).key(&key).body(body).send().await.map_err(map_sdk_error)?;
         Ok(())
     }
 
@@ -265,10 +346,7 @@ impl StorageBackend for S3Backend {
         // and I need to remember little things like these for when it does
         // matter (eg, check-then-"some important op" where fn isn't atomic).
         let _permit = self.acquire_permit().await;
-        self.client.delete_object().bucket(&self.bucket).key(&key).send().await.map_err(|e| match &e {
-            SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
-            _ => ErrorKind::BackendError(e.to_string()),
-        })?;
+        self.client.delete_object().bucket(&self.bucket).key(&key).send().await.map_err(map_sdk_error)?;
         Ok(())
     }
 
@@ -355,6 +433,14 @@ fn map_get_error(e: SdkError<GetObjectError>, path: &Path) -> ErrorKind {
         },
         SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
         _ => ErrorKind::BackendError(e.to_string()),
+    }
+}
+
+fn map_sdk_error<E: ToString>(e: SdkError<E>) -> ErrorKind {
+    let s = e.to_string();
+    match &e {
+        SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(s),
+        _ => ErrorKind::BackendError(s),
     }
 }
 

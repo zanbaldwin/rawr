@@ -6,7 +6,7 @@
 
 use super::{FileInfoStream, WalkEntry};
 use crate::error::{ErrorKind, Result};
-use crate::{FileInfo, StorageBackend, path::validate as validate_path};
+use crate::{StorageBackend, file::FileInfo, path::validate as validate_path};
 use async_stream::stream;
 use async_trait::async_trait;
 use exn::ResultExt;
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(info.path, PathBuf::from("file.txt"));
         assert_eq!(info.size, data.len() as u64);
         assert_eq!(info.compression, Compression::None);
-        assert!(info.file_hash.is_none());
+        assert_eq!(info.file_hash, ());
     }
 
     #[tokio::test]

@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use std::path::Path;
 
-use crate::{BackendHandle, FileInfo, StorageBackend, backend::FileInfoStream, error::Result};
+use crate::{BackendHandle, StorageBackend, backend::FileInfoStream, error::Result, file::FileInfo};
 
 /// Read-only storage backend.
 #[derive(Clone)]

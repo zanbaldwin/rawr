@@ -101,7 +101,7 @@ impl LocalBackend {
             ErrorKind::BackendError(format!("path `{:?}` is not within root `{:?}`", absolute, self.root))
         })?;
         // Validate path will also canonicalize it.
-        Ok(validate_path(relative)?)
+        validate_path(relative)
     }
 
     /// Re-use same data collection from file metadata for both list and stat functions
@@ -201,7 +201,7 @@ impl StorageBackend for LocalBackend {
                     match self.process_entry(entry, validated_prefix.as_deref()).await {
                         Ok(WalkEntry::File(f)) => yield Ok(f),
                         Ok(WalkEntry::Descend(d)) => stack.push(d),
-                        Ok(WalkEntry::Skip) => {},
+                        Ok(WalkEntry::Skip) => continue 'entries,
                         Err(e) => yield Err(e),
                     };
                 }

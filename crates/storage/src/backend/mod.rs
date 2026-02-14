@@ -8,10 +8,14 @@
 mod html;
 mod local;
 mod ro;
+#[cfg(feature = "s3")]
+mod s3;
 
 pub use self::html::HtmlOnlyBackend;
 pub use self::local::LocalBackend;
 pub use self::ro::ReadOnlyBackend;
+#[cfg(feature = "s3")]
+pub use self::s3::S3Backend;
 use crate::{FileInfo, error::Result};
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};

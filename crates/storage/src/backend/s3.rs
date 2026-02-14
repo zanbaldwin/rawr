@@ -380,8 +380,7 @@ impl StorageBackend for S3Backend {
                 SdkError::ServiceError(s) if matches!(s.err(), CopyObjectError::ObjectNotInActiveTierError(_)) => {
                     // WTF am I meant to do with files that do exist but can't be
                     // accessed without incurring fucking ridiculous egress fees?
-                    // TODO: Don't crash the application just because you're too lazy to deal with this.
-                    unimplemented!("file exists but has fallen deep, deep into the glacier...")
+                    ErrorKind::BackendError("object must be restored from cold storage".to_string())
                 },
                 SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
                 _ => ErrorKind::BackendError(e.to_string()),

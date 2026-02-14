@@ -3,7 +3,7 @@
 //! Wraps another backend and restricts all operations to files with
 //! `.html` base extension (after stripping any compression suffix).
 
-use crate::backend::FileInfoStream;
+use crate::backend::{BoxSyncRead, BoxSyncWrite, FileInfoStream};
 use crate::error::ErrorKind;
 use crate::{BackendHandle, StorageBackend, error::Result, file::FileInfo};
 use async_trait::async_trait;
@@ -86,11 +86,25 @@ impl StorageBackend for HtmlOnlyBackend {
         self.inner.read_head(path, bytes).await
     }
 
+    async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.reader(path).await
+    }
+
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         if !is_html_path(path) {
             exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
         }
         self.inner.write(path, data).await
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.writer(path).await
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
@@ -217,5 +231,23 @@ mod tests {
         assert!(matches!(&*result.unwrap_err(), ErrorKind::FilteredPath(_)));
         // html -> html: should succeed
         backend.rename(Path::new("a.html"), Path::new("b.html")).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_reader_rejects_non_html() {
+        let (_dir, backend) = setup();
+        let Err(err) = backend.reader(Path::new("file.txt")).await else {
+            panic!("expected error");
+        };
+        assert!(matches!(&*err, ErrorKind::FilteredPath(_)));
+    }
+
+    #[tokio::test]
+    async fn test_writer_rejects_non_html() {
+        let (_dir, backend) = setup();
+        let Err(err) = backend.writer(Path::new("file.txt")).await else {
+            panic!("expected error");
+        };
+        assert!(matches!(&*err, ErrorKind::FilteredPath(_)));
     }
 }

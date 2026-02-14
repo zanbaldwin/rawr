@@ -10,6 +10,9 @@ use std::path::Path;
 use crate::{BackendHandle, StorageBackend, backend::FileInfoStream, error::Result, file::FileInfo};
 
 /// Read-only storage backend.
+///
+/// Wraps another backend and silently drops all write operations, logging an
+/// [`info event`](tracing::Event).
 #[derive(Clone)]
 pub struct ReadOnlyBackend {
     inner: BackendHandle,

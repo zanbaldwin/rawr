@@ -14,7 +14,8 @@ use crate::error::{ErrorKind, Result};
 /// >           platform-specific weirdness. Null bytes are explicitly rejected.
 ///
 /// # Returns
-/// Returns the normalized path if valid, or an error if invalid.
+/// Returns the normalized path if valid, or [`InvalidPath`](crate::error::ErrorKind::InvalidPath)
+/// if invalid.
 ///
 /// # Examples
 ///

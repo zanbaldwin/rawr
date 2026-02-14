@@ -18,8 +18,8 @@ use tokio::io::AsyncReadExt;
 
 /// Local filesystem storage backend.
 ///
-/// Stores files in a directory on the local filesystem. All paths are relative
-/// to the configured root directory.
+/// Stores files in a directory on the local filesystem.
+/// All paths are relative to the configured root directory.
 ///
 /// # Examples
 ///
@@ -41,12 +41,8 @@ pub struct LocalBackend {
 impl LocalBackend {
     /// Create a new local filesystem backend.
     ///
-    /// # Arguments
-    /// * `root` - Absolute path to the library root directory
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the path is not absolute.
+    /// Returns an [`InvalidPath`](crate::error::ErrorKind::InvalidPath) if
+    /// the path is not absolute.
     ///
     /// # Examples
     ///

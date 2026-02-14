@@ -42,16 +42,12 @@ const DEFAULT_CONCURRENT_REQUESTS: usize = 100;
 
 /// S3-compatible storage backend.
 ///
-/// Stores files in an S3 bucket, optionally under a key prefix. All paths are
-/// relative to the configured prefix (if any).
+/// Stores files in an S3(-compatible) bucket, optionally under a key prefix.
+/// All paths are relative to the configured prefix (if any).
 ///
-/// # Supported Services
-///
-/// - AWS S3
-/// - Backblaze B2 (via S3-compatible API)
-/// - Tigris (Fly.io storage)
-/// - MinIO
-/// - Other S3-compatible services
+/// # Notes
+/// - Bucket prefix is treated as a directory, whereas
+/// - List prefixes are treated as strings.
 ///
 /// # Examples
 ///
@@ -140,7 +136,7 @@ impl S3Backend {
         // TODO: String lossy, or convert to &str and propagate an InvalidPath error?
         let path_str = validated.to_string_lossy();
         Ok(match &self.prefix {
-            Some(prefix) => format!("{}/{}", prefix.trim_end_matches('/'), path_str),
+            Some(prefix) => format!("{}/{}", prefix.trim_matches('/'), path_str.trim_start_matches('/')),
             None => path_str.into_owned(),
         })
     }

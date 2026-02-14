@@ -16,7 +16,8 @@ pub use self::local::LocalBackend;
 pub use self::ro::ReadOnlyBackend;
 #[cfg(feature = "s3")]
 pub use self::s3::S3Backend;
-use crate::{error::Result, file::FileInfo};
+use crate::error::Result;
+use crate::file::FileInfo;
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};
 use std::path::{Path, PathBuf};
@@ -34,7 +35,7 @@ enum WalkEntry {
 ///
 /// All storage operations are asynchronous to efficiently handle network
 /// operations and concurrent access. The trait supports both local filesystem
-/// and remote storage backends.
+/// and remote storage backends. It's a glorified CRUD interface, but in ✨Rust✨
 ///
 /// # Path Handling
 /// All paths are relative to the storage root and must be validated using
@@ -44,11 +45,13 @@ enum WalkEntry {
 /// # Examples
 ///
 /// ```
-/// use std::path::Path;
-/// use rawr_storage::{FileInfo, StorageBackend, error::Result};
-/// async fn example(backend: &dyn StorageBackend) -> Result<u64> {
-///     if backend.exists(Path::new("path/to/file.html.bz2")).await? {
-///         let data = backend.read(Path::new("path/to/file.html.bz2")).await?;
+/// use std::path::PathBuf;
+/// use rawr_storage::{file::FileInfo, backend::StorageBackend, error::Result};
+///
+/// async fn size_of_hardcoded_file(backend: &dyn StorageBackend) -> Result<u64> {
+///     let path = PathBuf::from("path/to/file.html.bz2");
+///     if backend.exists(&path).await? {
+///         let data = backend.read(&path).await?;
 ///         Ok(data.len() as u64)
 ///     } else {
 ///         Ok(0)
@@ -79,28 +82,38 @@ pub trait StorageBackend: Send + Sync {
     /// prefix is provided, only files whose paths start with the prefix
     /// are returned.
     ///
-    /// [`list()`](Self::list) is a convenience wrapper that collects this
-    /// stream via [`TryStreamExt`](futures::TryStreamExt::try_collect).
     ///
-    /// # Arguments
-    ///
-    /// - `prefix` - Optional path prefix to filter results
+    /// # Notes
+    /// - the `prefix` argument may have varying behaviour depending
+    ///   on the storage backend implementation used.
+    /// - [`list()`](Self::list) is a convenience wrapper that collects this
+    ///   stream into a [`Vec`] via [`TryStreamExt`](futures::TryStreamExt::try_collect)
+    ///   before returning all at once.
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use futures::TryStreamExt;
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
+    ///
+    /// // Filter by prefix
+    /// let mut fandom = backend.list_stream(Some(Path::new("Fandom/")));
+    ///
     /// // Process files one at a time
     /// let mut stream = backend.list_stream(None);
     /// while let Some(info) = stream.try_next().await? {
     ///     println!("{}: {} bytes", info.path.display(), info.size);
     /// }
     ///
-    /// // Filter by prefix
-    /// let mut fandom = backend.list_stream(Some(Path::new("Fandom/")));
+    /// // Process each file as it arrives (up to 4 concurrently)
+    /// backend.list_stream(None)
+    ///     .try_for_each_concurrent(4, |info| async move {
+    ///         println!("{}: {} bytes", info.path.display(), info.size);
+    ///         Ok(())
+    ///     })
+    ///     .await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -108,15 +121,11 @@ pub trait StorageBackend: Send + Sync {
 
     /// Check if a file exists.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - Relative path from storage root
-    ///
     /// # Examples
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// if backend.exists(Path::new("work.html.bz2")).await? {
     ///     println!("File exists!");
@@ -128,21 +137,15 @@ pub trait StorageBackend: Send + Sync {
 
     /// Read file contents.
     ///
-    /// Returns the complete file contents as a byte vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - Relative path from storage root
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::NotFound`] if the file does not exist.
+    /// Returns the complete file contents as a [`Vec<u8>`].
+    /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the file
+    /// does not exist.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// let data = backend.read(Path::new("work.html.bz2")).await?;
     /// println!("Read {} bytes", data.len());
@@ -153,29 +156,23 @@ pub trait StorageBackend: Send + Sync {
 
     /// Read only the first N bytes (for magic byte detection).
     ///
-    /// This is useful for detecting file formats without reading the entire file.
+    /// This is useful for detecting file formats without reading the entire
+    /// file. Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the
+    /// file does not exist.
     ///
-    /// > **Note:** This should NOT be used for extraction, as decompression of
-    /// > truncated compressed data will fail or return corrupt data.
-    ///
-    /// # Arguments
-    /// * `path` - Relative path from storage root
-    /// * `bytes` - Maximum number of bytes to read
-    ///
-    /// # Returns
-    /// Returns up to `bytes` bytes from the start of the file. If the file is
-    /// smaller than `bytes`, returns the entire file.
-    ///
-    /// # Errors
-    /// Returns [`Error::NotFound`] if the file does not exist.
+    /// # Notes
+    /// - This should **NOT** be used for decompression as truncated
+    ///   compressed data will fail or return corrupt data.
+    /// - If the file is smaller than `bytes`, returns the entire file.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
-    /// # use rawr_compress::Compression;
+    /// use rawr_compress::Compression;
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
+    ///
     /// // Read first 6 bytes to detect compression format
     /// let header = backend.read_head(Path::new("work.html.bz2"), 6).await?;
     /// let format = Compression::from_magic_bytes(&header);
@@ -188,18 +185,12 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// Creates a new file or overwrites an existing file with the provided data.
     ///
-    /// # Arguments
-    /// * `path` - Relative path from storage root
-    /// * `data` - File contents to write
-    ///
     /// # Notes
-    /// Implementations should create parent directories as needed.
-    ///
-    /// # Examples
+    /// - Implementations should create parent directories as needed.
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// let data = b"<html>...</html>";
     /// backend.write(Path::new("work.html"), data).await?;
@@ -210,17 +201,14 @@ pub trait StorageBackend: Send + Sync {
 
     /// Delete a file.
     ///
-    /// # Arguments
-    /// * `path` - Relative path from storage root
-    ///
-    /// # Errors
-    /// Returns [`Error::NotFound`] if the file does not exist.
+    /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the file
+    /// does not exist.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// backend.delete(Path::new("old-work.html.bz2")).await?;
     /// # Ok(())
@@ -230,25 +218,24 @@ pub trait StorageBackend: Send + Sync {
 
     /// Rename/move a file within the same backend.
     ///
-    /// # Arguments
-    /// * `from` - Current path (relative to storage root)
-    /// * `to` - New path (relative to storage root)
+    /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the source
+    /// file does not exist.
     ///
     /// # Notes
     /// - Implementations should create parent directories as needed
-    /// - For S3 backends, this is implemented as copy + delete
     /// - If the destination already exists, it will be overwritten
-    ///
-    /// # Errors
-    /// Returns [`Error::NotFound`] if the source file does not exist.
+    /// - For non-atomic backends: warn but don't fail when the delete operation fails
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
-    /// backend.rename(Path::new("old-path.html.bz2"), Path::new("new-path.html.bz2")).await?;
+    /// backend.rename(
+    ///     Path::new("old-path.html.bz2"),
+    ///     Path::new("new-path.html.bz2")
+    /// ).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -256,10 +243,6 @@ pub trait StorageBackend: Send + Sync {
 
     /// Get file metadata without reading contents.
     ///
-    /// # Arguments
-    /// * `path` - Relative path from storage root
-    ///
-    /// # Errors
     /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the file
     /// does not exist.
     ///
@@ -267,7 +250,7 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// ```no_run
     /// use std::path::Path;
-    /// # use rawr_storage::{StorageBackend, error::Result};
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// let info = backend.stat(Path::new("work.html.bz2")).await?;
     /// println!("Size: {} bytes, Modified: {}", info.size, info.modified);

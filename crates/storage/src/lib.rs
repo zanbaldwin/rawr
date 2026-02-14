@@ -3,7 +3,7 @@ pub mod error;
 pub mod file;
 mod path;
 
-pub use crate::backend::StorageBackend;
+use crate::backend::StorageBackend;
 pub use crate::path::validate as validate_path;
 use std::sync::Arc;
 

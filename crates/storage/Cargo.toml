@@ -14,7 +14,12 @@ s3 = ["dep:aws-sdk-s3"]
 async-stream = { workspace = true }
 # TODO: When `dyn async trait` stabilizes, migrate to native 2024 Edition async traits.
 async-trait = { workspace = true }
-aws-sdk-s3 = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true, optional = true, features = [
+    "default-https-client",
+    # Doesn't add any additional Tokio deps, but enabled
+    # sleep impls for exponential back-off. Keep it!
+    "rt-tokio",
+] }
 blake3 = { workspace = true }
 crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }

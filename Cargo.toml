@@ -12,7 +12,7 @@ version = "0.1.0-beta"
 [workspace.dependencies]
 async-stream = "^0.3.6"
 async-trait = "^0.1"
-aws-sdk-s3 = "^1.120"
+aws-sdk-s3 = { version = "^1.120", default-features = false }
 blake3 = "^1.8"
 brotli = "^8.0"
 bzip2 = "^0.6.0"

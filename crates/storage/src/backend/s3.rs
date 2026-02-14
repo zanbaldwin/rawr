@@ -15,12 +15,9 @@
 //! explicit credentials, and the credential chain is inherently single-account
 //! which doesn't fit well with multiple heterogeneous targets.
 
-use crate::{
-    FileInfo, StorageBackend,
-    backend::FileInfoStream,
-    error::{ErrorKind, Result},
-    validate_path,
-};
+use super::{FileInfoStream, WalkEntry};
+use crate::error::{ErrorKind, Result};
+use crate::{FileInfo, StorageBackend, validate_path};
 use async_trait::async_trait;
 use aws_sdk_s3::{
     Client,

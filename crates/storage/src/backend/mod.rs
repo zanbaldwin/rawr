@@ -15,10 +15,16 @@ pub use self::ro::ReadOnlyBackend;
 use crate::{FileInfo, error::Result};
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 type FileInfoStream<'a> = Pin<Box<dyn Stream<Item = Result<FileInfo>> + Send + 'a>>;
+
+enum WalkEntry {
+    File(FileInfo),
+    Descend(PathBuf),
+    Skip,
+}
 
 /// Unified interface for storage backends.
 ///

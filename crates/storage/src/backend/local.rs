@@ -15,6 +15,7 @@ use std::fs::{Metadata, create_dir_all as sync_create_dir};
 use std::path::{Path, PathBuf};
 use tokio::fs::{self, DirEntry};
 use tokio::io::AsyncReadExt;
+use tokio_util::io::SyncIoBridge;
 
 /// Local filesystem storage backend.
 ///
@@ -222,7 +223,9 @@ impl StorageBackend for LocalBackend {
     }
 
     async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        let file = fs::File::open(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?;
+        Ok(Box::new(SyncIoBridge::new(file)))
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
@@ -236,7 +239,12 @@ impl StorageBackend for LocalBackend {
     }
 
     async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
-        todo!()
+        let abs_path = self.absolute_path(path)?;
+        if let Some(parent) = abs_path.parent() {
+            fs::create_dir_all(parent).await.map_err(|e| Self::map_io_error(e, path))?;
+        }
+        let file = fs::File::create(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?;
+        Ok(Box::new(SyncIoBridge::new(file)))
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {

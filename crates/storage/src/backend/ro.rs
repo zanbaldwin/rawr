@@ -47,7 +47,7 @@ impl StorageBackend for ReadOnlyBackend {
     }
 
     async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
-        todo!()
+        self.inner.reader(path).await
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
@@ -56,7 +56,8 @@ impl StorageBackend for ReadOnlyBackend {
     }
 
     async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
-        todo!()
+        tracing::info!(path = %path.display(), "Skipping writer during read-only mode");
+        Ok(Box::new(std::io::sink()))
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {

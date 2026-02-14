@@ -87,7 +87,10 @@ impl StorageBackend for HtmlOnlyBackend {
     }
 
     async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
-        todo!()
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.reader(path).await
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
@@ -98,7 +101,10 @@ impl StorageBackend for HtmlOnlyBackend {
     }
 
     async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
-        todo!()
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.writer(path).await
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {

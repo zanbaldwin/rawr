@@ -5,7 +5,7 @@
 
 use crate::backend::FileInfoStream;
 use crate::error::ErrorKind;
-use crate::{BackendHandle, FileInfo, StorageBackend, error::Result};
+use crate::{BackendHandle, StorageBackend, error::Result, file::FileInfo};
 use async_trait::async_trait;
 use futures::StreamExt;
 use rawr_compress::Compression;

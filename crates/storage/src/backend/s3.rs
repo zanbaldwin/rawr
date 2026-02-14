@@ -17,7 +17,7 @@
 
 use super::{FileInfoStream, WalkEntry};
 use crate::error::{ErrorKind, Result};
-use crate::{FileInfo, StorageBackend, validate_path};
+use crate::{StorageBackend, file::FileInfo, validate_path};
 use async_stream::stream;
 use async_trait::async_trait;
 use aws_sdk_s3::types::Object;

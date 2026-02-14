@@ -16,7 +16,7 @@ pub use self::local::LocalBackend;
 pub use self::ro::ReadOnlyBackend;
 #[cfg(feature = "s3")]
 pub use self::s3::S3Backend;
-use crate::{FileInfo, error::Result};
+use crate::{error::Result, file::FileInfo};
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};
 use std::path::{Path, PathBuf};

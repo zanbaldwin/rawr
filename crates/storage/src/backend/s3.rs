@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use time::OffsetDateTime;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio_util::io::SyncIoBridge;
 
 /// Generous default for concurrent S3 requests.
 ///
@@ -315,7 +316,11 @@ impl StorageBackend for S3Backend {
     }
 
     async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
-        todo!()
+        let key = self.full_key(path)?;
+        let _permit = self.acquire_permit().await;
+        let response =
+            self.client.get_object().bucket(&self.bucket).key(&key).send().await.map_err(|e| map_get_error(e, path))?;
+        Ok(Box::new(SyncIoBridge::new(response.body.into_async_read())))
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
@@ -332,7 +337,8 @@ impl StorageBackend for S3Backend {
     }
 
     async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
-        todo!()
+        let key = self.full_key(path)?;
+        Ok(Box::new(writer::S3BufWriter::new(self.client.clone(), self.bucket.clone(), key)))
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
@@ -444,6 +450,122 @@ fn map_sdk_error<E: ToString>(e: SdkError<E>) -> ErrorKind {
     match &e {
         SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(s),
         _ => ErrorKind::BackendError(s),
+    }
+}
+
+// The following module is the result of me breaking down, crying in the corner,
+// and muttering "I though async meant I wouldn't have to write my own state
+// machines", then accepting defeat and asking ChatGPT a LOT of stupid questions.
+// This results in a piss-poor solution that doesn't have multipart uploads (!),
+// and still buffers the entire file into memory (!!) despite that being the core
+// reason I even added a writer() trait function in the first place (!!!), just so
+// I can a damn Result type as a return value.
+// Fuck async and fuck the S3 SDK.
+mod writer {
+    use aws_sdk_s3::Client;
+    use aws_sdk_s3::primitives::ByteStream;
+    use std::io::{self, Write};
+    use tokio::runtime::Handle;
+
+    /// Buffered S3 writer
+    ///
+    /// Buffers all written data in memory (!!), then performs a single
+    /// `PutObject` when `flush()` is called. Errors from the upload propagate
+    /// through `flush()`. If dropped without flushing, a best-effort upload is
+    /// attempted with errors logged.
+    ///
+    /// Oh yeah, if you call this from an async context, it will panic
+    /// because fuck you that's why.
+    pub(crate) struct S3BufWriter {
+        client: Client,
+        bucket: String,
+        key: String,
+        buf: Vec<u8>,
+        handle: Handle,
+        flushed: bool,
+    }
+
+    impl S3BufWriter {
+        pub(crate) fn new(client: Client, bucket: String, key: String) -> Self {
+            Self {
+                client,
+                bucket,
+                key,
+                buf: Vec::new(),
+                handle: Handle::current(),
+                flushed: false,
+            }
+        }
+
+        fn upload(&self, data: Vec<u8>) -> io::Result<()> {
+            // APPARENTLY this is fine, because it's the same machanism that
+            // SyncIoBridge uses internally. But be warned that this WILL PANIC
+            // is called from within an async context; it MUST be called from a
+            // sync or spawn_blocking context.
+            self.handle.block_on(async {
+                self.client
+                    .put_object()
+                    .bucket(&self.bucket)
+                    .key(&self.key)
+                    .body(ByteStream::from(data))
+                    .send()
+                    .await
+                    .map_err(|e| io::Error::other(e.to_string()))?;
+                Ok(())
+            })
+        }
+    }
+
+    impl Write for S3BufWriter {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.buf.extend_from_slice(data);
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            if self.buf.is_empty() {
+                self.flushed = true;
+                return Ok(());
+            }
+            let data = std::mem::take(&mut self.buf);
+            self.upload(data)?;
+            self.flushed = true;
+            Ok(())
+        }
+    }
+
+    impl Drop for S3BufWriter {
+        fn drop(&mut self) {
+            if self.flushed || self.buf.is_empty() {
+                return;
+            }
+            let data = std::mem::take(&mut self.buf);
+            if let Err(e) = self.upload(data) {
+                tracing::error!(key = %self.key, error = %e, "S3 upload failed during drop");
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use aws_sdk_s3::Client;
+
+        #[tokio::test]
+        async fn test_buffers_and_is_writable() {
+            let config = aws_sdk_s3::Config::builder()
+                .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+                .region(aws_sdk_s3::config::Region::new("us-east-1"))
+                .build();
+            let client = Client::from_conf(config);
+            let mut w = S3BufWriter::new(client, "bucket".into(), "key".into());
+            w.write_all(b"hello ").unwrap();
+            w.write_all(b"world").unwrap();
+            assert_eq!(w.buf, b"hello world");
+            // Don't flush — no real S3 endpoint. Mark flushed to skip
+            // the Drop safety net (which would also fail without S3).
+            w.flushed = true;
+        }
     }
 }
 

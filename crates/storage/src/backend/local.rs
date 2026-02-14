@@ -4,7 +4,7 @@
 //! Files are stored in a configured directory and accessed using standard filesystem
 //! operations via `tokio::fs` for async I/O.
 
-use super::{FileInfoStream, WalkEntry};
+use super::{BoxSyncRead, BoxSyncWrite, FileInfoStream, WalkEntry};
 use crate::error::{ErrorKind, Result};
 use crate::{StorageBackend, file::FileInfo, path::validate as validate_path};
 use async_stream::stream;
@@ -221,6 +221,10 @@ impl StorageBackend for LocalBackend {
         Ok(buffer)
     }
 
+    async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
+        todo!()
+    }
+
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         let abs_path = self.absolute_path(path)?;
         // Create parent directories if needed, to keep behaviour
@@ -229,6 +233,10 @@ impl StorageBackend for LocalBackend {
             fs::create_dir_all(parent).await.map_err(|e| Self::map_io_error(e, path))?;
         }
         Ok(fs::write(&abs_path, data).await.map_err(|e| Self::map_io_error(e, path))?)
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
+        todo!()
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
@@ -443,5 +451,56 @@ mod tests {
         assert!(backend.read(Path::new("etc/../../passwd")).await.is_err());
         assert!(backend.write(Path::new("../etc/passwd"), b"data").await.is_err());
         assert!(backend.delete(Path::new("../../file")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_writer_reader_roundtrip() {
+        use std::io::{Read, Write};
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let data = b"sync streaming roundtrip";
+
+        let mut w = backend.writer(Path::new("stream.txt")).await.unwrap();
+        tokio::task::spawn_blocking(move || {
+            w.write_all(data).unwrap();
+            w.flush().unwrap();
+        })
+        .await
+        .unwrap();
+
+        let mut r = backend.reader(Path::new("stream.txt")).await.unwrap();
+        let buf = tokio::task::spawn_blocking(move || {
+            let mut buf = Vec::new();
+            r.read_to_end(&mut buf).unwrap();
+            buf
+        })
+        .await
+        .unwrap();
+        assert_eq!(buf, data);
+    }
+
+    #[tokio::test]
+    async fn test_writer_creates_directories() {
+        use std::io::Write;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let mut w = backend.writer(Path::new("a/b/c/stream.txt")).await.unwrap();
+        tokio::task::spawn_blocking(move || {
+            w.write_all(b"nested").unwrap();
+            w.flush().unwrap();
+        })
+        .await
+        .unwrap();
+        assert!(backend.exists(Path::new("a/b/c/stream.txt")).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_reader_nonexistent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path()).unwrap();
+        let Err(err) = backend.reader(Path::new("nonexistent.txt")).await else {
+            panic!("expected error");
+        };
+        assert!(matches!(&*err, ErrorKind::NotFound(_)));
     }
 }

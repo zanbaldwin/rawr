@@ -15,7 +15,7 @@
 //! explicit credentials, and the credential chain is inherently single-account
 //! which doesn't fit well with multiple heterogeneous targets.
 
-use super::{FileInfoStream, WalkEntry};
+use super::{BoxSyncRead, BoxSyncWrite, FileInfoStream, WalkEntry};
 use crate::error::{ErrorKind, Result};
 use crate::{StorageBackend, file::FileInfo, validate_path};
 use async_stream::stream;
@@ -314,6 +314,10 @@ impl StorageBackend for S3Backend {
         Ok(body_bytes.to_vec())
     }
 
+    async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
+        todo!()
+    }
+
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         let key = self.full_key(path)?;
         let _permit = self.acquire_permit().await;
@@ -325,6 +329,10 @@ impl StorageBackend for S3Backend {
         let body = ByteStream::from(data.to_vec());
         self.client.put_object().bucket(&self.bucket).key(&key).body(body).send().await.map_err(map_sdk_error)?;
         Ok(())
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
+        todo!()
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {

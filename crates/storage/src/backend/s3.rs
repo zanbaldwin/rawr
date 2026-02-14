@@ -25,9 +25,12 @@ use async_trait::async_trait;
 use aws_sdk_s3::{
     Client,
     config::{BehaviorVersion, Credentials, Region, retry::RetryConfig},
-    primitives::DateTime,
+    error::{ProvideErrorMetadata, SdkError},
+    operation::{copy_object::CopyObjectError, get_object::GetObjectError, head_object::HeadObjectError},
+    primitives::{ByteStream, DateTime},
 };
 use exn::{OptionExt, ResultExt};
+use rawr_compress::Compression;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -135,7 +138,7 @@ impl S3Backend {
     /// Construct the full S3 key from a relative path.
     fn full_key(&self, path: &Path) -> Result<String> {
         let validated = validate_path(path)?;
-        // TODO: String lossy, or convert to &str and propogate an InvalidPath error?
+        // TODO: String lossy, or convert to &str and propagate an InvalidPath error?
         let path_str = validated.to_string_lossy();
         Ok(match &self.prefix {
             Some(prefix) => format!("{}/{}", prefix.trim_end_matches('/'), path_str),
@@ -179,31 +182,182 @@ impl StorageBackend for S3Backend {
     }
 
     async fn exists(&self, path: &Path) -> Result<bool> {
-        todo!()
+        let key = self.full_key(path)?;
+        let _permit = self.acquire_permit().await;
+        match self.client.head_object().bucket(&self.bucket).key(&key).send().await {
+            Ok(_) => Ok(true),
+            Err(SdkError::ServiceError(e)) if matches!(e.err(), HeadObjectError::NotFound(_)) => Ok(false),
+            Err(e) => Err(map_head_error(e, path).into()),
+        }
     }
 
     async fn read(&self, path: &Path) -> Result<Vec<u8>> {
-        todo!()
+        let key = self.full_key(path)?;
+        let _permit = self.acquire_permit().await;
+        // TODO: Future iteration - implement streaming reads for large files
+        //       to reduce memory usage. Current implementation loads entire
+        //       file into memory, which is fine for compressed HTML files but
+        //       may need optimization for larger content.
+        let response =
+            self.client.get_object().bucket(&self.bucket).key(&key).send().await.map_err(|e| map_get_error(e, path))?;
+        let bytes = response
+            .body
+            .collect()
+            .await
+            .or_raise(|| ErrorKind::Network("failed to read response body".to_string()))?
+            .into_bytes();
+        Ok(bytes.to_vec())
     }
 
     async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
-        todo!()
+        let key = self.full_key(path)?;
+        // If bytes == 0, then we could return an empty Vec early here.
+        // But if someone is requesting zero bytes, then they deserve to have
+        // their time and resources wasted by making an unnecessary API call.
+        // Do better.
+        let _permit = self.acquire_permit().await;
+        // Request only the first N bytes using Range header. I've never
+        // implemented a Range header, it's wild to me that this works.
+        let range = format!("bytes=0-{}", bytes.saturating_sub(1));
+        let response = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .range(range)
+            .send()
+            .await
+            .map_err(|e| map_get_error(e, path))?;
+        let body_bytes = response
+            .body
+            .collect()
+            .await
+            .or_raise(|| ErrorKind::Network("failed to read response body".to_string()))?
+            .into_bytes();
+        Ok(body_bytes.to_vec())
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        todo!()
+        let key = self.full_key(path)?;
+        let _permit = self.acquire_permit().await;
+        // TODO: Future iteration - implement multipart upload for large files
+        //       (>5MB) to improve reliability and allow resumable uploads.
+        //       Current implementation uses single PutObject which is fine
+        //       for compressed HTML files but may need optimization for
+        //       larger content.
+        let body = ByteStream::from(data.to_vec());
+        self.client.put_object().bucket(&self.bucket).key(&key).body(body).send().await.map_err(|e| match &e {
+            SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
+            _ => ErrorKind::BackendError(e.to_string()),
+        })?;
+        Ok(())
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
-        todo!()
+        let key = self.full_key(path)?;
+        // Note: S3 DeleteObject succeeds even if the object doesn't exist.
+        // We're only performing the existence check for completeness to match
+        // the trait's expected behaviour, not because it's required.
+        if !self.exists(path).await? {
+            exn::bail!(ErrorKind::NotFound(path.to_path_buf()));
+        }
+        // Technically because of async, in this little space between the
+        // check-then-delete another process (or another task in the runtime)
+        // could come along and delete the file. This is a no-op and doesn't
+        // fucking matter in the slightest, but I'm learning as I'm going along
+        // and I need to remember little things like these for when it does
+        // matter (eg, check-then-"some important op" where fn isn't atomic).
+        let _permit = self.acquire_permit().await;
+        self.client.delete_object().bucket(&self.bucket).key(&key).send().await.map_err(|e| match &e {
+            SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
+            _ => ErrorKind::BackendError(e.to_string()),
+        })?;
+        Ok(())
     }
 
+    // Good lord, why is renaming so complex on S3?
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        todo!()
+        let from_key = self.full_key(from)?;
+        // Probably redundant, but necessary. See below about `NoSuchKey`.
+        if !self.exists(from).await? {
+            exn::bail!(ErrorKind::NotFound(from.to_path_buf()));
+        }
+        let to_key = self.full_key(to)?;
+        // S3 doesn't support rename (booo), so we non-atomically copy-then-delete.
+        let _permit = self.acquire_permit().await;
+        // Copy source format: "bucket/key" (why is this different to the copy
+        // target? Why include the bucket name but not the `s3://` prefix?
+        // WHY AWS WHY?)
+        // TODO: This feels stupid, definitely have to test across multiple
+        //       S3-compatible platforms. Tigris, RustFS and Garage maybe?
+        let copy_source = format!("{}/{}", self.bucket, from_key);
+        self.client.copy_object().bucket(&self.bucket).copy_source(&copy_source).key(&to_key).send().await.map_err(
+            |e| match &e {
+                // S3 returns a `NoSuchKey` when the source files doesn't exist,
+                // but that isn't formally declared in the S3 API spec so
+                // therefore it doesn't get modelled in the Rust SDK. The
+                // following _should_ work but it not guaranteed to, hence why
+                // the above existence check is probably needed even if it's
+                // redundant most the time.
+                SdkError::ServiceError(s) if matches!(s.err().code(), Some("NoSuchKey")) => {
+                    ErrorKind::NotFound(from.to_path_buf())
+                },
+                SdkError::ServiceError(s) if matches!(s.err(), CopyObjectError::ObjectNotInActiveTierError(_)) => {
+                    // WTF am I meant to do with files that do exist but can't be
+                    // accessed without incurring fucking ridiculous egress fees?
+                    // TODO: Don't crash the application just because you're too lazy to deal with this.
+                    unimplemented!("file exists but has fallen deep, deep into the glacier...")
+                },
+                SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
+                _ => ErrorKind::BackendError(e.to_string()),
+            },
+        )?;
+        // Delete the source object, but log a warning and succeed
+        // anyway if this operation fails.
+        if let Err(e) = self.client.delete_object().bucket(&self.bucket).key(&from_key).send().await {
+            tracing::warn!(source = %from_key, target = %to_key, error = %e, "S3 rename: copy succeed but delete failed, file may be duplicated");
+        }
+        Ok(())
     }
 
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
-        todo!()
+        let key = self.full_key(path)?;
+        let _permit = self.acquire_permit().await;
+        let response = self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await
+            .map_err(|e| map_head_error(e, path))?;
+        let size = response.content_length.unwrap_or(0).max(0) as u64;
+        let modified = match response.last_modified {
+            Some(ref dt) => Self::parse_datetime(dt)?,
+            None => OffsetDateTime::UNIX_EPOCH,
+        };
+        let compression = Compression::from_path(path);
+        Ok(FileInfo::new(path.to_path_buf(), size, modified, compression))
+    }
+}
+
+fn map_head_error(e: SdkError<HeadObjectError>, path: &Path) -> ErrorKind {
+    match &e {
+        SdkError::ServiceError(s) if matches!(s.err(), HeadObjectError::NotFound(_)) => {
+            ErrorKind::NotFound(path.to_path_buf())
+        },
+        SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
+        _ => ErrorKind::BackendError(e.to_string()),
+    }
+}
+
+fn map_get_error(e: SdkError<GetObjectError>, path: &Path) -> ErrorKind {
+    match &e {
+        SdkError::ServiceError(s) if matches!(s.err(), GetObjectError::NoSuchKey(_)) => {
+            ErrorKind::NotFound(path.to_path_buf())
+        },
+        SdkError::TimeoutError(_) | SdkError::DispatchFailure(_) => ErrorKind::Network(e.to_string()),
+        _ => ErrorKind::BackendError(e.to_string()),
     }
 }
 

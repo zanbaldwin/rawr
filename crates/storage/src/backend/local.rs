@@ -99,10 +99,10 @@ impl LocalBackend {
     }
 
     /// Re-use same data collection from file metadata for both list and stat functions
-    fn metadata(path: &Path, metadata: Metadata) -> Result<FileInfo> {
+    fn metadata(&self, path: &Path, metadata: Metadata) -> Result<FileInfo> {
         let modified = metadata.modified().map_err(ErrorKind::Io)?.into();
         let compression = Compression::from_path(path);
-        Ok(FileInfo::new(PathBuf::from(path), metadata.len(), modified, compression))
+        Ok(FileInfo::new(self.name(), PathBuf::from(path), metadata.len(), modified, compression))
     }
 
     fn map_io_error(e: std::io::Error, path: &Path) -> ErrorKind {
@@ -130,7 +130,7 @@ impl LocalBackend {
             return Ok(WalkEntry::Descend(path));
         }
         if metadata.is_file() {
-            return Ok(WalkEntry::File(Self::metadata(&relative, metadata)?));
+            return Ok(WalkEntry::File(self.metadata(&relative, metadata)?));
         }
         // Note: silently drop what is most likely a broken symlink.
         Ok(WalkEntry::Skip)
@@ -249,7 +249,7 @@ impl StorageBackend for LocalBackend {
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
         let abs_path = self.absolute_path(path)?;
         let metadata = fs::metadata(&abs_path).await.map_err(|e| Self::map_io_error(e, path))?;
-        Self::metadata(path, metadata)
+        self.metadata(path, metadata)
     }
 }
 

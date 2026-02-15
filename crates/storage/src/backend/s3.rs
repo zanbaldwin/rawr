@@ -190,7 +190,7 @@ impl S3Backend {
             None => UtcDateTime::UNIX_EPOCH,
         };
         let compression = Compression::from_path(&relative);
-        Ok(WalkEntry::File(FileInfo::new(relative, size, modified, compression)))
+        Ok(WalkEntry::File(FileInfo::new(self.name(), relative, size, modified, compression)))
     }
 }
 
@@ -407,7 +407,7 @@ impl StorageBackend for S3Backend {
             None => UtcDateTime::UNIX_EPOCH,
         };
         let compression = Compression::from_path(path);
-        Ok(FileInfo::new(path.to_path_buf(), size, modified, compression))
+        Ok(FileInfo::new(self.name(), path.to_path_buf(), size, modified, compression))
     }
 }
 

@@ -14,4 +14,7 @@
 //!   to their content hashes. Multiple files may reference the same Version
 //!   if they have identical content.
 
+mod db;
 pub mod error;
+
+pub use crate::db::Database;

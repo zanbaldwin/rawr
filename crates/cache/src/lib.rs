@@ -16,5 +16,6 @@
 
 mod db;
 pub mod error;
+mod models;
 
 pub use crate::db::Database;

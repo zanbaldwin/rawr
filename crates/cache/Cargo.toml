@@ -9,6 +9,8 @@ version.workspace = true
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
+facet = { workspace = true }
+facet-json = { workspace = true }
 rawr-compress = { path = "../compress" }
 rawr-extract = { path = "../extract" }
 rawr-storage = { path = "../storage" }
@@ -23,3 +25,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+rstest = { workspace = true }

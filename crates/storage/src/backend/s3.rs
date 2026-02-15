@@ -32,7 +32,7 @@ use exn::{OptionExt, ResultExt};
 use rawr_compress::Compression;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use time::OffsetDateTime;
+use time::UtcDateTime;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 /// Generous default for concurrent S3 requests.
@@ -159,9 +159,9 @@ impl S3Backend {
         self.rate_limiter.clone().acquire_owned().await.unwrap()
     }
 
-    /// Convert AWS DateTime to OffsetDateTime.
-    fn parse_datetime(dt: &DateTime) -> Result<OffsetDateTime> {
-        OffsetDateTime::from_unix_timestamp_nanos(dt.as_nanos())
+    /// Convert AWS DateTime to UtcDateTime.
+    fn parse_datetime(dt: &DateTime) -> Result<UtcDateTime> {
+        UtcDateTime::from_unix_timestamp_nanos(dt.as_nanos())
             .or_raise(|| ErrorKind::BackendError("S3 datetime out of range".to_string()))
     }
 
@@ -187,7 +187,7 @@ impl S3Backend {
         let size = entry.size.unwrap_or(0).max(0) as u64;
         let modified = match entry.last_modified {
             Some(ref dt) => Self::parse_datetime(dt)?,
-            None => OffsetDateTime::UNIX_EPOCH,
+            None => UtcDateTime::UNIX_EPOCH,
         };
         let compression = Compression::from_path(&relative);
         Ok(WalkEntry::File(FileInfo::new(relative, size, modified, compression)))
@@ -404,7 +404,7 @@ impl StorageBackend for S3Backend {
         let size = response.content_length.unwrap_or(0).max(0) as u64;
         let modified = match response.last_modified {
             Some(ref dt) => Self::parse_datetime(dt)?,
-            None => OffsetDateTime::UNIX_EPOCH,
+            None => UtcDateTime::UNIX_EPOCH,
         };
         let compression = Compression::from_path(path);
         Ok(FileInfo::new(path.to_path_buf(), size, modified, compression))

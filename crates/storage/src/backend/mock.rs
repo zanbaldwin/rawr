@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use rawr_compress::Compression;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use time::OffsetDateTime;
+use time::UtcDateTime;
 use tokio::sync::RwLock;
 
 use crate::StorageBackend;
@@ -41,7 +41,7 @@ use crate::StorageBackend;
 /// ```
 pub struct MockBackend {
     name: String,
-    storage: RwLock<HashMap<PathBuf, (OffsetDateTime, Vec<u8>)>>,
+    storage: RwLock<HashMap<PathBuf, (UtcDateTime, Vec<u8>)>>,
 }
 
 impl MockBackend {
@@ -62,7 +62,7 @@ impl MockBackend {
     /// ```
     pub fn with_files(files: impl IntoIterator<Item = (impl Into<PathBuf>, impl Into<Vec<u8>>)>) -> Self {
         let mut map = HashMap::new();
-        let now = OffsetDateTime::now_utc();
+        let now = UtcDateTime::now();
         for (path, data) in files {
             let path = path.into();
             let Ok(validated) = validate_path(&path) else {
@@ -92,7 +92,7 @@ impl MockBackend {
         self
     }
 
-    fn file_info(&self, path: &Path, size: u64, inserted: OffsetDateTime) -> FileInfo {
+    fn file_info(&self, path: &Path, size: u64, inserted: UtcDateTime) -> FileInfo {
         FileInfo::new(path, size, inserted, Compression::from_path(path))
     }
 }
@@ -118,7 +118,7 @@ impl StorageBackend for MockBackend {
         Box::pin(stream! {
             // Snapshot matching entries under the read lock, then drop it
             // before yielding to avoid holding the lock across yield points.
-            let entries: Vec<(PathBuf, (OffsetDateTime, u64))> = {
+            let entries: Vec<(PathBuf, (UtcDateTime, u64))> = {
                 let guard = self.storage.read().await;
                 guard
                     .iter()
@@ -126,7 +126,7 @@ impl StorageBackend for MockBackend {
                         Some(pfx) => path.starts_with(pfx),
                         None => true,
                     })
-                    .map(|(path, (inserted, data))| (path.clone(), (inserted.clone(), data.len() as u64)))
+                    .map(|(path, (inserted, data))| (path.clone(), (*inserted, data.len() as u64)))
                     .collect()
             };
             for (path, (inserted, size)) in entries {
@@ -157,7 +157,7 @@ impl StorageBackend for MockBackend {
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         let path = validate_path(path)?;
-        self.storage.write().await.insert(path, (OffsetDateTime::now_utc(), data.to_vec()));
+        self.storage.write().await.insert(path, (UtcDateTime::now(), data.to_vec()));
         Ok(())
     }
 
@@ -179,7 +179,7 @@ impl StorageBackend for MockBackend {
         let path = validate_path(path)?;
         let guard = self.storage.read().await;
         let (inserted, data) = guard.get(&path).ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(path.clone())))?;
-        Ok(self.file_info(&path, data.len() as u64, inserted.clone()))
+        Ok(self.file_info(&path, data.len() as u64, *inserted))
     }
 }
 

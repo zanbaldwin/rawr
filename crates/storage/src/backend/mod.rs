@@ -7,9 +7,9 @@
 
 mod html;
 mod local;
-mod ro;
 #[cfg(feature = "mock")]
 mod mock;
+mod ro;
 #[cfg(feature = "s3")]
 mod s3;
 
@@ -257,7 +257,7 @@ pub trait StorageBackend: Send + Sync {
     /// # use rawr_storage::{backend::StorageBackend, error::Result};
     /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
     /// let info = backend.stat(Path::new("work.html.bz2")).await?;
-    /// println!("Size: {} bytes, Modified: {}", info.size, info.modified);
+    /// println!("Size: {} bytes, Discovered: {}", info.size, info.discovered_at);
     /// # Ok(())
     /// # }
     /// ```

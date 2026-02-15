@@ -19,3 +19,7 @@ pub use self::series::SeriesPosition;
 pub use self::tag::{Tag, TagKind};
 pub use self::version::Version;
 pub use self::warning::Warning;
+
+fn sanitize(s: impl AsRef<str>) -> String {
+    s.as_ref().trim().to_lowercase().replace('/', "").replace('-', "").replace('_', "").replace(' ', "")
+}

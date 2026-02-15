@@ -8,11 +8,15 @@
 mod html;
 mod local;
 mod ro;
+#[cfg(feature = "mock")]
+mod mock;
 #[cfg(feature = "s3")]
 mod s3;
 
 pub use self::html::HtmlOnlyBackend;
 pub use self::local::LocalBackend;
+#[cfg(feature = "mock")]
+pub use self::mock::MockBackend;
 pub use self::ro::ReadOnlyBackend;
 #[cfg(feature = "s3")]
 pub use self::s3::S3Backend;

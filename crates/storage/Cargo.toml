@@ -8,6 +8,8 @@ version.workspace = true
 
 [features]
 default = []
+# Feature intended for use in other crates' dev dependencies.
+mock = []
 s3 = ["dep:aws-sdk-s3"]
 
 [dependencies]

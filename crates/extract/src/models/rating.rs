@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+use super::sanitize;
 use crate::error::{Error, ErrorKind};
 
 /// Content rating enum.
@@ -51,12 +52,13 @@ impl TryFrom<String> for Rating {
 impl FromStr for Rating {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim() {
-            "G" | "General Audiences" | "general_audiences" => Self::GeneralAudiences,
-            "T" | "Teen And Up Audiences" | "teen_and_up" => Self::TeenAndUp,
-            "M" | "Mature" | "mature" => Self::Mature,
-            "E" | "Explicit" | "explicit" => Self::Explicit,
-            "N" | "Not Rated" | "not_rated" => Self::NotRated,
+        let sanitized = sanitize(s);
+        Ok(match sanitized.as_str() {
+            "g" | "general" | "generalaudiences" => Self::GeneralAudiences,
+            "t" | "teen" | "teenandup" | "teenaudiences" | "teenandupaudiences" => Self::TeenAndUp,
+            "m" | "mature" => Self::Mature,
+            "e" | "explicit" => Self::Explicit,
+            "n" | "notrated" => Self::NotRated,
             _ => exn::bail!(ErrorKind::ParseError {
                 field: "rating",
                 value: format!("unknown rating: {}", s)

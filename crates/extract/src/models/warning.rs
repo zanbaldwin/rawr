@@ -1,3 +1,4 @@
+use super::sanitize;
 use crate::error::{Error, ErrorKind};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
@@ -34,19 +35,19 @@ impl Warning {
 impl FromStr for Warning {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim() {
-            "No Archive Warnings Apply" | "no_archive_warnings_apply" => Self::NoWarningsApply,
-            "Creator Chose Not To Use Archive Warnings"
-            | "creator_chose_not_to_use_archive_warnings"
-            | "Creator Chose Not To Use"
-            | "creator_chose_not_to_use" => Self::CreatorChoseNotToUse,
-            "Graphic Depictions Of Violence"
-            | "graphic_depictions_of_violence"
-            | "Graphic Violence"
-            | "graphic_violence" => Self::GraphicViolence,
-            "Major Character Death" | "major_character_death" => Self::MajorCharacterDeath,
-            "Underage" | "underage" => Self::Underage,
-            "Rape/Non-Con" | "rape_non_con" | "rape_noncon" | "Non-Con" | "non_con" | "noncon" => Self::NonCon,
+        let sanitized = sanitize(s);
+        Ok(match sanitized.as_str() {
+            "noarchivewarningsapply" | "nowarningsapply" => Self::NoWarningsApply,
+            "creatorchosenottousearchivewarnings"
+            | "creatorchosenottousewarnings"
+            | "creatorchosenottouse"
+            | "chosenottousearchivewarnings"
+            | "chosenottousewarnings"
+            | "chosenottouse" => Self::CreatorChoseNotToUse,
+            "graphicdepictionsofviolence" | "graphicviolence" | "depictionsofviolence" => Self::GraphicViolence,
+            "majorcharacterdeath" => Self::MajorCharacterDeath,
+            "underage" => Self::Underage,
+            "rapenoncon" | "noncon" => Self::NonCon,
             _ => exn::bail!(ErrorKind::ParseError {
                 field: "warnings",
                 value: format!("unknown warning: {}", s)

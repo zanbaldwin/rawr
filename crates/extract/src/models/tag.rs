@@ -1,4 +1,7 @@
+use super::sanitize;
+use crate::error::{Error, ErrorKind};
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::str::FromStr;
 
 /// A tag applied to a work.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -32,5 +35,17 @@ impl TagKind {
 impl Display for TagKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.as_str())
+    }
+}
+impl FromStr for TagKind {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let sanitized = sanitize(s);
+        Ok(match sanitized.as_str() {
+            "relationship" => Self::Relationship,
+            "character" => Self::Character,
+            "freeform" => Self::Freeform,
+            _ => exn::bail!(ErrorKind::ParseError { field: "tag_kind", value: s.to_string() }),
+        })
     }
 }

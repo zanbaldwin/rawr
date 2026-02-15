@@ -16,5 +16,6 @@ pub use crate::truncate::{ESTIMATED_HEADER_SIZE_BYTES, safe_html_truncate};
 ///
 /// See [`Extractor`] for more details.
 pub fn extract(html: &str) -> Result<Metadata> {
+    // TODO: Perform hashing of input HTML, and return Version instead of Metadata.
     Extractor::from_long_html(html).metadata()
 }

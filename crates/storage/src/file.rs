@@ -11,12 +11,12 @@
 //! ```no_run
 //! # use rawr_storage::file::{FileInfo, Calculated};
 //! # use rawr_compress::Compression;
-//! # use time::OffsetDateTime;
+//! # use time::UtcDateTime;
 //! // Backends return FileInfo<Discovered> (the default)
 //! let file = FileInfo::new(
 //!     "work/123.html.gz",
 //!     4096,
-//!     OffsetDateTime::now_utc(),
+//!     UtcDateTime::now(),
 //!     Compression::Gzip,
 //! );
 //! // Access metadata fields directly via Deref
@@ -34,11 +34,12 @@
 //! |---|---|
 //! | [`&FileMeta`](FileMeta) | Only metadata needed — works with any state via [`Deref`] |
 //! | [`&FileInfo`](FileInfo) | Working with unhashed files from backend listings |
-//! | [`&FileInfo<Calculated>`](FileInfo) | Hash is required at compile time |
+//! | [`&FileInfo<Read>`](FileInfo) | File hash is required at compile time |
+//! | [`&FileInfo<Processed>`](FileInfo) | Content hash is required at compile time |
 
 use rawr_compress::Compression;
 use std::{ops::Deref, path::PathBuf};
-use time::OffsetDateTime;
+use time::UtcDateTime;
 
 // Note to self: I've never used the typestate pattern and I _really_ want to
 // use it here. Come back here in the future when it comes back to bite you
@@ -55,7 +56,7 @@ pub struct FileMeta {
     /// Relative path from the storage root
     pub path: PathBuf,
     pub size: u64,
-    pub modified: OffsetDateTime,
+    pub modified: UtcDateTime,
     /// Compression format (detected from the file extension)
     pub compression: Compression,
 }
@@ -137,7 +138,7 @@ impl<S: HashState> Deref for FileInfo<S> {
 
 impl FileInfo {
     /// Creates a new file info in the [`Discovered`] state.
-    pub fn new(path: impl Into<PathBuf>, size: u64, modified: OffsetDateTime, compression: Compression) -> Self {
+    pub fn new(path: impl Into<PathBuf>, size: u64, modified: UtcDateTime, compression: Compression) -> Self {
         FileMeta {
             path: path.into(),
             size,

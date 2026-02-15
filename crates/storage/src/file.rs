@@ -2,14 +2,15 @@
 //! whether a file's content hash has been computed using a typestate parameter:
 //!
 //! - [`FileInfo<Discovered>`] (or just [`FileInfo`]) — metadata only, no hash yet
-//! - [`FileInfo<Calculated>`] — hash computed and available as a [`String`]
+//! - [`FileInfo<Read>`] — file hash computed and available as a [`String`]
+//! - [`FileInfo<Processed>`] - content hash computed and available as a [`String`]
 //!
 //! Both dereference to [`FileMeta`], which holds the common fields.
 //!
 //! # Lifecycle
 //!
 //! ```no_run
-//! # use rawr_storage::file::{FileInfo, Calculated};
+//! # use rawr_storage::file::{FileInfo, Read};
 //! # use rawr_compress::Compression;
 //! # use time::UtcDateTime;
 //! // Backends return FileInfo<Discovered> (the default)
@@ -23,19 +24,20 @@
 //! // Access metadata fields directly via Deref
 //! println!("{}: {} bytes", file.path.display(), file.size);
 //!
-//! // Attach a hash to transition to Calculated
-//! let file = file.with_hash("af1349b9f5f9a1a6...");
+//! // Attach a hash to transition to Read state
+//! let file = file.with_file_hash("af1349b9f5f9a1a6...");
 //! // file_hash is now a String, not unit ()
 //! println!("{}: {}", file.path.display(), file.file_hash);
 //! ```
 //!
 //! # Choosing a Type for Function Signatures
 //!
-//! | Accepts | Use when |
-//! |---|---|
-//! | [`&FileMeta`](FileMeta) | Only metadata needed — works with any state via [`Deref`] |
-//! | [`&FileInfo`](FileInfo) | Working with unhashed files from backend listings |
-//! | [`&FileInfo<Calculated>`](FileInfo) | Hash is required at compile time |
+//! | Accepts                            | Use when                                                  |
+//! |------------------------------------|-----------------------------------------------------------|
+//! | [`&FileMeta`](FileMeta)            | Only metadata needed — works with any state via [`Deref`] |
+//! | [`&FileInfo`](FileInfo)            | Working with unhashed files from backend listings         |
+//! | [`&FileInfo<Read>`](FileInfo)      | File hash is required at compile time                     |
+//! | [`&FileInfo<Processed>`](FileInfo) | Content hash is required at compile time                  |
 
 use rawr_compress::Compression;
 use std::{ops::Deref, path::PathBuf};
@@ -56,15 +58,19 @@ pub struct FileMeta {
     pub target: String,
     /// Relative path from the storage root
     pub path: PathBuf,
-    pub size: u64,
-    pub modified: UtcDateTime,
     /// Compression format (detected from the file extension)
     pub compression: Compression,
+    pub size: u64,
+    pub discovered_at: UtcDateTime,
 }
 impl FileMeta {
-    /// Consumes itself to attach a hash, transitioning to [`FileInfo<Calculated>`].
-    pub fn with_hash(self, hash: impl Into<String>) -> FileInfo<Calculated> {
-        FileInfo { meta: self, file_hash: hash.into() }
+    /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].
+    pub fn with_file_hash(self, hash: impl Into<String>) -> FileInfo<Read> {
+        FileInfo {
+            meta: self,
+            file_hash: hash.into(),
+            content_hash: (),
+        }
     }
 }
 
@@ -74,31 +80,47 @@ mod sealed {
 /// Represents the hash calculation state of a [`FileInfo`].
 ///
 /// This trait is sealed and cannot be implemented outside this crate.
-/// The two implementations are [`Discovered`] and [`Calculated`].
+/// The three implementations are [`Discovered`], [`Read`] and [`Processed`].
 pub trait HashState: sealed::Sealed {
     /// - `()` for [`Discovered`]
-    /// - [`String`] for [`Calculated`]
-    type Hash;
+    /// - [`String`] for [`Read`] and [`Processed`]
+    type File;
+    /// - `()` for [`Discovered`] and [`Read`]
+    /// - [`String`] for [`Processed`]
+    type Content;
 }
 
-/// Hash state: file discovered, hash not yet computed.
+/// Hash state: file discovered, hashes not yet computed.
 ///
 /// This is the default state for [`FileInfo`] returned from
 /// [`StorageBackend`](crate::StorageBackend) operations.
 pub struct Discovered;
 impl sealed::Sealed for Discovered {}
 impl HashState for Discovered {
-    type Hash = ();
+    type File = ();
+    type Content = ();
+}
+
+/// Hash state: file hash has been computed.
+///
+/// [`FileInfo<Read>`] provides the file hash as a [`String`] via
+/// the [`file_hash`](FileInfo::file_hash) field.
+pub struct Read;
+impl sealed::Sealed for Read {}
+impl HashState for Read {
+    type File = String;
+    type Content = ();
 }
 
 /// Hash state: content hash has been computed.
 ///
-/// [`FileInfo<Calculated>`] provides the hash as a [`String`] via
-/// the [`file_hash`](FileInfo::file_hash) field.
-pub struct Calculated;
-impl sealed::Sealed for Calculated {}
-impl HashState for Calculated {
-    type Hash = String;
+/// [`FileInfo<Processed>`] provides the content hash as a [`String`] via
+/// the [`content_hash`](FileInfo::content_hash) field.
+pub struct Processed;
+impl sealed::Sealed for Processed {}
+impl HashState for Processed {
+    type File = String;
+    type Content = String;
 }
 
 /// File metadata with typestate-tracked hash status.
@@ -108,14 +130,17 @@ impl HashState for Calculated {
 /// access.
 ///
 /// See the [module documentation](self) for usage examples and guidance
-/// on choosing between `FileMeta`, `FileInfo`, and `FileInfo<Calculated>`
-/// in function signatures.
+/// on choosing between `FileMeta`, `FileInfo`, `FileInfo<Read>`, and
+/// `FileInfo<Processed>` in function signatures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileInfo<S: HashState = Discovered> {
     meta: FileMeta,
     /// - `()` in [`Discovered`] state
-    /// - [`String`] in [`Calculated`] state
-    pub file_hash: S::Hash,
+    /// - [`String`] in [`Read`] and [`Processed`] states
+    pub file_hash: S::File,
+    /// - `()` in [`Discovered`] and [`Read`] states
+    /// - [`String`] in [`Processed`] state
+    pub content_hash: S::Content,
 }
 impl<S: HashState> FileInfo<S> {
     /// Returns a reference to the underlying [`FileMeta`].
@@ -150,19 +175,34 @@ impl FileInfo {
             target: target.into(),
             path: path.into(),
             size,
-            modified,
+            discovered_at: modified,
             compression,
         }
         .into()
     }
 
-    /// Consumes itself to attach a hash, transitioning to [`FileInfo<Calculated>`].
-    pub fn with_hash(self, hash: impl Into<String>) -> FileInfo<Calculated> {
-        FileInfo { meta: self.meta, file_hash: hash.into() }
+    /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].
+    pub fn with_file_hash(self, hash: impl Into<String>) -> FileInfo<Read> {
+        FileInfo {
+            meta: self.meta,
+            file_hash: hash.into(),
+            content_hash: (),
+        }
     }
 }
 impl From<FileMeta> for FileInfo<Discovered> {
     fn from(meta: FileMeta) -> Self {
-        Self { meta, file_hash: () }
+        Self { meta, file_hash: (), content_hash: () }
+    }
+}
+
+impl FileInfo<Read> {
+    /// Consumes itself to attach a hash, transitioning to [`FileInfo<Processed>`].
+    pub fn with_content_hash(self, hash: impl Into<String>) -> FileInfo<Processed> {
+        FileInfo {
+            meta: self.meta,
+            file_hash: self.file_hash,
+            content_hash: hash.into(),
+        }
     }
 }

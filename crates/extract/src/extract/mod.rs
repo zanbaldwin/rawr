@@ -130,21 +130,17 @@ impl Extractor {
         authors
     }
 
-    fn summary(&self) -> String {
-        self.document
-            .select(&consts::SUMMARY_SELECTOR)
-            .next()
-            .map(|el| {
-                #[cfg(feature = "markdown")]
-                {
-                    html_to_markdown(el.inner_html().as_str().trim(), true)
-                }
-                #[cfg(not(feature = "markdown"))]
-                {
-                    el.text().collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")
-                }
-            })
-            .unwrap_or_default()
+    fn summary(&self) -> Option<String> {
+        self.document.select(&consts::SUMMARY_SELECTOR).next().map(|el| {
+            #[cfg(feature = "markdown")]
+            {
+                html_to_markdown(el.inner_html().as_str().trim(), true)
+            }
+            #[cfg(not(feature = "markdown"))]
+            {
+                el.text().collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")
+            }
+        })
     }
 
     fn datalist(&self) -> Datalist<'_> {

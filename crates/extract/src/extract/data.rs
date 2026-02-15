@@ -3,7 +3,7 @@ use crate::consts;
 use crate::error::{ErrorKind, Result};
 use crate::models::{Fandom, Language, Rating, SeriesPosition, Tag, TagKind, Warning};
 use ::regex::{Regex, escape as regex_escape};
-use exn::OptionExt;
+use exn::{OptionExt, ResultExt};
 use scraper::{ElementRef, Html};
 use std::collections::{HashMap, HashSet};
 
@@ -108,9 +108,15 @@ impl<'a> Datalist<'a> {
         series
     }
 
-    pub fn rating(&self) -> Result<Rating> {
-        let text = self.extract_text(&["Rating"]).ok_or_raise(|| ErrorKind::MissingField("rating"))?;
-        text.try_into()
+    pub fn rating(&self) -> Result<Option<Rating>> {
+        if let Some(s) = self.extract_text(&["Rating"]) {
+            Ok(match s.parse::<Rating>().or_raise(|| ErrorKind::ParseError { field: "rating", value: s }) {
+                Ok(r) => Some(r),
+                Err(e) => return Err(e),
+            })
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn warnings(&self) -> Vec<Warning> {

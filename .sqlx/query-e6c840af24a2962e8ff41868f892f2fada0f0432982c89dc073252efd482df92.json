@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO files (target, path, compression, file_size, file_hash, content_hash, discovered_at)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n            ON CONFLICT (target, path) DO UPDATE SET\n                compression = excluded.compression,\n                file_size = excluded.file_size,\n                file_hash = excluded.file_hash,\n                content_hash = excluded.content_hash\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "e6c840af24a2962e8ff41868f892f2fada0f0432982c89dc073252efd482df92"
+}

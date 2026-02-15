@@ -7,13 +7,13 @@ use time::UtcDateTime;
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct FileRow {
-    target: String,
-    path: String,
-    compression: String,
-    file_size: i64,
-    file_hash: String,
-    content_hash: String,
-    discovered_at: i64,
+    pub(crate) target: String,
+    pub(crate) path: String,
+    pub(crate) compression: String,
+    pub(crate) file_size: i64,
+    pub(crate) file_hash: String,
+    pub(crate) content_hash: String,
+    pub(crate) discovered_at: i64,
 }
 impl TryFrom<&storage::FileInfo<Processed>> for FileRow {
     type Error = Error;

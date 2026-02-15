@@ -1,35 +1,32 @@
+use crate::error::{Error, ErrorKind};
+use crate::models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy};
 use exn::ResultExt;
 use facet_json::{from_str as from_json, to_string as to_json};
 use rawr_extract::models as extract;
 use time::UtcDateTime;
 
-use crate::{
-    error::{Error, ErrorKind},
-    models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy},
-};
-
 #[derive(sqlx::FromRow)]
 pub(crate) struct VersionRow {
-    content_hash: String,
-    content_crc32: i64,
-    work_id: i64,
-    content_size: i64,
-    title: String,
-    authors: String,
-    fandoms: String,
-    series: String,
-    chapters_written: i64,
+    pub(crate) content_hash: String,
+    pub(crate) content_crc32: i64,
+    pub(crate) work_id: i64,
+    pub(crate) content_size: i64,
+    pub(crate) title: String,
+    pub(crate) authors: String,
+    pub(crate) fandoms: String,
+    pub(crate) series: String,
+    pub(crate) chapters_written: i64,
     #[sqlx(default)]
-    chapters_total: Option<i64>,
-    words: i64,
-    summary: String,
-    rating: String,
-    warnings: String,
-    lang: String,
-    published_on: i64,
-    last_modified: i64,
-    tags: String,
-    extracted_at: i64,
+    pub(crate) chapters_total: Option<i64>,
+    pub(crate) words: i64,
+    pub(crate) summary: Option<String>,
+    pub(crate) rating: Option<String>,
+    pub(crate) warnings: String,
+    pub(crate) lang: String,
+    pub(crate) published_on: i64,
+    pub(crate) last_modified: i64,
+    pub(crate) tags: String,
+    pub(crate) extracted_at: i64,
 }
 impl TryFrom<&extract::Version> for VersionRow {
     type Error = Error;
@@ -51,8 +48,8 @@ impl TryFrom<&extract::Version> for VersionRow {
             chapters_written: i64::from(version.metadata.chapters.written),
             chapters_total: version.metadata.chapters.total.map(i64::from),
             words: i64::try_from(version.metadata.words).or_raise(|| ErrorKind::InvalidData("words"))?,
-            summary: version.metadata.summary.clone(),
-            rating: version.metadata.rating.as_short_str().to_string(),
+            summary: version.metadata.summary.as_ref().map(|s| s.to_string()),
+            rating: version.metadata.rating.map(|r| r.as_short_str().to_string()),
             warnings: to_json(&warnings).or_raise(|| ErrorKind::InvalidData("warnings"))?,
             lang: version.metadata.language.name.clone(),
             published_on: version.metadata.published.midnight().as_utc().unix_timestamp(),
@@ -94,7 +91,10 @@ impl TryFrom<VersionRow> for extract::Version {
                         .transpose()?,
                 ),
                 words: u64::try_from(row.words).or_raise(|| ErrorKind::InvalidData("words"))?,
-                rating: row.rating.parse::<extract::Rating>().or_raise(|| ErrorKind::InvalidData("rating"))?,
+                rating: row
+                    .rating
+                    .map(|r| r.parse::<extract::Rating>().or_raise(|| ErrorKind::InvalidData("rating")))
+                    .transpose()?,
                 warnings: from_json::<Vec<WarningProxy>>(&row.warnings)
                     .or_raise(|| ErrorKind::InvalidData("warnings"))?
                     .into_iter()
@@ -140,8 +140,8 @@ mod tests {
             chapters_written: 6,
             chapters_total: Some(6),
             words: 19375,
-            summary: "".to_string(),
-            rating: "G".to_string(),
+            summary: Some("".to_string()),
+            rating: Some("G".to_string()),
             warnings: r#"["NoWarningsApply"]"#.to_string(),
             lang: "English".to_string(),
             published_on: 820450800,
@@ -179,8 +179,8 @@ mod tests {
                 series: vec![],
                 chapters: extract::Chapters { written: 6, total: Some(6) },
                 words: 19375,
-                summary: "".to_string(),
-                rating: extract::Rating::GeneralAudiences,
+                summary: Some("".to_string()),
+                rating: Some(extract::Rating::GeneralAudiences),
                 warnings: vec![extract::Warning::NoWarningsApply],
                 language: extract::Language::new("English"),
                 published: published_on,

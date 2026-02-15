@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT DISTINCT work_id\n            FROM versions\n            ORDER BY work_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "work_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd36eb0d9a9d7c7b444e0c51de58017c34a1624fa6abeb707e1bc2c0ea84be74"
+}

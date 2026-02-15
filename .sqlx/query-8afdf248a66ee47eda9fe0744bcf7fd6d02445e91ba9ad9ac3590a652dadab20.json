@@ -1,0 +1,164 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                f.target,\n                f.path,\n                f.compression,\n                f.file_size,\n                f.file_hash,\n                f.discovered_at,\n                v.content_hash,\n                v.content_crc32,\n                v.work_id,\n                v.content_size,\n                v.title,\n                v.authors,\n                v.fandoms,\n                v.series,\n                v.chapters_written,\n                v.chapters_total,\n                v.words,\n                v.summary,\n                v.rating,\n                v.warnings,\n                v.lang,\n                v.published_on,\n                v.last_modified,\n                v.tags,\n                v.extracted_at\n            FROM versions v\n            JOIN files f ON f.content_hash = v.content_hash\n            WHERE v.work_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "target",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "path",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "compression",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_size",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "file_hash",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "discovered_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "content_hash",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "content_crc32",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "work_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "content_size",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "title",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "authors",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "fandoms",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "series",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapters_written",
+        "ordinal": 14,
+        "type_info": "Integer"
+      },
+      {
+        "name": "chapters_total",
+        "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "words",
+        "ordinal": 16,
+        "type_info": "Integer"
+      },
+      {
+        "name": "summary",
+        "ordinal": 17,
+        "type_info": "Text"
+      },
+      {
+        "name": "rating",
+        "ordinal": 18,
+        "type_info": "Text"
+      },
+      {
+        "name": "warnings",
+        "ordinal": 19,
+        "type_info": "Text"
+      },
+      {
+        "name": "lang",
+        "ordinal": 20,
+        "type_info": "Text"
+      },
+      {
+        "name": "published_on",
+        "ordinal": 21,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_modified",
+        "ordinal": 22,
+        "type_info": "Integer"
+      },
+      {
+        "name": "tags",
+        "ordinal": 23,
+        "type_info": "Text"
+      },
+      {
+        "name": "extracted_at",
+        "ordinal": 24,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8afdf248a66ee47eda9fe0744bcf7fd6d02445e91ba9ad9ac3590a652dadab20"
+}

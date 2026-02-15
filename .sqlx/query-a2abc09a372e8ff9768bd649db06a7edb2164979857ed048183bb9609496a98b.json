@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO versions (\n                content_hash,       content_crc32,  work_id,        content_size,\n                title,              authors,        fandoms,        series,\n                chapters_written,   chapters_total, words,          summary,\n                rating,             warnings,       lang,           published_on,\n                last_modified,      tags,           extracted_at\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ON CONFLICT (content_hash) DO NOTHING;\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 19
+    },
+    "nullable": []
+  },
+  "hash": "a2abc09a372e8ff9768bd649db06a7edb2164979857ed048183bb9609496a98b"
+}

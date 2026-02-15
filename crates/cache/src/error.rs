@@ -31,6 +31,10 @@ pub enum ErrorKind {
     /// Serialization/deserialization error.
     #[display("invalid cache data in field {_0}")]
     InvalidData(#[error(not(source))] &'static str),
+    /// When the cache is asked to handle file/version pair that
+    /// don't relate to each other
+    #[display("relationship constraint")]
+    Constraint,
 }
 
 impl ErrorKind {

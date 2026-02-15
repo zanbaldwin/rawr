@@ -93,7 +93,7 @@ impl MockBackend {
     }
 
     fn file_info(&self, path: &Path, size: u64, inserted: UtcDateTime) -> FileInfo {
-        FileInfo::new(path, size, inserted, Compression::from_path(path))
+        FileInfo::new(self.name(), path, size, inserted, Compression::from_path(path))
     }
 }
 impl Default for MockBackend {

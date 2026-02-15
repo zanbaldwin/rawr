@@ -14,6 +14,7 @@
 //! # use time::UtcDateTime;
 //! // Backends return FileInfo<Discovered> (the default)
 //! let file = FileInfo::new(
+//!     "local",
 //!     "work/123.html.gz",
 //!     4096,
 //!     UtcDateTime::now(),
@@ -34,8 +35,7 @@
 //! |---|---|
 //! | [`&FileMeta`](FileMeta) | Only metadata needed — works with any state via [`Deref`] |
 //! | [`&FileInfo`](FileInfo) | Working with unhashed files from backend listings |
-//! | [`&FileInfo<Read>`](FileInfo) | File hash is required at compile time |
-//! | [`&FileInfo<Processed>`](FileInfo) | Content hash is required at compile time |
+//! | [`&FileInfo<Calculated>`](FileInfo) | Hash is required at compile time |
 
 use rawr_compress::Compression;
 use std::{ops::Deref, path::PathBuf};
@@ -53,6 +53,7 @@ use time::UtcDateTime;
 /// on any [`FileInfo<S>`](FileInfo) directly.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileMeta {
+    pub target: String,
     /// Relative path from the storage root
     pub path: PathBuf,
     pub size: u64,
@@ -138,8 +139,15 @@ impl<S: HashState> Deref for FileInfo<S> {
 
 impl FileInfo {
     /// Creates a new file info in the [`Discovered`] state.
-    pub fn new(path: impl Into<PathBuf>, size: u64, modified: UtcDateTime, compression: Compression) -> Self {
+    pub fn new(
+        target: impl Into<String>,
+        path: impl Into<PathBuf>,
+        size: u64,
+        modified: UtcDateTime,
+        compression: Compression,
+    ) -> Self {
         FileMeta {
+            target: target.into(),
             path: path.into(),
             size,
             modified,

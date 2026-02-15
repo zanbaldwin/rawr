@@ -1,5 +1,5 @@
 use super::Metadata;
-use time::Date;
+use time::{Date, UtcDateTime};
 
 /// A specific version of an AO3 work, representing the metadata extracted from
 /// a single HTML download. This is the primary entity in the system.
@@ -20,6 +20,7 @@ pub struct Version {
     /// CRC32 hash of decompressed HTML
     pub crc32: u32,
     pub metadata: Metadata,
+    pub extracted_at: UtcDateTime,
 }
 impl Version {
     /// Returns the most recent modification date for this version.

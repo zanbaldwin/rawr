@@ -29,8 +29,8 @@ pub enum ErrorKind {
     #[display("version not found: ({_0})")]
     VersionNotFound(#[error(not(source))] String),
     /// Serialization/deserialization error.
-    #[display("invalid cache data")]
-    InvalidData,
+    #[display("invalid cache data in field {_0}")]
+    InvalidData(#[error(not(source))] &'static str),
 }
 
 impl ErrorKind {

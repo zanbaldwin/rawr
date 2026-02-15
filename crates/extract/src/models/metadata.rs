@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use time::Date;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
 pub struct Metadata {
     /// AO3 Work ID (extracted from URL)
     pub work_id: u64,

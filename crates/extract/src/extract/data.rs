@@ -109,14 +109,11 @@ impl<'a> Datalist<'a> {
     }
 
     pub fn rating(&self) -> Result<Option<Rating>> {
-        if let Some(s) = self.extract_text(&["Rating"]) {
-            Ok(match s.parse::<Rating>().or_raise(|| ErrorKind::ParseError { field: "rating", value: s }) {
-                Ok(r) => Some(r),
-                Err(e) => return Err(e),
-            })
+        Ok(if let Some(s) = self.extract_text(&["Rating"]) {
+            Some(s.parse::<Rating>().or_raise(|| ErrorKind::ParseError { field: "rating", value: s })?)
         } else {
-            Ok(None)
-        }
+            None
+        })
     }
 
     pub fn warnings(&self) -> Vec<Warning> {

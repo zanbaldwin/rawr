@@ -64,6 +64,22 @@ pub struct FileMeta {
     pub discovered_at: UtcDateTime,
 }
 impl FileMeta {
+    pub fn new(
+        target: impl Into<String>,
+        path: impl Into<PathBuf>,
+        compression: Compression,
+        size: u64,
+        discovered_at: UtcDateTime,
+    ) -> Self {
+        Self {
+            target: target.into(),
+            path: path.into(),
+            compression,
+            size,
+            discovered_at,
+        }
+    }
+
     /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].
     pub fn with_file_hash(self, hash: impl Into<String>) -> FileInfo<Read> {
         FileInfo {
@@ -168,17 +184,10 @@ impl FileInfo {
         target: impl Into<String>,
         path: impl Into<PathBuf>,
         size: u64,
-        modified: UtcDateTime,
+        discovered_at: UtcDateTime,
         compression: Compression,
     ) -> Self {
-        FileMeta {
-            target: target.into(),
-            path: path.into(),
-            size,
-            discovered_at: modified,
-            compression,
-        }
-        .into()
+        FileMeta::new(target, path, compression, size, discovered_at).into()
     }
 
     /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].

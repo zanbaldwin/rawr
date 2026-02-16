@@ -17,8 +17,10 @@
 mod db;
 pub mod error;
 mod models;
+mod repo;
 
 pub use crate::db::Database;
+pub use crate::repo::Repository;
 use rawr_extract::models as extract;
 use rawr_storage::file as storage;
 

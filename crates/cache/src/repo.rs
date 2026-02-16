@@ -494,6 +494,65 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         u64::try_from(row.0).or_raise(|| ErrorKind::Database)
     }
+
+    /* ========== *\
+    |  Duplicates  |
+    \* ========== */
+
+    /// Find content hashes that have multiple files pointing to them, across any target.
+    ///
+    /// Like [`find_duplicate_content_within_targets()`](Self::find_duplicate_content_within_targets), but searches
+    /// across target boundaries (eg, content backed up to a remote target will count as a duplicate of the original
+    /// local content).
+    pub async fn find_duplicate_content_across_targets(&self) -> Result<Vec<(String, u64)>> {
+        let rows: Vec<(String, i64)> =
+            sqlx::query_as(include_str!("../queries/find_duplicate_content_across_targets.sql"))
+                .fetch_all(&self.pool)
+                .await
+                .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter()
+            .map(|(hash, count)| u64::try_from(count).map(|c| (hash, c)).or_raise(|| ErrorKind::Database))
+            .collect::<Result<Vec<_>>>()
+    }
+
+    /// Find duplicate content (content hashes that have multiple files pointing to them within the same target).
+    ///
+    /// These are duplicate files (same content at different paths within the
+    /// same target). Returns a list of (content_hash, file_count) tuples,
+    /// sorted by count descending.
+    ///
+    /// Use [`get_by_content_hash`](Self::get_by_content_hash) to retrieve
+    /// the actual files for cleanup.
+    pub async fn find_duplicate_content_within_targets(&self) -> Result<Vec<(String, u64)>> {
+        let rows: Vec<(String, i64)> =
+            sqlx::query_as(include_str!("../queries/find_duplicate_content_within_targets.sql"))
+                .fetch_all(&self.pool)
+                .await
+                .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter()
+            .map(|(hash, count)| u64::try_from(count).map(|c| (hash, c)).or_raise(|| ErrorKind::Database))
+            .collect::<Result<Vec<_>>>()
+    }
+
+    /// Find works that have multiple versions.
+    ///
+    /// These may be intentional (tracking history) or candidates for cleanup.
+    /// Returns a list of (work_id, version_count) tuples, sorted by count descending.
+    ///
+    /// Use [`get_by_work_id`](Self::get_by_work_id) to retrieve the versions
+    /// and determine which to keep.
+    pub async fn find_works_with_multiple_versions(&self) -> Result<Vec<(u64, u64)>> {
+        let rows: Vec<(i64, i64)> = sqlx::query_as(include_str!("../queries/find_works_with_multiple_versions.sql"))
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+
+        rows.into_iter()
+            .map(|(id, count)| {
+                u64::try_from(id).and_then(|i| u64::try_from(count).map(|c| (i, c))).or_raise(|| ErrorKind::Database)
+            })
+            .collect::<Result<Vec<_>>>()
+    }
 }
 
 #[cfg(test)]

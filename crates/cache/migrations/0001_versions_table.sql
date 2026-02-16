@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS versions (
     rating TEXT, -- Single Character
     warnings TEXT NOT NULL, -- JSON Array
     lang TEXT NOT NULL, -- Word
-    published_on DATE NOT NULL,
-    last_modified DATE NOT NULL,
+    published_on INT NOT NULL,
+    last_modified INT NOT NULL,
     tags TEXT NOT NULL, -- JSON Array of Objects
     extracted_at INT NOT NULL  -- Unix timestamp
 );

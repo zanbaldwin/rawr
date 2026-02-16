@@ -1,23 +1,24 @@
+use crate::File;
 use crate::error::{Error, ErrorKind};
 use exn::{OptionExt, ResultExt};
 use rawr_compress::Compression;
-use rawr_storage::file::{self as storage, Processed};
+use rawr_storage::file as storage;
 use std::path::PathBuf;
 use time::UtcDateTime;
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct FileRow {
-    target: String,
-    path: String,
-    compression: String,
-    file_size: i64,
-    file_hash: String,
-    content_hash: String,
-    discovered_at: i64,
+    pub(crate) target: String,
+    pub(crate) path: String,
+    pub(crate) compression: String,
+    pub(crate) file_size: i64,
+    pub(crate) file_hash: String,
+    pub(crate) content_hash: String,
+    pub(crate) discovered_at: i64,
 }
-impl TryFrom<&storage::FileInfo<Processed>> for FileRow {
+impl TryFrom<&File> for FileRow {
     type Error = Error;
-    fn try_from(file: &storage::FileInfo<Processed>) -> Result<Self, Self::Error> {
+    fn try_from(file: &File) -> Result<Self, Self::Error> {
         Ok(Self {
             target: file.target.clone(),
             path: file.path.to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string(),
@@ -29,20 +30,17 @@ impl TryFrom<&storage::FileInfo<Processed>> for FileRow {
         })
     }
 }
-impl TryFrom<FileRow> for storage::FileInfo<Processed> {
+impl TryFrom<FileRow> for File {
     type Error = Error;
     fn try_from(row: FileRow) -> Result<Self, Self::Error> {
-        let meta = storage::FileMeta {
-            target: row.target,
-            path: PathBuf::from(row.path),
-            compression: row
-                .compression
-                .parse::<Compression>()
-                .or_raise(|| ErrorKind::InvalidData("compression format"))?,
-            size: u64::try_from(row.file_size).or_raise(|| ErrorKind::InvalidData("file size"))?,
-            discovered_at: UtcDateTime::from_unix_timestamp(row.discovered_at)
+        let meta = storage::FileMeta::new(
+            row.target,
+            PathBuf::from(row.path),
+            row.compression.parse::<Compression>().or_raise(|| ErrorKind::InvalidData("compression format"))?,
+            u64::try_from(row.file_size).or_raise(|| ErrorKind::InvalidData("file size"))?,
+            UtcDateTime::from_unix_timestamp(row.discovered_at)
                 .or_raise(|| ErrorKind::InvalidData("discovery date"))?,
-        };
+        );
         Ok(meta.with_file_hash(row.file_hash).with_content_hash(row.content_hash))
     }
 }

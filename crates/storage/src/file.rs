@@ -132,6 +132,7 @@ impl HashState for Read {
 ///
 /// [`FileInfo<Processed>`] provides the content hash as a [`String`] via
 /// the [`content_hash`](FileInfo::content_hash) field.
+#[derive(Debug, Eq, PartialEq)]
 pub struct Processed;
 impl sealed::Sealed for Processed {}
 impl HashState for Processed {

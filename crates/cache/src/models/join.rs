@@ -49,11 +49,6 @@ impl TryFrom<FullJoinRow> for (File, Version) {
 ///
 /// Selecting from "versions LEFT JOIN files" may result in orphaned versions
 /// with no related files.
-///
-/// **Important**: the SELECT order matter with sqlx, as `f.*, v.*` may
-/// return a NULL content hash - you must use `v.*, f.*`.
-// TODO: That is literally a guess. I haven't written the tests yet and I'm
-//       too lazy to set up a database to test it manually.
 pub(crate) struct LeftJoinRow {
     pub(crate) file: Option<FileRow>,
     pub(crate) version: VersionRow,

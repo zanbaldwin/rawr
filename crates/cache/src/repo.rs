@@ -31,7 +31,7 @@ pub enum ExistenceResult {
     /// record is stale and the file needs to be re-imported to update the cache.
     HashMismatch(File, Version),
     /// The specified file is not recorded in the cache database, but a file
-    /// with the same hash is known about at a different location.
+    /// with the same file hash is known about at a different location.
     LocatedElsewhere(File, Version),
 }
 
@@ -184,7 +184,7 @@ impl Repository {
         row.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()
     }
 
-    /// Get a file and its version by the file hash from a storage target.
+    /// Get all files and their versions matching a file hash within a storage target.
     ///
     /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
     /// disk. This is useful for detecting if a file's content has changed.
@@ -205,7 +205,7 @@ impl Repository {
         rows.into_iter().map(|r| r.try_into()).collect()
     }
 
-    /// Get a file and its version by the file hash from any storage target.
+    /// Get all files and their versions matching a file hash across all storage targets.
     ///
     /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
     /// disk. This is useful for detecting if a file's content has changed.

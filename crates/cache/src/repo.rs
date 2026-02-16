@@ -463,6 +463,37 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         Ok(row.0 > 0)
     }
+
+    /* ============= *\
+    |  Count Methods  |
+    \* ============= */
+
+    /// Count the total number of file records in the database.
+    pub async fn count_scanned_files(&self) -> Result<u64> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/count_scanned_files.sql"))
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        u64::try_from(row.0).or_raise(|| ErrorKind::Database)
+    }
+
+    /// Count the total number of versions in the database.
+    pub async fn count_versions(&self) -> Result<u64> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/count_versions.sql"))
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        u64::try_from(row.0).or_raise(|| ErrorKind::Database)
+    }
+
+    /// Count the number of distinct works in the database.
+    pub async fn count_works(&self) -> Result<u64> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/count_works.sql"))
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        u64::try_from(row.0).or_raise(|| ErrorKind::Database)
+    }
 }
 
 #[cfg(test)]

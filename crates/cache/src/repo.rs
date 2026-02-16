@@ -346,6 +346,35 @@ impl Repository {
             .collect::<Result<Vec<u64>>>()?;
         Ok(ids)
     }
+
+    /* ============== *\
+    |  Update Methods  |
+    \* ============== */
+
+    /// Update a file's path in the database (move/rename).
+    ///
+    /// Used during organize operations when files are moved to match the
+    /// configured path template.
+    ///
+    /// Returns `true` if a record was updated, `false` if `old_path` was not found.
+    pub async fn update_target_path(
+        &self,
+        target: impl AsRef<str>,
+        old_path: impl AsRef<Path>,
+        new_path: impl AsRef<Path>,
+    ) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/update_target_path.sql"))
+            .bind(Self::sqlx_hates_paths(new_path)?)
+            .bind(target.as_ref())
+            .bind(Self::sqlx_hates_paths(old_path)?)
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
 }
 
 #[cfg(test)]

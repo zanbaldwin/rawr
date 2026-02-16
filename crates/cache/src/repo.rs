@@ -749,4 +749,81 @@ mod tests {
         let (file, _version) = retrieved.unwrap();
         assert_eq!(file.content_hash, "content_abc");
     }
+
+    #[tokio::test]
+    async fn test_left_join_orphaned_version() {
+        let path = "fandoms/work.html.bz2";
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file = make_test_file(path, "content_abc");
+        repo.upsert(&file, &version).await.unwrap();
+        assert!(repo.get_by_target_path(DEFAULT_TARGET, path).await.unwrap().is_some());
+        assert!(repo.delete_by_target_path(DEFAULT_TARGET, path).await.unwrap());
+        // Use one of the methods that use a LEFT JOIN (nullable file).
+        let Some((v, f)) = repo.get_by_content_hash("content_abc").await.unwrap() else {
+            panic!("orphaned version not fetched from database");
+        };
+        // Don't compare versions as the original will have nanoseconds
+        // component in the datetimes. Use extracted metadata instead.
+        assert_eq!(version.metadata, v.metadata);
+        assert_eq!(0, f.len());
+    }
+
+    #[tokio::test]
+    async fn test_get_by_content_hash() {
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file1 = make_test_file("file1.html.bz2", "content_abc");
+        repo.upsert(&file1, &version).await.unwrap();
+        let file2 = make_test_file("file2.html.bz2", "content_abc");
+        repo.upsert(&file2, &version).await.unwrap();
+        let (_version, files) = repo.get_by_content_hash("content_abc").await.unwrap().unwrap();
+        assert_eq!(2, files.len());
+        repo.delete_by_target_path(DEFAULT_TARGET, "file1.html.bz2").await.unwrap();
+        let (_version, files) = repo.get_by_content_hash("content_abc").await.unwrap().unwrap();
+        assert_eq!(1, files.len());
+        repo.delete_by_target_path(DEFAULT_TARGET, "file2.html.bz2").await.unwrap();
+        let (_version, files) = repo.get_by_content_hash("content_abc").await.unwrap().unwrap();
+        assert_eq!(0, files.len());
+    }
+
+    #[tokio::test]
+    async fn test_update_path() {
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file = make_test_file("old/path.html.bz2", "content_abc");
+        repo.upsert(&file, &version).await.unwrap();
+        let updated = repo.update_target_path(DEFAULT_TARGET, "old/path.html.bz2", "new/path.html.bz2").await.unwrap();
+        assert!(updated);
+        assert!(repo.get_by_target_path(DEFAULT_TARGET, "old/path.html.bz2").await.unwrap().is_none());
+        assert!(repo.get_by_target_path(DEFAULT_TARGET, "new/path.html.bz2").await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_cascade_delete() {
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file = make_test_file("fandoms/work.html.bz2", "content_abc");
+        repo.upsert(&file, &version).await.unwrap();
+        // Delete version should cascade to file
+        repo.delete_by_content_hash("content_abc").await.unwrap();
+        let retrieved = repo.get_by_target_path(DEFAULT_TARGET, "fandoms/work.html.bz2").await.unwrap();
+        assert!(retrieved.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_duplicate_content() {
+        let repo = make_repository().await;
+        let version1 = make_test_version(111, "hash1");
+        let version2 = make_test_version(222, "hash2");
+        let file1 = make_test_file("path1.html.bz2", "hash1");
+        let file2 = make_test_file("path2.html.bz2", "hash1");
+        let file3 = make_test_file("path3.html.bz2", "hash2");
+        repo.upsert(&file1, &version1).await.unwrap();
+        repo.upsert(&file2, &version1).await.unwrap();
+        repo.upsert(&file3, &version2).await.unwrap();
+        let dups = repo.find_duplicate_content_across_targets().await.unwrap();
+        assert_eq!(dups.len(), 1);
+        assert_eq!(dups[0], ("hash1".to_string(), 2));
+    }
 }

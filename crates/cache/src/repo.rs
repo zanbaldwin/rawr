@@ -16,6 +16,25 @@ type FileResult = (File, Version);
 type OptionalFileResult = (Option<File>, Version);
 type VersionResult = (Version, Vec<File>);
 
+/// Result of checking whether a file exists in the cache.
+#[derive(Debug, Eq, PartialEq)]
+pub enum ExistenceResult {
+    /// No file record exists at the given path.
+    NotFound,
+    /// A file record exists at the given path and the file hash matches.
+    ExactMatch(File, Version),
+    /// A file record exists at the given path, but the current file hash does
+    /// not match what's on record.
+    ///
+    /// The file could be corrupt, it could have been replaced, it could have
+    /// been recompressed to another format. Whatever happened, the current file
+    /// record is stale and the file needs to be re-imported to update the cache.
+    HashMismatch(File, Version),
+    /// The specified file is not recorded in the cache database, but a file
+    /// with the same file hash is known about at a different location.
+    LocatedElsewhere(File, Version),
+}
+
 fn group_files_by_version(rows: Vec<FileResult>) -> Vec<VersionResult> {
     // TODO: Weep at the allocations. Burn this quick and dirty hack to the ground.
     //       I was meant to refactor group_optional_files_by_version before
@@ -374,6 +393,75 @@ impl Repository {
             .await
             .or_raise(|| ErrorKind::Database)?;
         Ok(result.rows_affected() > 0)
+    }
+
+    /* ================ *\
+    |  Existence Method  |
+    \* ================ */
+
+    /// Check if a file exists and whether its hash matches.
+    ///
+    /// This is the primary method for determining if a file needs to be
+    /// re-imported during a scan operation:
+    ///
+    /// | Result                                | Action                                     |
+    /// |---------------------------------------|--------------------------------------------|
+    /// | [`ExistenceResult::NotFound`]         | File is new, needs full import             |
+    /// | [`ExistenceResult::ExactMatch`]       | File unchanged, skip import                |
+    /// | [`ExistenceResult::HashMismatch`]     | File changed, needs re-import              |
+    /// | [`ExistenceResult::LocatedElsewhere`] | File is new, import but may re-use version |
+    pub async fn exists(
+        &self,
+        target: impl AsRef<str>,
+        path: impl AsRef<Path>,
+        file_hash: impl AsRef<str>,
+    ) -> Result<ExistenceResult> {
+        if let Some((file, version)) = self.get_by_target_path(target, path).await? {
+            return Ok(match file.file_hash == file_hash.as_ref() {
+                true => ExistenceResult::ExactMatch(file, version),
+                false => ExistenceResult::HashMismatch(file, version),
+            });
+        }
+        Ok(match self.get_by_file_hash_across_targets(file_hash.as_ref()).await?.into_iter().next() {
+            Some((file, version)) => ExistenceResult::LocatedElsewhere(file, version),
+            _ => ExistenceResult::NotFound,
+        })
+    }
+
+    /// Check if a file record exists at the given target and path, without
+    /// fetching the full row.
+    pub async fn target_path_exists(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/target_path_exists.sql"))
+            .bind(target.as_ref())
+            .bind(Self::sqlx_hates_paths(path)?)
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(row.0 > 0)
+    }
+
+    /// Check if a file with the given compressed file hash exists in any target.
+    ///
+    /// Useful for detecting if an identical compressed file exists elsewhere
+    /// in the library or other targets.
+    pub async fn file_hash_exists(&self, file_hash: impl AsRef<str>) -> Result<bool> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/file_hash_exists.sql"))
+            .bind(file_hash.as_ref())
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(row.0 > 0)
+    }
+
+    /// Check if a version with the given decompressed content hash (BLAKE3 of
+    /// the HTML) exists in the database.
+    pub async fn content_hash_exists(&self, content_hash: impl AsRef<str>) -> Result<bool> {
+        let row: (i64,) = sqlx::query_as(include_str!("../queries/content_hash_exists.sql"))
+            .bind(content_hash.as_ref())
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(row.0 > 0)
     }
 }
 

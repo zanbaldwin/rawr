@@ -1,8 +1,8 @@
-//! Combined repository for FileRecord and Version entities.
+//! Combined repository for File and Version structs.
 //!
-//! They're tightly coupled: can't have a FileRecord without a Version, and
-//! there's no point keeping a version if there's no physical file to extract it
-//! from (unless for historical record keeping).
+//! They're tightly coupled: can't have a File without a Version, and there's
+//! no point keeping a version if there's no physical file to extract it from
+//! (unless for historical record keeping).
 
 use crate::error::{ErrorKind, Result};
 use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
@@ -24,7 +24,7 @@ pub enum ExistenceResult {
     /// A file record exists at the given path and the file hash matches.
     ExactMatch(File, Version),
     /// A file record exists at the given path, but the current file hash does
-    /// not match what's on record. but the file hash differs.
+    /// not match what's on record.
     ///
     /// The file could be corrupt, it could have been replaced, it could have
     /// been recompressed to another format. Whatever happened, the current file
@@ -59,11 +59,10 @@ fn group_optional_files_by_version(rows: Vec<OptionalFileResult>) -> Vec<Version
 /// Repository for managing File and Version entries in the cache database.
 ///
 /// This repository treats files and versions as a unit. Files track physical
-/// locations in the library (paths), while versions track unique content
+/// locations in storage targets by path, while versions track unique content
 /// (identified by BLAKE3 hash of decompressed HTML) and its extracted metadata.
 ///
 /// # Relationships
-///
 /// - Many files can reference the same version (duplicate content at different paths)
 /// - Files can be using different compression (duplicate version content hash, different file hash)
 /// - Many versions can exist for the same work_id (different downloads over time)
@@ -85,8 +84,8 @@ impl Repository {
         Self { pool, dry_run }
     }
 
-    fn sqlx_hates_paths(path: &Path) -> Result<String> {
-        Ok(path.to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string())
+    fn sqlx_hates_paths(path: impl AsRef<Path>) -> Result<String> {
+        Ok(path.as_ref().to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string())
     }
 
     /* ============== *\
@@ -153,7 +152,10 @@ impl Repository {
     |  Fetching Methods  |
     \* ================ */
 
-    /// Get a file and its version by target and path.
+    /// Look up a single file record and its associated version by storage
+    /// target and relative path.
+    ///
+    /// Returns `None` if no file is recorded at that location.
     pub async fn get_by_target_path(
         &self,
         target: impl AsRef<str>,
@@ -161,17 +163,17 @@ impl Repository {
     ) -> Result<Option<FileResult>> {
         let row: Option<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_target_path.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(path)?)
             .fetch_optional(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
         row.map(|r| r.try_into()).transpose()
     }
 
-    /// Get a file and its version by path, across all targets.
+    /// Look up all file records matching a relative path, regardless of target.
     pub async fn get_by_path_across_targets(&self, path: impl AsRef<Path>) -> Result<Vec<FileResult>> {
         let row: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_path_across_targets.sql"))
-            .bind(Self::sqlx_hates_paths(path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(path)?)
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -239,20 +241,20 @@ impl Repository {
     /// "Best" is determined by the version comparison algorithm in `rawr-extract`,
     /// which considers factors like last modified date, chapter count, and
     /// file size.
-    ///
-    /// > **Note::** This is equivalent to `get_by_work_id(work_id)?.first()`
-    /// > but more efficient.
     pub async fn get_best_for_work_id(&self, work_id: u64) -> Result<Option<VersionResult>> {
         // TODO: This is NOT more efficient, but it IS easier to implement and
         //       that's all we care about right now.
-        let results = self.get_by_work_id(work_id).await?;
-        Ok(results.into_iter().next())
+        Ok(self.get_by_work_id(work_id).await?.into_iter().next())
     }
 
     // =========================================================================
     // Listing
     // =========================================================================
 
+    /// List all distinct target identifiers that have file records in the database.
+    ///
+    /// A "target" is a named storage location (e.g., `"local"`, `"s3-backup"`)
+    /// under which files are tracked.
     pub async fn list_scanned_targets(&self) -> Result<Vec<String>> {
         let targets: Vec<String> = sqlx::query_scalar(include_str!("../queries/list_scanned_targets.sql"))
             .fetch_all(&self.pool)
@@ -329,7 +331,7 @@ impl Repository {
         Ok(ids)
     }
 
-    /// List all distinct work IDs on a target.
+    /// List all distinct work IDs that have files in the given target.
     pub async fn list_all_work_ids_for_target(&self, target: impl AsRef<str>) -> Result<Vec<u64>> {
         let ids: Vec<i64> = sqlx::query_scalar(include_str!("../queries/list_all_work_ids_for_target.sql"))
             .bind(target.as_ref())
@@ -363,9 +365,9 @@ impl Repository {
             return Ok(true);
         }
         let result = sqlx::query(include_str!("../queries/update_target_path.sql"))
-            .bind(Self::sqlx_hates_paths(new_path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(new_path)?)
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(old_path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(old_path)?)
             .execute(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -383,10 +385,10 @@ impl Repository {
     ///
     /// | Result                                | Action                                     |
     /// |---------------------------------------|--------------------------------------------|
-    /// | [`ExistenceResult::NotFound`]         | File is new, needs full import             |
-    /// | [`ExistenceResult::ExactMatch`]       | File unchanged, skip import                |
-    /// | [`ExistenceResult::HashMismatch`]     | File changed, needs re-import              |
-    /// | [`ExistenceResult::LocatedElsewhere`] | File is new, import but may re-use version |
+    /// | `ExistenceResult::NotFound`         | File is new, needs full import             |
+    /// | `ExistenceResult::ExactMatch`       | File unchanged, skip import                |
+    /// | `ExistenceResult::HashMismatch`     | File changed, needs re-import              |
+    /// | `ExistenceResult::LocatedElsewhere` | File is new, import but may re-use version |
     pub async fn exists(
         &self,
         target: impl AsRef<str>,
@@ -405,11 +407,12 @@ impl Repository {
         })
     }
 
-    /// Check if a file record exists at the given target and path.
+    /// Check if a file record exists at the given target and path, without
+    /// fetching the full row.
     pub async fn target_path_exists(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
         let row: (i64,) = sqlx::query_as(include_str!("../queries/target_path_exists.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(path)?)
             .fetch_one(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -429,7 +432,8 @@ impl Repository {
         Ok(row.0 > 0)
     }
 
-    /// Check if a version with the given decompressed content hash exists in any target.
+    /// Check if a version with the given decompressed content hash (BLAKE3 of
+    /// the HTML) exists in the database.
     pub async fn content_hash_exists(&self, content_hash: impl AsRef<str>) -> Result<bool> {
         let row: (i64,) = sqlx::query_as(include_str!("../queries/content_hash_exists.sql"))
             .bind(content_hash.as_ref())
@@ -534,7 +538,7 @@ impl Repository {
         }
         let result = sqlx::query(include_str!("../queries/delete_by_target_path.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path.as_ref())?)
+            .bind(Self::sqlx_hates_paths(path)?)
             .execute(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -617,7 +621,7 @@ impl Repository {
     /// Delete all versions that have no files referencing them.
     ///
     /// Versions become orphaned when all their files are deleted (e.g., via
-    /// [`delete_by_path`](Self::delete_by_path)). This cleans them up.
+    /// [`delete_by_target_path`](Self::delete_by_target_path)). This cleans them up.
     ///
     /// Whether to call this automatically is controlled by the
     /// `retain_deleted_versions` configuration option in the app binary, and
@@ -688,7 +692,7 @@ mod tests {
 
     async fn make_repository() -> Repository {
         let db = Database::connect_in_memory().await.unwrap();
-        Repository::new(db.pool().clone(), false)
+        Repository::from(&db)
     }
 
     #[tokio::test]

@@ -72,7 +72,7 @@ impl Extractor {
             // Datalist
             fandoms: datalist.fandoms(),
             series: datalist.series(),
-            rating: datalist.rating().or_raise(|| ErrorKind::MissingField("rating"))?,
+            rating: datalist.rating()?,
             warnings: datalist.warnings(),
             tags: datalist.tags(),
             language: datalist.language(),

@@ -19,3 +19,8 @@ pub mod error;
 mod models;
 
 pub use crate::db::Database;
+use rawr_extract::models as extract;
+use rawr_storage::file as storage;
+
+pub(crate) type File = storage::FileInfo<storage::Processed>;
+pub(crate) type Version = extract::Version;

@@ -1,39 +1,37 @@
+use crate::Version;
+use crate::error::{Error, ErrorKind};
+use crate::models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy};
 use exn::ResultExt;
 use facet_json::{from_str as from_json, to_string as to_json};
 use rawr_extract::models as extract;
 use time::UtcDateTime;
 
-use crate::{
-    error::{Error, ErrorKind},
-    models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy},
-};
-
 #[derive(sqlx::FromRow)]
 pub(crate) struct VersionRow {
-    content_hash: String,
-    content_crc32: i64,
-    work_id: i64,
-    content_size: i64,
-    title: String,
-    authors: String,
-    fandoms: String,
-    series: String,
-    chapters_written: i64,
+    pub(crate) content_hash: String,
+    pub(crate) content_crc32: i64,
+    pub(crate) work_id: i64,
+    pub(crate) content_size: i64,
+    pub(crate) title: String,
+    pub(crate) authors: String,
+    pub(crate) fandoms: String,
+    pub(crate) series: String,
+    pub(crate) chapters_written: i64,
     #[sqlx(default)]
-    chapters_total: Option<i64>,
-    words: i64,
-    summary: Option<String>,
-    rating: Option<String>,
-    warnings: String,
-    lang: String,
-    published_on: i64,
-    last_modified: i64,
-    tags: String,
-    extracted_at: i64,
+    pub(crate) chapters_total: Option<i64>,
+    pub(crate) words: i64,
+    pub(crate) summary: Option<String>,
+    pub(crate) rating: Option<String>,
+    pub(crate) warnings: String,
+    pub(crate) lang: String,
+    pub(crate) published_on: i64,
+    pub(crate) last_modified: i64,
+    pub(crate) tags: String,
+    pub(crate) extracted_at: i64,
 }
-impl TryFrom<&extract::Version> for VersionRow {
+impl TryFrom<&Version> for VersionRow {
     type Error = Error;
-    fn try_from(version: &extract::Version) -> Result<Self, Self::Error> {
+    fn try_from(version: &Version) -> Result<Self, Self::Error> {
         let authors = version.metadata.authors.iter().map(AuthorProxy::from).collect::<Vec<_>>();
         let fandoms = version.metadata.fandoms.iter().map(FandomProxy::from).collect::<Vec<_>>();
         let series = version.metadata.series.iter().map(SeriesPositionProxy::from).collect::<Vec<_>>();
@@ -62,7 +60,7 @@ impl TryFrom<&extract::Version> for VersionRow {
         })
     }
 }
-impl TryFrom<VersionRow> for extract::Version {
+impl TryFrom<VersionRow> for Version {
     type Error = Error;
     fn try_from(row: VersionRow) -> Result<Self, Self::Error> {
         Ok(Self {

@@ -19,13 +19,13 @@ pub struct Metadata {
     /// Total word count
     pub words: u64,
     /// Content rating
-    pub rating: Rating,
+    pub rating: Option<Rating>,
     /// Archive warnings
     pub warnings: Vec<Warning>,
     /// All tags (relationships, characters, freeform)
     pub tags: Vec<Tag>,
     /// Work summary (converted to Markdown)
-    pub summary: String,
+    pub summary: Option<String>,
     /// Language of the work
     pub language: Language,
     /// Original publication date
@@ -52,11 +52,11 @@ impl Metadata {
         let mut map = HashMap::new();
         map.insert("work-id", self.work_id.to_string());
         map.insert("title", self.title.clone());
-        map.insert("summary", self.summary.clone());
+        map.insert("summary", self.summary.as_ref().map(|s| s.to_string()).unwrap_or_default());
         map.insert("words", human_number(self.words));
         map.insert("chapters-written", self.chapters.written.to_string());
         map.insert("chapters-total", self.chapters.total.map_or("?".into(), |t| t.to_string()));
-        map.insert("rating", self.rating.as_short_str().into());
+        map.insert("rating", self.rating.map(|r| r.as_short_str().to_string()).unwrap_or_default());
         map.insert("published", self.published.to_string());
         map.insert("updated", self.last_modified.to_string());
         map

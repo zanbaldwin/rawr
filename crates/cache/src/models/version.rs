@@ -22,8 +22,8 @@ pub(crate) struct VersionRow {
     #[sqlx(default)]
     chapters_total: Option<i64>,
     words: i64,
-    summary: String,
-    rating: String,
+    summary: Option<String>,
+    rating: Option<String>,
     warnings: String,
     lang: String,
     published_on: i64,
@@ -51,8 +51,8 @@ impl TryFrom<&extract::Version> for VersionRow {
             chapters_written: i64::from(version.metadata.chapters.written),
             chapters_total: version.metadata.chapters.total.map(i64::from),
             words: i64::try_from(version.metadata.words).or_raise(|| ErrorKind::InvalidData("words"))?,
-            summary: version.metadata.summary.clone(),
-            rating: version.metadata.rating.as_short_str().to_string(),
+            summary: version.metadata.summary.as_ref().map(|s| s.to_string()),
+            rating: version.metadata.rating.map(|r| r.as_short_str().to_string()),
             warnings: to_json(&warnings).or_raise(|| ErrorKind::InvalidData("warnings"))?,
             lang: version.metadata.language.name.clone(),
             published_on: version.metadata.published.midnight().as_utc().unix_timestamp(),
@@ -94,7 +94,10 @@ impl TryFrom<VersionRow> for extract::Version {
                         .transpose()?,
                 ),
                 words: u64::try_from(row.words).or_raise(|| ErrorKind::InvalidData("words"))?,
-                rating: row.rating.parse::<extract::Rating>().or_raise(|| ErrorKind::InvalidData("rating"))?,
+                rating: row
+                    .rating
+                    .map(|r| r.parse::<extract::Rating>().or_raise(|| ErrorKind::InvalidData("rating")))
+                    .transpose()?,
                 warnings: from_json::<Vec<WarningProxy>>(&row.warnings)
                     .or_raise(|| ErrorKind::InvalidData("warnings"))?
                     .into_iter()
@@ -140,8 +143,8 @@ mod tests {
             chapters_written: 6,
             chapters_total: Some(6),
             words: 19375,
-            summary: "".to_string(),
-            rating: "G".to_string(),
+            summary: None,
+            rating: Some("G".to_string()),
             warnings: r#"["NoWarningsApply"]"#.to_string(),
             lang: "English".to_string(),
             published_on: 820450800,
@@ -179,8 +182,8 @@ mod tests {
                 series: vec![],
                 chapters: extract::Chapters { written: 6, total: Some(6) },
                 words: 19375,
-                summary: "".to_string(),
-                rating: extract::Rating::GeneralAudiences,
+                summary: None,
+                rating: Some(extract::Rating::GeneralAudiences),
                 warnings: vec![extract::Warning::NoWarningsApply],
                 language: extract::Language::new("English"),
                 published: published_on,

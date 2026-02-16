@@ -16,6 +16,13 @@ type FileResult = (File, Version);
 type OptionalFileResult = (Option<File>, Version);
 type VersionResult = (Version, Vec<File>);
 
+fn group_files_by_version(rows: Vec<FileResult>) -> Vec<VersionResult> {
+    // TODO: Weep at the allocations. Burn this quick and dirty hack to the ground.
+    //       I was meant to refactor group_optional_files_by_version before
+    //       I got to the point of using it even more, but I got lazy.
+    group_optional_files_by_version(rows.into_iter().map(|(f, v)| (Some(f), v)).collect())
+}
+
 fn group_optional_files_by_version(rows: Vec<OptionalFileResult>) -> Vec<VersionResult> {
     let mut map: HashMap<String, (Version, Vec<File>)> = HashMap::new();
     for (file, version) in rows {
@@ -241,6 +248,104 @@ impl Repository {
         //       that's all we care about right now.
         Ok(self.get_by_work_id(work_id).await?.into_iter().next())
     }
+
+    // =========================================================================
+    // Listing
+    // =========================================================================
+
+    /// List all distinct target identifiers that have file records in the database.
+    ///
+    /// A "target" is a named storage location (e.g., `"local"`, `"s3-backup"`)
+    /// under which files are tracked.
+    pub async fn list_scanned_targets(&self) -> Result<Vec<String>> {
+        let targets: Vec<String> = sqlx::query_scalar(include_str!("../queries/list_scanned_targets.sql"))
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(targets)
+    }
+
+    /// List all versions and their associated files for a target.
+    ///
+    /// Returns a list of (version, files) tuples. Each version appears once
+    /// with all files that reference it within the target.
+    pub async fn list_versions_for_target(&self, target: impl AsRef<str>) -> Result<Vec<VersionResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_versions_for_target.sql"))
+            .bind(target.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
+        Ok(group_files_by_version(pairs))
+    }
+
+    /// List all files for a specific target.
+    ///
+    /// Returns a list of (file, version) tuples for files in the given target.
+    pub async fn list_files_for_target(&self, target: impl AsRef<str>) -> Result<Vec<FileResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_files_for_target.sql"))
+            .bind(target.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter().map(|r| r.try_into()).collect()
+    }
+
+    /// List all file paths for a specific target.
+    ///
+    /// This is more efficient than [`list_files_for_target`](Self::list_files_for_target)
+    /// when you only need paths (e.g., for comparing against storage backend listing).
+    pub async fn list_all_paths_for_target(&self, target: impl AsRef<str>) -> Result<Vec<String>> {
+        let paths: Vec<String> = sqlx::query_scalar(include_str!("../queries/list_all_paths_for_target.sql"))
+            .bind(target.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(paths)
+    }
+
+    /// List recently extracted files with their versions, ordered by extraction time.
+    ///
+    /// Useful for showing a picker of recent works.
+    // TODO: Make a distinction between most recent discovered files and most recent imported files.
+    pub async fn list_recent_files(&self, limit: usize) -> Result<Vec<FileResult>> {
+        let limit = i64::try_from(limit).or_raise(|| ErrorKind::InvalidData("limit"))?;
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_recent_files.sql"))
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()
+    }
+
+    /// List all distinct work IDs in the database.
+    ///
+    /// Useful for iterating over all works in the library.
+    pub async fn list_all_work_ids(&self) -> Result<Vec<u64>> {
+        let ids: Vec<i64> = sqlx::query_scalar(include_str!("../queries/list_all_work_ids.sql"))
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let ids = ids
+            .into_iter()
+            .map(|id| u64::try_from(id).or_raise(|| ErrorKind::InvalidData("work id")))
+            .collect::<Result<Vec<u64>>>()?;
+        Ok(ids)
+    }
+
+    /// List all distinct work IDs that have files in the given target.
+    pub async fn list_all_work_ids_for_target(&self, target: impl AsRef<str>) -> Result<Vec<u64>> {
+        let ids: Vec<i64> = sqlx::query_scalar(include_str!("../queries/list_all_work_ids_for_target.sql"))
+            .bind(target.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let ids = ids
+            .into_iter()
+            .map(|id| u64::try_from(id).or_raise(|| ErrorKind::InvalidData("work id")))
+            .collect::<Result<Vec<u64>>>()?;
+        Ok(ids)
+    }
 }
 
 #[cfg(test)]
@@ -251,6 +356,8 @@ mod tests {
     use rawr_extract::models::{Chapters, Language, Metadata, Rating};
     use rawr_storage::file::FileMeta;
     use time::{Date, UtcDateTime};
+
+    const DEFAULT_TARGET: &str = "local";
 
     fn make_test_version(work_id: u64, content_hash: &str) -> Version {
         Version {
@@ -281,7 +388,7 @@ mod tests {
     }
 
     fn make_test_file(path: &str, content_hash: &str) -> File {
-        FileMeta::new("local", path, Compression::Bzip2, 123, UtcDateTime::now())
+        FileMeta::new(DEFAULT_TARGET, path, Compression::Bzip2, 123, UtcDateTime::now())
             .with_file_hash("file_hash_123")
             .with_content_hash(content_hash)
     }
@@ -299,7 +406,7 @@ mod tests {
         let version = make_test_version(12345, "content_abc");
         let file = make_test_file("fandoms/work.html.bz2", "content_abc");
         repo.upsert(&file, &version).await.unwrap();
-        let retrieved = repo.get_by_target_path("local", "fandoms/work.html.bz2").await.unwrap();
+        let retrieved = repo.get_by_target_path(DEFAULT_TARGET, "fandoms/work.html.bz2").await.unwrap();
         assert!(retrieved.is_some());
         let (file, _version) = retrieved.unwrap();
         assert_eq!(file.content_hash, "content_abc");

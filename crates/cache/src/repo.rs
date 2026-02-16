@@ -62,6 +62,10 @@ fn group_optional_files_by_version(rows: Vec<OptionalFileResult>) -> Vec<Version
 /// locations in storage targets by path, while versions track unique content
 /// (identified by BLAKE3 hash of decompressed HTML) and its extracted metadata.
 ///
+/// When `dry_run` is enabled, write operations (inserts, updates, deletes)
+/// still validate their inputs but skip the actual database mutation,
+/// returning the same values they would on success.
+///
 /// # Relationships
 /// - Many files can reference the same version (duplicate content at different paths)
 /// - Files can be using different compression (duplicate version content hash, different file hash)
@@ -180,17 +184,37 @@ impl Repository {
         row.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()
     }
 
-    /// Get a file and its version by the hash of the compressed file.
+    /// Get a file and its version by the file hash from a storage target.
     ///
-    /// The file is a BLAKE3 hash of the file as stored on disk (compressed).
-    /// This is useful for detecting if a file's content has changed.
+    /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
+    /// disk. This is useful for detecting if a file's content has changed.
     ///
     /// > **Note:** Multiple files could theoretically have the same file hash
     /// > if they are exact copies (in different paths/targets).
-    pub async fn get_by_file_hash(&self, file_hash: impl AsRef<str>) -> Result<Vec<FileResult>> {
-        let file_hash = file_hash.as_ref();
-        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_file_hash.sql"))
-            .bind(file_hash)
+    pub async fn get_by_target_file_hash(
+        &self,
+        target: impl AsRef<str>,
+        file_hash: impl AsRef<str>,
+    ) -> Result<Vec<FileResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_target_file_hash.sql"))
+            .bind(target.as_ref())
+            .bind(file_hash.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter().map(|r| r.try_into()).collect()
+    }
+
+    /// Get a file and its version by the file hash from any storage target.
+    ///
+    /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
+    /// disk. This is useful for detecting if a file's content has changed.
+    ///
+    /// > **Note:** Multiple files could theoretically have the same file hash
+    /// > if they are exact copies (in different paths/targets).
+    pub async fn get_by_file_hash_across_targets(&self, file_hash: impl AsRef<str>) -> Result<Vec<FileResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_file_hash_across_targets.sql"))
+            .bind(file_hash.as_ref())
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -263,10 +287,10 @@ impl Repository {
         Ok(targets)
     }
 
-    /// List all versions and their associated files across all targets.
+    /// List all versions and their associated files for a target.
     ///
     /// Returns a list of (version, files) tuples. Each version appears once
-    /// with all files that reference it (potentially from multiple targets).
+    /// with all files that reference it within the target.
     pub async fn list_versions_for_target(&self, target: impl AsRef<str>) -> Result<Vec<VersionResult>> {
         let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_versions_for_target.sql"))
             .bind(target.as_ref())
@@ -401,7 +425,7 @@ impl Repository {
                 false => ExistenceResult::HashMismatch(file, version),
             });
         }
-        Ok(match self.get_by_file_hash(file_hash.as_ref()).await?.into_iter().next() {
+        Ok(match self.get_by_file_hash_across_targets(file_hash.as_ref()).await?.into_iter().next() {
             Some((file, version)) => ExistenceResult::LocatedElsewhere(file, version),
             _ => ExistenceResult::NotFound,
         })
@@ -479,6 +503,10 @@ impl Repository {
     \* ========== */
 
     /// Find content hashes that have multiple files pointing to them, across any target.
+    ///
+    /// Like [`find_duplicate_content_within_targets()`](Self::find_duplicate_content_within_targets), but searches
+    /// across target boundaries (eg, content backed up to a remote target will count as a duplicate of the original
+    /// local content).
     pub async fn find_duplicate_content_across_targets(&self) -> Result<Vec<(String, u64)>> {
         let rows: Vec<(String, i64)> =
             sqlx::query_as(include_str!("../queries/find_duplicate_content_across_targets.sql"))
@@ -542,12 +570,15 @@ impl Repository {
             .execute(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
-        // Calling self.delete_orphaned_versions() is the responsiblity of
+        // Calling self.delete_orphaned_versions() is the responsibility of
         // the callee (orchestrator in app binary).
         Ok(result.rows_affected() > 0)
     }
 
     /// Delete all file records in a target with the given compressed file hash.
+    ///
+    /// Only deletes file records, not versions. May create orphaned versions;
+    /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
     ///
     /// Returns `true` if any records were deleted.
     pub async fn delete_by_target_file_hash(
@@ -568,6 +599,9 @@ impl Repository {
     }
 
     /// Delete all file records across all targets with the given compressed file hash.
+    ///
+    /// Only deletes file records, not versions. May create orphaned versions;
+    /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
     ///
     /// Returns `true` if any records were deleted.
     pub async fn delete_by_file_hash_across_targets(&self, file_hash: impl AsRef<str>) -> Result<bool> {

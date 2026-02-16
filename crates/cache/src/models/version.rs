@@ -1,3 +1,4 @@
+use crate::Version;
 use crate::error::{Error, ErrorKind};
 use crate::models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy};
 use exn::ResultExt;
@@ -28,9 +29,9 @@ pub(crate) struct VersionRow {
     pub(crate) tags: String,
     pub(crate) extracted_at: i64,
 }
-impl TryFrom<&extract::Version> for VersionRow {
+impl TryFrom<&Version> for VersionRow {
     type Error = Error;
-    fn try_from(version: &extract::Version) -> Result<Self, Self::Error> {
+    fn try_from(version: &Version) -> Result<Self, Self::Error> {
         let authors = version.metadata.authors.iter().map(AuthorProxy::from).collect::<Vec<_>>();
         let fandoms = version.metadata.fandoms.iter().map(FandomProxy::from).collect::<Vec<_>>();
         let series = version.metadata.series.iter().map(SeriesPositionProxy::from).collect::<Vec<_>>();
@@ -59,7 +60,7 @@ impl TryFrom<&extract::Version> for VersionRow {
         })
     }
 }
-impl TryFrom<VersionRow> for extract::Version {
+impl TryFrom<VersionRow> for Version {
     type Error = Error;
     fn try_from(row: VersionRow) -> Result<Self, Self::Error> {
         Ok(Self {

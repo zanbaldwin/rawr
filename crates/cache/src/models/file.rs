@@ -1,7 +1,8 @@
+use crate::File;
 use crate::error::{Error, ErrorKind};
 use exn::{OptionExt, ResultExt};
 use rawr_compress::Compression;
-use rawr_storage::file::{self as storage, Processed};
+use rawr_storage::file::FileMeta;
 use std::path::PathBuf;
 use time::UtcDateTime;
 
@@ -15,9 +16,9 @@ pub(crate) struct FileRow {
     pub(crate) content_hash: String,
     pub(crate) discovered_at: i64,
 }
-impl TryFrom<&storage::FileInfo<Processed>> for FileRow {
+impl TryFrom<&File> for FileRow {
     type Error = Error;
-    fn try_from(file: &storage::FileInfo<Processed>) -> Result<Self, Self::Error> {
+    fn try_from(file: &File) -> Result<Self, Self::Error> {
         Ok(Self {
             target: file.target.clone(),
             path: file.path.to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string(),
@@ -29,10 +30,10 @@ impl TryFrom<&storage::FileInfo<Processed>> for FileRow {
         })
     }
 }
-impl TryFrom<FileRow> for storage::FileInfo<Processed> {
+impl TryFrom<FileRow> for File {
     type Error = Error;
     fn try_from(row: FileRow) -> Result<Self, Self::Error> {
-        let meta = storage::FileMeta {
+        let meta = FileMeta {
             target: row.target,
             path: PathBuf::from(row.path),
             compression: row

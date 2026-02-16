@@ -5,10 +5,27 @@
 //! (unless for historical record keeping).
 
 use crate::error::{ErrorKind, Result};
-use crate::models::{FileRow, VersionRow};
+use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
 use crate::{Database, File, Version};
-use exn::ResultExt;
+use exn::{OptionExt, ResultExt};
 use sqlx::SqlitePool;
+use std::collections::HashMap;
+use std::path::Path;
+
+type FileResult = (File, Version);
+type OptionalFileResult = (Option<File>, Version);
+type VersionResult = (Version, Vec<File>);
+
+fn group_optional_files_by_version(rows: Vec<OptionalFileResult>) -> Vec<VersionResult> {
+    let mut map: HashMap<String, (Version, Vec<File>)> = HashMap::new();
+    for (file, version) in rows {
+        let entry = map.entry(version.hash.clone()).or_insert_with(|| (version, Vec::new()));
+        if let Some(file) = file {
+            entry.1.push(file);
+        }
+    }
+    map.into_values().collect()
+}
 
 /// Repository for managing File and Version entries in the cache database.
 ///
@@ -40,6 +57,10 @@ impl Repository {
     /// Create a new repository with the given connection pool.
     pub fn new(pool: SqlitePool, dry_run: bool) -> Self {
         Self { pool, dry_run }
+    }
+
+    fn sqlx_hates_paths(path: impl AsRef<Path>) -> Result<String> {
+        Ok(path.as_ref().to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string())
     }
 
     /* ============== *\
@@ -100,5 +121,187 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         tx.commit().await.or_raise(|| ErrorKind::Database)?;
         Ok(())
+    }
+
+    /* ================ *\
+    |  Fetching Methods  |
+    \* ================ */
+
+    /// Look up a single file record and its associated version by storage
+    /// target and relative path.
+    ///
+    /// Returns `None` if no file is recorded at that location.
+    pub async fn get_by_target_path(
+        &self,
+        target: impl AsRef<str>,
+        path: impl AsRef<Path>,
+    ) -> Result<Option<FileResult>> {
+        let row: Option<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_target_path.sql"))
+            .bind(target.as_ref())
+            .bind(Self::sqlx_hates_paths(path)?)
+            .fetch_optional(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        row.map(|r| r.try_into()).transpose()
+    }
+
+    /// Look up all file records matching a relative path, regardless of target.
+    pub async fn get_by_path_across_targets(&self, path: impl AsRef<Path>) -> Result<Vec<FileResult>> {
+        let row: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_path_across_targets.sql"))
+            .bind(Self::sqlx_hates_paths(path)?)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        row.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()
+    }
+
+    /// Get all files and their versions matching a file hash within a storage target.
+    ///
+    /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
+    /// disk. This is useful for detecting if a file's content has changed.
+    ///
+    /// > **Note:** Multiple files could theoretically have the same file hash
+    /// > if they are exact copies (in different paths/targets).
+    pub async fn get_by_target_file_hash(
+        &self,
+        target: impl AsRef<str>,
+        file_hash: impl AsRef<str>,
+    ) -> Result<Vec<FileResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_target_file_hash.sql"))
+            .bind(target.as_ref())
+            .bind(file_hash.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter().map(|r| r.try_into()).collect()
+    }
+
+    /// Get all files and their versions matching a file hash across all storage targets.
+    ///
+    /// The file hash is a BLAKE3 hash of the (compressed) file as stored on
+    /// disk. This is useful for detecting if a file's content has changed.
+    ///
+    /// > **Note:** Multiple files could theoretically have the same file hash
+    /// > if they are exact copies (in different paths/targets).
+    pub async fn get_by_file_hash_across_targets(&self, file_hash: impl AsRef<str>) -> Result<Vec<FileResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_file_hash_across_targets.sql"))
+            .bind(file_hash.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        rows.into_iter().map(|r| r.try_into()).collect()
+    }
+
+    /// Get a version and all files that reference it by content hash.
+    ///
+    /// The content hash is a BLAKE3 hash of the decompressed HTML content.
+    /// Multiple files may reference the same version if the same content
+    /// exists at different paths, with different compression formats, or in different targets.
+    pub async fn get_by_content_hash(&self, content_hash: impl AsRef<str>) -> Result<Option<VersionResult>> {
+        let content_hash = content_hash.as_ref();
+        let rows: Vec<LeftJoinRow> = sqlx::query_as(include_str!("../queries/get_by_content_hash.sql"))
+            .bind(content_hash)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        if rows.is_empty() {
+            return Ok(None);
+        }
+        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
+        Ok(group_optional_files_by_version(pairs).into_iter().next())
+    }
+
+    /// Get all versions and their files for a given AO3 work ID.
+    ///
+    /// A work may have multiple versions if it was downloaded at different
+    /// times (e.g., before and after the author added chapters). Each version
+    /// may have multiple files if duplicates exist (possibly across targets).
+    ///
+    /// Results are sorted by the version comparison algorithm (best/newest first).
+    pub async fn get_by_work_id(&self, work_id: u64) -> Result<Vec<VersionResult>> {
+        let work_id = i64::try_from(work_id).or_raise(|| ErrorKind::InvalidData("work id"))?;
+        let rows: Vec<LeftJoinRow> = sqlx::query_as(include_str!("../queries/get_by_work_id.sql"))
+            .bind(work_id)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
+        let mut map = group_optional_files_by_version(pairs);
+        map.sort_by(|(a, _), (b, _)| b.cmp(a));
+        Ok(map)
+    }
+
+    /// Get the best version for a work ID and all files referencing it.
+    ///
+    /// "Best" is determined by the version comparison algorithm in `rawr-extract`,
+    /// which considers factors like last modified date, chapter count, and
+    /// file size.
+    pub async fn get_best_for_work_id(&self, work_id: u64) -> Result<Option<VersionResult>> {
+        // TODO: This is NOT more efficient, but it IS easier to implement and
+        //       that's all we care about right now.
+        Ok(self.get_by_work_id(work_id).await?.into_iter().next())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Database, File, Version};
+    use rawr_compress::Compression;
+    use rawr_extract::models::{Chapters, Language, Metadata, Rating};
+    use rawr_storage::file::FileMeta;
+    use time::{Date, UtcDateTime};
+
+    fn make_test_version(work_id: u64, content_hash: &str) -> Version {
+        Version {
+            hash: content_hash.to_string(),
+            length: 1000,
+            crc32: 12_345_678,
+            metadata: Metadata {
+                work_id,
+                title: "Test Work".to_string(),
+                authors: vec![],
+                fandoms: vec![],
+                rating: Some(Rating::GeneralAudiences),
+                warnings: vec![],
+                tags: vec![],
+                summary: Some("A test work".to_string()),
+                language: Language {
+                    name: "English".to_string(),
+                    iso_code: Some("en".to_string()),
+                },
+                chapters: Chapters { written: 1, total: Some(1) },
+                words: 1000,
+                published: Date::from_calendar_date(2024, time::Month::January, 1).unwrap(),
+                last_modified: Date::from_calendar_date(2024, time::Month::January, 1).unwrap(),
+                series: vec![],
+            },
+            extracted_at: UtcDateTime::now(),
+        }
+    }
+
+    fn make_test_file(path: &str, content_hash: &str) -> File {
+        FileMeta::new("local", path, Compression::Bzip2, 123, UtcDateTime::now())
+            .with_file_hash("file_hash_123")
+            .with_content_hash(content_hash)
+    }
+
+    async fn make_repository() -> Repository {
+        let db = Database::connect_in_memory().await.unwrap();
+        // ... database should drop at the end of this function, but
+        // repository keeps working? What in the Mara Bos magic is this?
+        Repository::from(&db)
+    }
+
+    #[tokio::test]
+    async fn test_insert_and_get() {
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file = make_test_file("fandoms/work.html.bz2", "content_abc");
+        repo.upsert(&file, &version).await.unwrap();
+        let retrieved = repo.get_by_target_path("local", "fandoms/work.html.bz2").await.unwrap();
+        assert!(retrieved.is_some());
+        let (file, _version) = retrieved.unwrap();
+        assert_eq!(file.content_hash, "content_abc");
     }
 }

@@ -546,12 +546,143 @@ impl Repository {
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
-
         rows.into_iter()
             .map(|(id, count)| {
                 u64::try_from(id).and_then(|i| u64::try_from(count).map(|c| (i, c))).or_raise(|| ErrorKind::Database)
             })
             .collect::<Result<Vec<_>>>()
+    }
+
+    /* ============== *\
+    |  Delete Methods  |
+    \* ============== */
+
+    /// Delete a file record by its target and path.
+    ///
+    /// Only deletes the file record, not the version. If this was the last
+    /// file referencing a version, the version becomes orphaned. Call
+    /// [`delete_orphaned_versions`](Self::delete_orphaned_versions) to clean
+    /// up orphans if `retain_deleted_versions` is not enabled.
+    ///
+    /// Returns `true` if a record was deleted, `false` if the path was not found.
+    pub async fn delete_by_target_path(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/delete_by_target_path.sql"))
+            .bind(target.as_ref())
+            .bind(Self::sqlx_hates_paths(path)?)
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        // Calling self.delete_orphaned_versions() is the responsibility of
+        // the callee (orchestrator in app binary).
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete all file records in a target with the given compressed file hash.
+    ///
+    /// Only deletes file records, not versions. May create orphaned versions;
+    /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
+    ///
+    /// Returns `true` if any records were deleted.
+    pub async fn delete_by_target_file_hash(
+        &self,
+        target: impl AsRef<str>,
+        file_hash: impl AsRef<str>,
+    ) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/delete_by_target_file_hash.sql"))
+            .bind(target.as_ref())
+            .bind(file_hash.as_ref())
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete all file records across all targets with the given compressed file hash.
+    ///
+    /// Only deletes file records, not versions. May create orphaned versions;
+    /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
+    ///
+    /// Returns `true` if any records were deleted.
+    pub async fn delete_by_file_hash_across_targets(&self, file_hash: impl AsRef<str>) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/delete_by_file_hash_across_targets.sql"))
+            .bind(file_hash.as_ref())
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete a version and all files referencing it.
+    ///
+    /// Due to CASCADE, deleting a version automatically deletes all file
+    /// records that reference it.
+    ///
+    /// Returns `true` if the version was deleted, `false` if it was not found.
+    pub async fn delete_by_content_hash(&self, content_hash: impl AsRef<str>) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/delete_by_content_hash.sql"))
+            .bind(content_hash.as_ref())
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete all versions and files for a given work ID.
+    ///
+    /// This removes the work entirely from the cache (versions and file
+    /// records). The actual files on disk are not affected.
+    ///
+    /// Returns `true` if any versions were deleted.
+    pub async fn delete_by_work_id(&self, work_id: u64) -> Result<bool> {
+        if self.dry_run {
+            return Ok(true);
+        }
+        let result = sqlx::query(include_str!("../queries/delete_by_work_id.sql"))
+            .bind(i64::try_from(work_id).or_raise(|| ErrorKind::Database)?)
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Delete all versions that have no files referencing them.
+    ///
+    /// Versions become orphaned when all their files are deleted (e.g., via
+    /// [`delete_by_target_path`](Self::delete_by_target_path)). This cleans them up.
+    ///
+    /// Whether to call this automatically is controlled by the
+    /// `retain_deleted_versions` configuration option in the app binary, and
+    /// is the responsibility of the repository callee.
+    ///
+    /// Returns the number of orphaned versions deleted.
+    pub async fn delete_orphaned_versions(&self) -> Result<u64> {
+        if self.dry_run {
+            let row: (i64,) = sqlx::query_as(include_str!("../queries/count_orphan_versions.sql"))
+                .fetch_one(&self.pool)
+                .await
+                .or_raise(|| ErrorKind::Database)?;
+            // Operation already completed, do not failed because of a parse
+            // error. It probably means that the number of rows affected
+            // negative (??), in which case return zero even if it's wrong.
+            return Ok(u64::try_from(row.0).unwrap_or(0));
+        }
+        let result = sqlx::query(include_str!("../queries/delete_orphan_versions.sql"))
+            .execute(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(result.rows_affected())
     }
 }
 

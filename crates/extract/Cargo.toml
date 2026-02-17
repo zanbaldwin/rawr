@@ -16,7 +16,6 @@ exn = { workspace = true }
 fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 regex = { workspace = true }
 scraper = { workspace = true }
-thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting", "parsing"] }
 tracing = { workspace = true }
 

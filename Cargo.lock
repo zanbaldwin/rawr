@@ -2423,8 +2423,17 @@ dependencies = [
  "regex",
  "rstest",
  "scraper",
- "thiserror",
  "time",
+ "tracing",
+]
+
+[[package]]
+name = "rawr-render"
+version = "0.1.0-beta"
+dependencies = [
+ "derive_more",
+ "exn",
+ "rawr-extract",
  "tracing",
 ]
 

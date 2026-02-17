@@ -7,13 +7,13 @@
 use crate::error::{ErrorKind, Result};
 use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
 use crate::{Database, File, Version};
-use exn::{OptionExt, ResultExt};
+use exn::ResultExt;
+use rawr_storage::validate_path;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::Path;
 
 type FileResult = (File, Version);
-type OptionalFileResult = (Option<File>, Version);
 type VersionResult = (Version, Vec<File>);
 
 /// Result of checking whether a file exists in the cache.
@@ -35,22 +35,18 @@ pub enum ExistenceResult {
     LocatedElsewhere(File, Version),
 }
 
-fn group_files_by_version(rows: Vec<FileResult>) -> Vec<VersionResult> {
-    // TODO: Weep at the allocations. Burn this quick and dirty hack to the ground.
-    //       I was meant to refactor group_optional_files_by_version before
-    //       I got to the point of using it even more, but I got lazy.
-    group_optional_files_by_version(rows.into_iter().map(|(f, v)| (Some(f), v)).collect())
-}
-
-fn group_optional_files_by_version(rows: Vec<OptionalFileResult>) -> Vec<VersionResult> {
-    let mut map: HashMap<String, (Version, Vec<File>)> = HashMap::new();
-    for (file, version) in rows {
+fn group_by_version<F: Into<Option<File>>>(
+    rows: impl IntoIterator<Item = Result<(F, Version)>>,
+) -> Result<Vec<VersionResult>> {
+    let mut map: HashMap<String, VersionResult> = HashMap::new();
+    for row in rows {
+        let (file, version) = row?;
         let entry = map.entry(version.hash.clone()).or_insert_with(|| (version, Vec::new()));
-        if let Some(file) = file {
+        if let Some(file) = file.into() {
             entry.1.push(file);
         }
     }
-    map.into_values().collect()
+    Ok(map.into_values().collect())
 }
 
 /// Repository for managing File and Version entries in the cache database.
@@ -86,7 +82,8 @@ impl Repository {
     }
 
     fn sqlx_hates_paths(path: impl AsRef<Path>) -> Result<String> {
-        Ok(path.as_ref().to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string())
+        let buf = validate_path(path.as_ref()).or_raise(|| ErrorKind::InvalidData("path"))?;
+        buf.into_os_string().into_string().map_err(|_| ErrorKind::InvalidData("path").into())
     }
 
     /* ============== *\
@@ -233,8 +230,8 @@ impl Repository {
         if rows.is_empty() {
             return Ok(None);
         }
-        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
-        Ok(group_optional_files_by_version(pairs).into_iter().next())
+        let pairs = rows.into_iter().map(|r| r.try_into());
+        Ok(group_by_version(pairs)?.into_iter().next())
     }
 
     /// Get all versions and their files for a given AO3 work ID.
@@ -251,8 +248,8 @@ impl Repository {
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
-        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
-        let mut map = group_optional_files_by_version(pairs);
+        let pairs = rows.into_iter().map(|r| r.try_into());
+        let mut map = group_by_version(pairs)?;
         map.sort_by(|(a, _), (b, _)| b.cmp(a));
         Ok(map)
     }
@@ -294,8 +291,8 @@ impl Repository {
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
-        let pairs = rows.into_iter().map(|r| r.try_into()).collect::<Result<Vec<_>>>()?;
-        Ok(group_files_by_version(pairs))
+        let pairs = rows.into_iter().map(|r| r.try_into());
+        group_by_version(pairs)
     }
 
     /// List all files for a specific target.

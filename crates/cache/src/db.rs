@@ -4,7 +4,6 @@ use exn::ResultExt;
 use sqlx::SqliteConnection;
 use sqlx::pool::PoolConnectionMetadata;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteSynchronous};
-use std::ops::Deref;
 use std::path::Path;
 use tracing::instrument;
 
@@ -126,12 +125,6 @@ impl Database {
         // Let SQLite update query planner statistics
         _ = sqlx::query("PRAGMA optimize").execute(&self.pool).await;
         self.pool.close().await;
-    }
-}
-impl Deref for Database {
-    type Target = SqlitePool;
-    fn deref(&self) -> &Self::Target {
-        &self.pool
     }
 }
 

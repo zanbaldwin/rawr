@@ -1,6 +1,7 @@
 //! In-memory storage backend for testing.
 
 use super::FileInfoStream;
+use crate::StorageBackend;
 use crate::error::{ErrorKind, Result};
 use crate::file::FileInfo;
 use crate::path::validate as validate_path;
@@ -9,10 +10,9 @@ use async_trait::async_trait;
 use rawr_compress::Compression;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::{fs::File, io::Read};
 use time::UtcDateTime;
 use tokio::sync::RwLock;
-
-use crate::StorageBackend;
 
 /// In-memory storage backend for testing.
 ///
@@ -55,12 +55,12 @@ impl MockBackend {
     /// ```
     /// use rawr_storage::backend::MockBackend;
     ///
-    /// let backend = MockBackend::with_files([
+    /// let backend = MockBackend::with_data([
     ///     ("one.html", b"data file 1"),
     ///     ("dir/two.html", b"data file 2"),
     /// ]);
     /// ```
-    pub fn with_files(files: impl IntoIterator<Item = (impl Into<PathBuf>, impl Into<Vec<u8>>)>) -> Self {
+    pub fn with_data(files: impl IntoIterator<Item = (impl Into<PathBuf>, impl Into<Vec<u8>>)>) -> Self {
         let mut map = HashMap::new();
         let now = UtcDateTime::now();
         for (path, data) in files {
@@ -68,9 +68,43 @@ impl MockBackend {
             let Ok(validated) = validate_path(&path) else {
                 // The panic here is DELIBERATE. MockBackend is intended to be
                 // used in tests; panics are expected. There is no error result.
-                panic!("MockBackend::with_files: invalid path {}", path.display());
+                panic!("MockBackend::with_data(): invalid path {}", path.display());
             };
             map.insert(validated, (now, data.into()));
+        }
+        Self {
+            name: "mock".to_string(),
+            storage: RwLock::new(map),
+        }
+    }
+
+    /// Mock storage backend from real test fixtures.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rawr_storage::backend::MockBackend;
+    ///
+    /// let backend = MockBackend::from_files([
+    ///     "../../tests/fixtures/work1.html",
+    ///     "../../tests/fixtures/work2.html",
+    /// ]);
+    /// ```
+    pub fn from_files<P: Into<PathBuf>>(files: impl IntoIterator<Item = P>) -> Self {
+        let mut map: HashMap<_, (UtcDateTime, Vec<u8>)> = HashMap::new();
+        let now = UtcDateTime::now();
+        for path in files {
+            let path = path.into();
+            if !path.exists() {
+                panic!("MockBackend::with_files(): file does not exist {}", path.display());
+            }
+            let mut file = File::open(&path).unwrap();
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).unwrap();
+            // Place files directly into the root of the storage backend,
+            // instead of needing to validating custom locations.
+            let filename = PathBuf::from(path.file_name().unwrap());
+            map.insert(filename, (now, contents));
         }
         Self {
             name: "mock".to_string(),
@@ -99,7 +133,7 @@ impl MockBackend {
 impl Default for MockBackend {
     fn default() -> Self {
         let files: [(&str, &str); 0] = [];
-        Self::with_files(files)
+        Self::with_data(files)
     }
 }
 
@@ -197,7 +231,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_with_files() {
-        let backend = MockBackend::with_files([
+        let backend = MockBackend::with_data([
             ("a/file.html.gz", Vec::from(*b"compressed")),
             ("b/file.html", Vec::from(*b"plain")),
         ]);
@@ -263,7 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_with_prefix() {
-        let backend = MockBackend::with_files([
+        let backend = MockBackend::with_data([
             ("Fandom1/work1.html", Vec::from(*b"a")),
             ("Fandom1/work2.html", Vec::from(*b"b")),
             ("Fandom2/work3.html", Vec::from(*b"c")),
@@ -277,7 +311,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_all() {
-        let backend = MockBackend::with_files([("a.txt", Vec::from(*b"1")), ("b.txt", Vec::from(*b"2"))]);
+        let backend = MockBackend::with_data([("a.txt", Vec::from(*b"1")), ("b.txt", Vec::from(*b"2"))]);
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 2);
     }
@@ -292,6 +326,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "invalid path")]
     fn test_with_files_panics_on_bad_path() {
-        MockBackend::with_files([("../escape", Vec::from(*b"bad"))]);
+        MockBackend::with_data([("../escape", Vec::from(*b"bad"))]);
     }
 }

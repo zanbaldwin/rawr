@@ -12,6 +12,7 @@ use rawr_storage::validate_path;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::Path;
+use tracing::instrument;
 
 type FileResult = (File, Version);
 type VersionResult = (Version, Vec<File>);
@@ -98,6 +99,13 @@ impl Repository {
     ///
     /// Returns [`ErrorKind::Constraint`] if the file's content hash does not
     /// match the version's content hash.
+    #[instrument(skip_all, fields(
+        target = file.target,
+        path = %file.path.display(),
+        file_hash = file.file_hash,
+        content_hash = version.hash,
+        work_id = version.metadata.work_id,
+    ))]
     pub async fn upsert(&self, file: &File, version: &Version) -> Result<()> {
         if file.content_hash != version.hash {
             exn::bail!(ErrorKind::Constraint);
@@ -562,6 +570,7 @@ impl Repository {
     /// up orphans if `retain_deleted_versions` is not enabled.
     ///
     /// Returns `true` if a record was deleted, `false` if the path was not found.
+    #[instrument(skip_all, fields(target = target.as_ref(), path = %path.as_ref().display()))]
     pub async fn delete_by_target_path(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
         if self.dry_run {
             return Ok(true);
@@ -583,6 +592,7 @@ impl Repository {
     /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
     ///
     /// Returns `true` if any records were deleted.
+    #[instrument(skip_all, fields(target = target.as_ref(), file_hash = file_hash.as_ref()))]
     pub async fn delete_by_target_file_hash(
         &self,
         target: impl AsRef<str>,
@@ -606,6 +616,7 @@ impl Repository {
     /// see [`delete_orphaned_versions`](Self::delete_orphaned_versions).
     ///
     /// Returns `true` if any records were deleted.
+    #[instrument(skip_all, fields(file_hash = file_hash.as_ref()))]
     pub async fn delete_by_file_hash_across_targets(&self, file_hash: impl AsRef<str>) -> Result<bool> {
         if self.dry_run {
             return Ok(true);
@@ -624,6 +635,7 @@ impl Repository {
     /// records that reference it.
     ///
     /// Returns `true` if the version was deleted, `false` if it was not found.
+    #[instrument(skip_all, fields(content_hash = content_hash.as_ref()))]
     pub async fn delete_by_content_hash(&self, content_hash: impl AsRef<str>) -> Result<bool> {
         if self.dry_run {
             return Ok(true);
@@ -642,6 +654,7 @@ impl Repository {
     /// records). The actual files on disk are not affected.
     ///
     /// Returns `true` if any versions were deleted.
+    #[instrument(skip_all, fields(work_id = work_id))]
     pub async fn delete_by_work_id(&self, work_id: u64) -> Result<bool> {
         if self.dry_run {
             return Ok(true);
@@ -664,6 +677,7 @@ impl Repository {
     /// is the responsibility of the repository callee.
     ///
     /// Returns the number of orphaned versions deleted.
+    #[instrument(skip_all)]
     pub async fn delete_orphaned_versions(&self) -> Result<u64> {
         if self.dry_run {
             let row: (i64,) = sqlx::query_as(include_str!("../queries/count_orphan_versions.sql"))
@@ -746,6 +760,19 @@ mod tests {
         assert!(retrieved.is_some());
         let (file, _version) = retrieved.unwrap();
         assert_eq!(file.content_hash, "content_abc");
+    }
+
+    #[tokio::test]
+    async fn test_upsert() {
+        let repo = make_repository().await;
+        let version = make_test_version(12345, "content_abc");
+        let file1 = make_test_file("fandom/work1.html.bz2", "content_abc");
+        let file2 = make_test_file("fandom/work2.html.bz2", "content_abc");
+        repo.upsert(&file1, &version).await.unwrap();
+        repo.upsert(&file2, &version).await.unwrap();
+        repo.upsert(&file1, &version).await.unwrap();
+        assert_eq!(1, repo.count_versions().await.unwrap());
+        assert_eq!(2, repo.count_scanned_files().await.unwrap());
     }
 
     #[tokio::test]

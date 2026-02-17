@@ -3,6 +3,7 @@ use crate::{Renderer, TempFile, style::CssVariables};
 use exn::ResultExt;
 use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
+use tracing::instrument;
 
 pub enum Output {
     Persisted(PathBuf),
@@ -16,6 +17,7 @@ impl Renderer {
         Ok(Output::Temporary(output))
     }
 
+    #[instrument(skip_all)]
     pub fn render_to<R: Read>(
         &self,
         html: R,

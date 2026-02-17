@@ -2,8 +2,10 @@ use crate::error::{ErrorKind, Result};
 use exn::ResultExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::instrument;
 
 /// Represents a Chrome/Chromium executable.
+#[derive(Debug)]
 pub(crate) enum Chrome {
     /// A directly executable binary.
     Binary { path: PathBuf },
@@ -36,6 +38,7 @@ impl Chrome {
         exn::bail!(ErrorKind::ChromeNotFound);
     }
 
+    #[instrument]
     pub(crate) fn execute(&self, html: &Path, pdf: &Path) -> Result<()> {
         if !html.exists() || !pdf.is_absolute() || pdf.is_dir() {
             exn::bail!(ErrorKind::Io);

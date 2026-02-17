@@ -1,10 +1,14 @@
 mod chrome;
-mod error;
+pub mod error;
+mod render;
 mod style;
 
 use crate::chrome::Chrome;
 use crate::error::{Error, Result};
+pub use crate::render::Output;
 pub use crate::style::StyleConfig;
+
+pub type TempFile = tempfile::NamedTempFile;
 
 pub struct Renderer {
     chrome: Chrome,

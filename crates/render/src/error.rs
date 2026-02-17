@@ -22,9 +22,11 @@ pub enum ErrorKind {
     #[display("chrome/chromium not detected on your system")]
     ChromeNotFound,
     ChromeTimeout,
-    /// Chrome exited with a non-zero status code
+    /// Chrome exited with a non-zero exit code.
+    /// If the exit code is zero, then Chrome either timed-out, killed by signal, or crashed.
     #[display("Chrome exited with code: {_0}")]
     ChromeFailed(#[error(not(source))] i32),
+    /// Asset was not loadable (either file or builtin).
     AssetNotFound(#[error(not(source))] String),
     Io,
 }

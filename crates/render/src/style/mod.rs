@@ -1,12 +1,13 @@
 mod assets;
 mod variables;
 
+pub(crate) use self::variables::CssVariables;
 use crate::error::{ErrorKind, Result};
 use crate::style::assets::Builtins;
 use exn::ResultExt;
 use std::borrow::Cow;
-use std::fs::File;
-use std::{io::Read, path::Path};
+use std::{fs::File, path::Path};
+use std::{io::Read, io::Write};
 
 enum Style {
     Builtin(String),
@@ -15,14 +16,32 @@ enum Style {
     // time anyway, so do here and fail fast.
     UserContent(String),
 }
+impl Style {
+    fn write_all_to(&self, w: &mut impl Write) -> std::io::Result<()> {
+        let content = match self {
+            // Safety: business logic dictates that the builtin exists.
+            Self::Builtin(name) => Builtins::load(name).unwrap(),
+            Self::UserContent(content) => Cow::Borrowed(content.as_bytes()),
+        };
+        w.write_all(b"<style>")?;
+        w.write_all(&content)?;
+        w.write_all(b"</style>\n")
+    }
+}
 
 /// # Example
 ///
 /// ```no_run
+/// use rawr_render::StyleConfig;
+/// # use rawr_render::error::Result;
+///
+/// # fn get_styles() -> Result<StyleConfig> {
 /// let styles = StyleConfig::new()
 ///     .with_builtin("book.css")?
 ///     .with_builtin("rmpp.css")?
 ///     .with_file("/path/to/custom.css")?;
+/// # Ok(styles)
+/// # }
 /// ```
 #[derive(Default)]
 pub struct StyleConfig {
@@ -39,7 +58,7 @@ impl StyleConfig {
 
     pub fn with_builtin(mut self, name: impl AsRef<str>) -> Result<Self> {
         let name = name.as_ref();
-        if !Builtins::exists(&name) {
+        if !Builtins::exists(name) {
             exn::bail!(ErrorKind::AssetNotFound(Builtins::identifier(name)));
         }
         self.styles.push(Style::Builtin(name.to_string()));
@@ -61,5 +80,12 @@ impl StyleConfig {
     pub fn with_content(mut self, content: impl Into<String>) -> Self {
         self.styles.push(Style::UserContent(content.into()));
         self
+    }
+
+    pub(crate) fn write_all_to(&self, w: &mut impl Write) -> std::io::Result<usize> {
+        for style in &self.styles {
+            style.write_all_to(w)?;
+        }
+        Ok(self.styles.len())
     }
 }

@@ -671,8 +671,9 @@ impl Repository {
                 .await
                 .or_raise(|| ErrorKind::Database)?;
             // Operation already completed, do not failed because of a parse
-            // error. It probably means that the number of rows affected
-            // negative (??), in which case return zero even if it's wrong.
+            // error. It probably means that the number of rows affected is
+            // negative (which the real operation below would never return).
+            // Return zero even if it's wrong.
             return Ok(u64::try_from(row.0).unwrap_or(0));
         }
         let result = sqlx::query(include_str!("../queries/delete_orphan_versions.sql"))

@@ -39,6 +39,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "any_ascii"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c6333e01ba7235575b6ab53e5af10f1c327927fd97c36462917e289557ea64"
+
+[[package]]
 name = "anyhow"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2474,12 +2480,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawr-library"
+version = "0.1.0-beta"
+dependencies = [
+ "async-stream",
+ "derive_more",
+ "exn",
+ "futures",
+ "rawr-cache",
+ "rawr-compress",
+ "rawr-extract",
+ "rawr-storage",
+ "rslug",
+ "rstest",
+ "time",
+ "tokio",
+ "tracing",
+ "upon",
+]
+
+[[package]]
 name = "rawr-render"
 version = "0.1.0-beta"
 dependencies = [
  "derive_more",
  "exn",
  "rawr-extract",
+ "rslug",
  "rstest",
  "rust-embed",
  "tempfile",
@@ -2607,6 +2634,15 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rslug"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e67d88d4333775a1ddb375a1b4fe7f9175d49b641011c7f3340fd41426caedf"
+dependencies = [
+ "any_ascii",
 ]
 
 [[package]]
@@ -3600,6 +3636,17 @@ name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+
+[[package]]
+name = "upon"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ead40aa15464f4d808014183fa0b030761ff6f57e162f7fc76d6a900df7a28"
+dependencies = [
+ "serde",
+ "unicode-ident",
+ "unicode-width",
+]
 
 [[package]]
 name = "url"

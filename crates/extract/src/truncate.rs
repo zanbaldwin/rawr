@@ -2,54 +2,49 @@
 
 pub const ESTIMATED_HEADER_SIZE_BYTES: usize = 12 * 1024;
 
-/// Truncates an HTML string to approximately `max_bytes` while ensuring
+/// Truncates raw HTML bytes to approximately `max_bytes` while ensuring
 /// the cut point is at a safe boundary (not mid-tag or mid-entity).
 /// This is useful for extracting metadata from very large HTML files,
 /// since all required metadata is typically in the first ~10KB.
 ///
+/// Accepts raw bytes, instead of requiring HTML to be valid UTF-8. The tag and
+/// entity markers (`<`, `>`, `&`, `;`) are all ASCII-range bytes, so
+/// searching is safe.
+///
 /// # Arguments
 ///
-/// * `html` - The HTML string to truncate
+/// * `html` - The raw HTML bytes to truncate
 /// * `max_bytes` - The maximum number of bytes to keep
 ///
 /// # Returns
 ///
-/// A string slice of the input up to approximately `max_bytes`, truncated
-/// at a safe-ish boundary.
+/// A byte slice of the input up to approximately `max_bytes`, truncated
+/// at a safe-ish (ISH!) boundary.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use rawr_extract::safe_html_truncate;
-/// let html = "<div>Hello World</div>";
+/// let html = b"<div>Hello World</div>";
 /// // Will truncate at a safe boundary, not mid-tag
 /// assert_eq!(safe_html_truncate(html, 10).len(), 10);
 /// assert_eq!(safe_html_truncate(html, 18).len(), 16)
 /// ```
-pub fn safe_html_truncate(html: &str, max_bytes: usize) -> &str {
+pub fn safe_html_truncate(html: &[u8], max_bytes: usize) -> &[u8] {
     if html.len() <= max_bytes {
         return html;
     }
-    // Start from max_bytes and search backward for a safe cut point
-    let mut end = max_bytes;
-    // Ensure we don't cut in the middle of a UTF-8 character
-    while end > 0 && !html.is_char_boundary(end) {
-        end -= 1;
-    }
-    if end == 0 {
-        return "";
-    }
-    let candidate = &html[..end];
-    let open_tag_match = candidate.rfind('<');
-    let close_tag_match = candidate.rfind('>');
+    let candidate = &html[..max_bytes];
+    let open_tag_match = memrchr(b'<', candidate);
+    let close_tag_match = memrchr(b'>', candidate);
     if let Some(open_tag_position) = open_tag_match
         && close_tag_match.map(|gt| gt < open_tag_position).unwrap_or(true)
     {
         // We're inside a HTML tag, cut before the '<'
         return &candidate[..open_tag_position];
     }
-    let start_entity_match = candidate.rfind('&');
-    let end_entity_match = candidate.rfind(';');
+    let start_entity_match = memrchr(b'&', candidate);
+    let end_entity_match = memrchr(b';', candidate);
     if let Some(amp_pos) = start_entity_match
         && end_entity_match.map(|semi| semi < amp_pos).unwrap_or(true)
     {
@@ -61,60 +56,67 @@ pub fn safe_html_truncate(html: &str, max_bytes: usize) -> &str {
     candidate
 }
 
+/// Search backwards through a byte slice for a specific byte. Like a shitty
+/// version of [`rfind`](str::rfind) with even less pattern matching.
+fn memrchr(needle: u8, haystack: &[u8]) -> Option<usize> {
+    haystack.iter().rposition(|&b| b == needle)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn no_truncation_needed() {
-        let html = "<div>Hello</div>";
+        let html = b"<div>Hello</div>";
         assert_eq!(safe_html_truncate(html, 100), html);
     }
 
     #[test]
     fn truncates_at_tag_boundary() {
-        let html = "<div>Hello</div><span>World</span>";
+        let html = b"<div>Hello</div><span>World</span>";
         let result = safe_html_truncate(html, 20);
         // Should cut at the end of </div>
-        assert!(result.ends_with(">"));
-        assert!(!result.contains("<span"));
+        assert!(result.ends_with(b">"));
+        assert!(!result.windows(5).any(|w| w == b"<span"));
     }
 
     #[test]
     fn does_not_cut_mid_tag() {
-        let html = "<div class=\"test\">Content</div>";
+        let html = b"<div class=\"test\">Content</div>";
         let result = safe_html_truncate(html, 10);
         // Should not cut inside the opening tag
-        assert!(result.is_empty() || result.ends_with(">") || !result.contains("<div"), "Result was: {}", result);
+        assert!(result.is_empty() || result.ends_with(b">") || !result.windows(4).any(|w| w == b"<div"));
     }
 
     #[test]
     fn handles_entities() {
-        let html = "<p>Hello &amp; World</p>";
+        let html = b"<p>Hello &amp; World</p>";
         let result = safe_html_truncate(html, 12);
         // Should not cut in the middle of &amp;
-        assert!(!result.ends_with("&"));
-        assert!(!result.ends_with("&a"));
-        assert!(!result.ends_with("&am"));
-        assert!(!result.ends_with("&amp"));
+        assert!(!result.ends_with(b"&"));
+        assert!(!result.ends_with(b"&a"));
+        assert!(!result.ends_with(b"&am"));
+        assert!(!result.ends_with(b"&amp"));
     }
 
     #[test]
-    fn handles_utf8() {
-        let html = "<p>Hello 世界</p>";
+    fn handles_non_utf8() {
+        // Latin-1 encoded bytes (not valid UTF-8)
+        let html = b"<p>Hello \xe9\xe8\xe0</p>";
         let result = safe_html_truncate(html, 12);
-        // Should not panic and should be valid UTF-8
-        assert!(result.is_ascii() || result.chars().count() > 0);
+        // Should not panic — operates purely on bytes
+        assert!(!result.is_empty());
     }
 
     #[test]
-    fn empty_string() {
-        assert_eq!(safe_html_truncate("", 100), "");
+    fn empty_bytes() {
+        assert_eq!(safe_html_truncate(b"", 100), b"");
     }
 
     #[test]
     fn zero_max_bytes() {
-        let html = "<div>Hello</div>";
+        let html = b"<div>Hello</div>";
         let result = safe_html_truncate(html, 0);
         assert!(result.is_empty());
     }

@@ -2469,12 +2469,16 @@ dependencies = [
 name = "rawr-extract"
 version = "0.1.0-beta"
 dependencies = [
+ "blake3",
+ "crc32fast",
  "derive_more",
  "exn",
  "fast_html2md",
+ "html5ever",
  "regex",
  "rstest",
  "scraper",
+ "tendril",
  "time",
  "tracing",
 ]

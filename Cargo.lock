@@ -2475,6 +2475,7 @@ dependencies = [
  "exn",
  "fast_html2md",
  "html5ever",
+ "memchr",
  "regex",
  "rstest",
  "scraper",

@@ -1,5 +1,7 @@
 //! Utilities for truncating HTML documents for efficient extraction.
 
+use memchr::memrchr;
+
 pub const ESTIMATED_HEADER_SIZE_BYTES: usize = 12 * 1024;
 
 /// Truncates raw HTML bytes to approximately `max_bytes` while ensuring
@@ -54,12 +56,6 @@ pub fn safe_html_truncate(html: &[u8], max_bytes: usize) -> &[u8] {
     // We're neither inside a HTML tag, or inside a HTML entity.
     // We _should_ be in the middle of text, which is completely fine to truncate.
     candidate
-}
-
-/// Search backwards through a byte slice for a specific byte. Like a shitty
-/// version of [`rfind`](str::rfind) with even less pattern matching.
-fn memrchr(needle: u8, haystack: &[u8]) -> Option<usize> {
-    haystack.iter().rposition(|&b| b == needle)
 }
 
 #[cfg(test)]

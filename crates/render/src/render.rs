@@ -2,21 +2,48 @@ use crate::error::{ErrorKind, Result};
 use crate::{Renderer, TempFile, style::CssVariables};
 use exn::ResultExt;
 use std::io::{Cursor, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::instrument;
 
+/// The result of a render operation, holding a reference to the generated PDF.
+///
+/// The PDF lives either at a caller-specified path ([`Persisted`](Self::Persisted))
+/// or in a temporary file ([`Temporary`](Self::Temporary)) that is deleted when
+/// this value is dropped. Use [`path()`](Self::path) to get the location
+/// regardless of variant.
+#[must_use]
 pub enum Output {
+    /// PDF written to the path the caller requested via [`Renderer::render_to`].
     Persisted(PathBuf),
+    /// PDF written to an auto-managed temporary file. The file is deleted on drop.
     Temporary(TempFile),
+}
+impl Output {
+    /// Returns the filesystem path to the generated PDF.
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Persisted(p) => p,
+            Self::Temporary(f) => f.path(),
+        }
+    }
 }
 
 impl Renderer {
+    /// Renders HTML to a PDF stored in a temporary file.
+    ///
+    /// Configured styles and optional `CssVariables` are injected before the
+    /// closing `</head>` tag. The returned [`Output::Temporary`] is deleted when
+    /// dropped — hold the value for as long as you need the PDF.
     pub fn render<R: Read>(&self, html: R, variables: impl Into<Option<CssVariables>>) -> Result<Output> {
         let output = TempFile::new().or_raise(|| ErrorKind::Io)?;
-        self.render_to(html, variables, output.path().to_path_buf())?;
+        _ = self.render_to(html, variables, output.path().to_path_buf())?;
         Ok(Output::Temporary(output))
     }
 
+    /// Renders HTML to a PDF at the specified path.
+    ///
+    /// Like [`render()`](Self::render), but writes the PDF to `save_to` instead of
+    /// a temporary file. Returns [`Output::Persisted`] on success.
     #[instrument(skip_all)]
     pub fn render_to<R: Read>(
         &self,
@@ -30,10 +57,12 @@ impl Renderer {
         Ok(Output::Persisted(save_to))
     }
 
+    /// Convenience wrapper around [`render()`](Self::render) that accepts a byte slice.
     pub fn render_slice(&self, html: &[u8], variables: impl Into<Option<CssVariables>>) -> Result<Output> {
         self.render(Cursor::new(html), variables)
     }
 
+    /// Convenience wrapper around [`render_to()`](Self::render_to) that accepts a byte slice.
     pub fn render_slice_to(
         &self,
         html: &[u8],
@@ -43,6 +72,7 @@ impl Renderer {
         self.render_to(Cursor::new(html), variables, save_to)
     }
 
+    // Lol, apparently this is called a "ring-buffer algorithm". I call it a "overlapping search".
     fn persist_html<R: Read>(&self, mut html: R, variables: Option<CssVariables>) -> Result<TempFile> {
         let mut tmp = TempFile::new().or_raise(|| ErrorKind::Io)?;
         const NEEDLE: &[u8] = b"</head";

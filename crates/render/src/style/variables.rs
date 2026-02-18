@@ -1,13 +1,28 @@
+//! CSS custom properties (variables) for rendered documents.
+//!
+//! [`CssVariables`] is rendered as a `<style>` block setting `:root` custom
+//! properties prefixed with `--meta-`. These are injected alongside stylesheets
+//! so that CSS rules can reference work metadata (title, word count, etc.)
+//! without template preprocessing.
+
 #[cfg(feature = "metadata")]
 use rawr_extract::models::Metadata;
+use rslug::slugify;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
+/// A set of CSS custom properties injected as `:root` variables.
+///
+/// Each entry becomes `--meta-{key}: "{value}"` in a `<style>` block.
+/// Values are escaped per the [W3C CSS string token grammar][spec].
+///
+/// [spec]: https://www.w3.org/TR/css-syntax-3/#consume-string-token
 pub struct CssVariables {
     variables: HashMap<String, String>,
 }
 
 impl CssVariables {
+    /// Creates a new set of CSS variables from any map-like type.
     pub fn new(map: impl Into<HashMap<String, String>>) -> Self {
         Self { variables: map.into() }
     }
@@ -18,6 +33,10 @@ impl<K: Into<String>, V: Into<String>> FromIterator<(K, V)> for CssVariables {
         Self { variables }
     }
 }
+/// Converts work [`Metadata`] into CSS variables for use in stylesheets.
+///
+/// Populates keys like `work-id`, `words`, `rating`, `published`, etc.
+/// Numeric values are formatted with comma separators for display.
 #[cfg(feature = "metadata")]
 impl From<&Metadata> for CssVariables {
     fn from(m: &Metadata) -> Self {
@@ -50,7 +69,7 @@ impl Display for CssVariables {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         writeln!(f, "<style>\n:root {{")?;
         for (key, value) in self.variables.iter() {
-            writeln!(f, "    --meta-{}: \"{}\";", key, css_escape_string(value))?;
+            writeln!(f, "    --meta-{}: \"{}\";", slugify!(key), css_escape_string(value))?;
         }
         write!(f, "}}\n</style>")
     }

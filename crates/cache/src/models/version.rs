@@ -107,7 +107,7 @@ impl TryFrom<VersionRow> for Version {
                     .map(extract::Tag::from)
                     .collect::<Vec<_>>(),
                 summary: row.summary,
-                // Safety: FromStr for Language has an infallible error type.
+                // Infallible: Language accepts any string.
                 language: row.lang.parse::<extract::Language>().unwrap(),
                 published: UtcDateTime::from_unix_timestamp(row.published_on)
                     .or_raise(|| ErrorKind::InvalidData("published on date"))?

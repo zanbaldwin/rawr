@@ -14,7 +14,9 @@ use crate::{ESTIMATED_HEADER_SIZE_BYTES, consts, safe_html_truncate};
 use exn::{OptionExt, ResultExt};
 #[cfg(feature = "markdown")]
 use html2md::rewrite_html as html_to_markdown;
-use scraper::Html;
+use html5ever::driver;
+use scraper::{Html, HtmlTreeSink};
+use tendril::TendrilSink;
 use tracing::instrument;
 
 #[derive(Debug)]
@@ -26,15 +28,23 @@ impl Extractor {
         Self { document }
     }
 
-    pub fn from_html(html: &str) -> Self {
-        let document = Html::parse_document(html);
+    /// Construct an [`Extractor`] from raw HTML bytes.
+    ///
+    /// Parses the bytes using html5ever directly, performing lossy UTF-8
+    /// conversion (invalid byte sequences become `U+FFFD`).
+    ///
+    /// Copied directly from [Scraper](scraper)'s
+    /// [`parse_document()`](scraper::Html::parse_document).
+    pub fn from_html(html: impl AsRef<[u8]>) -> Self {
+        let parser = driver::parse_document(HtmlTreeSink::new(Html::new_document()), Default::default());
+        let document = parser.from_utf8().one(html.as_ref());
         Self::from_document(document)
     }
 
-    /// Construct an [`Extractor`] from a large HTML document; it will
-    /// automatically truncate the HTML to an appropriate size.
-    pub fn from_long_html(html: &str) -> Self {
-        Self::from_html(safe_html_truncate(html, ESTIMATED_HEADER_SIZE_BYTES))
+    /// Construct an [`Extractor`] from a large HTML string; automatically
+    /// truncate the HTML to an appropriate size.
+    pub fn from_long_html(html: impl AsRef<[u8]>) -> Self {
+        Self::from_html(safe_html_truncate(html.as_ref(), ESTIMATED_HEADER_SIZE_BYTES))
     }
 
     /// Extraction of the metadata automatically performs a validity check,
@@ -177,7 +187,8 @@ impl TryFrom<Extractor> for Metadata {
 /// > Contains a valid AO3 work URL in `div#preface p.message a`
 ///
 /// This function is designed to be fast and only examines the necessary parts
-/// of the document.
+/// of the document. Extraction automatically performs validation, so skip this
+/// function if you plan on extracting data anyway.
 ///
 /// # Examples
 ///
@@ -191,9 +202,9 @@ impl TryFrom<Extractor> for Metadata {
 ///     </div>
 /// "#;
 ///
-/// assert!(is_valid(valid_html));
+/// assert!(is_valid(valid_html.as_bytes()));
 /// ```
-#[instrument(skip(html), fields(html_size = html.len()))]
-pub fn is_valid(html: &str) -> bool {
+#[instrument(skip(html), fields(html_size = html.as_ref().len()))]
+pub fn is_valid(html: impl AsRef<[u8]>) -> bool {
     Extractor::from_long_html(html).is_valid()
 }

@@ -11,11 +11,15 @@ default = ["markdown"]
 markdown = ["dep:fast_html2md"]
 
 [dependencies]
+blake3 = { workspace = true }
+crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
+html5ever = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true }
+tendril = { workspace = true }
 time = { workspace = true, features = ["formatting", "parsing"] }
 tracing = { workspace = true }
 

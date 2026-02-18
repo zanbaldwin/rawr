@@ -22,6 +22,11 @@ pub struct Version {
     pub metadata: Metadata,
     pub extracted_at: UtcDateTime,
 }
+impl AsRef<Version> for Version {
+    fn as_ref(&self) -> &Version {
+        self
+    }
+}
 impl Version {
     /// Returns the most recent modification date for this version.
     pub fn last_modified(&self) -> Date {

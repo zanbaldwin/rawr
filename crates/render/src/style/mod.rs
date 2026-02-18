@@ -1,5 +1,12 @@
+//! CSS style management for rendered documents.
+//!
+//! Styles are assembled through [`StyleConfig`]'s builder API, combining
+//! compile-time embedded builtins (see [`StyleConfig::list_builtins`]) with
+//! user-provided files or raw CSS content. All styles are read eagerly at
+//! construction time so that missing files fail fast rather than at render time.
+
 mod assets;
-mod variables;
+pub(crate) mod variables;
 
 pub(crate) use self::variables::CssVariables;
 use crate::error::{ErrorKind, Result};
@@ -19,8 +26,8 @@ enum Style {
 impl Style {
     fn write_all_to(&self, w: &mut impl Write) -> std::io::Result<()> {
         let content = match self {
-            // Safety: business logic dictates that the builtin exists.
-            Self::Builtin(name) => Builtins::load(name).unwrap(),
+            // Infallible: business logic dictates that the builtin exists.
+            Self::Builtin(name) => Builtins::load(name).expect("builting validated at construction"),
             Self::UserContent(content) => Cow::Borrowed(content.as_bytes()),
         };
         w.write_all(b"<style>")?;
@@ -29,6 +36,11 @@ impl Style {
     }
 }
 
+/// An ordered collection of CSS stylesheets to inject into rendered documents.
+///
+/// Styles are applied in insertion order — later styles override earlier ones.
+/// Use the builder methods to compose builtins, files, and raw CSS content.
+///
 /// # Example
 ///
 /// ```no_run
@@ -48,14 +60,21 @@ pub struct StyleConfig {
     styles: Vec<Style>,
 }
 impl StyleConfig {
+    /// Creates an empty style configuration with no stylesheets.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns the names of all embedded builtin stylesheets (e.g. `"book.css"`).
     pub fn list_builtins() -> Vec<Cow<'static, str>> {
         assets::Builtins::list()
     }
 
+    /// Appends a builtin stylesheet by name.
+    ///
+    /// Returns [`ErrorKind::AssetNotFound`](crate::error::ErrorKind::AssetNotFound)
+    /// if `name` does not match any embedded asset. Use [`list_builtins()`](Self::list_builtins)
+    /// to discover available names.
     pub fn with_builtin(mut self, name: impl AsRef<str>) -> Result<Self> {
         let name = name.as_ref();
         if !Builtins::exists(name) {
@@ -65,6 +84,10 @@ impl StyleConfig {
         Ok(self)
     }
 
+    /// Appends a stylesheet read from a file on disk.
+    ///
+    /// The file is read immediately so that missing or unreadable files
+    /// surface as errors during construction rather than at render time.
     pub fn with_file(mut self, path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         if !path.exists() {
@@ -77,6 +100,8 @@ impl StyleConfig {
         Ok(self)
     }
 
+    /// Appends raw CSS content as a stylesheet. This is infallible since no
+    /// I/O is involved.
     pub fn with_content(mut self, content: impl Into<String>) -> Self {
         self.styles.push(Style::UserContent(content.into()));
         self

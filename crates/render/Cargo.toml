@@ -14,6 +14,7 @@ metadata = ["dep:rawr-extract"]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 rawr-extract = { path = "../extract", optional = true }
+rslug = { workspace = true }
 rust-embed = { workspace = true }
 tracing = { workspace = true }
 tempfile = { workspace = true }

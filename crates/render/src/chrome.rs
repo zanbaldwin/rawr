@@ -57,6 +57,7 @@ impl Chrome {
                 c
             },
         };
+        // TODO set command timeout to 180 seconds. Spawn in a subprocess.
         cmd.args([
             "--headless=new",
             "--disable-gpu",

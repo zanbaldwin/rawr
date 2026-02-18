@@ -8,6 +8,10 @@ use exn::OptionExt;
 use rust_embed::Embed;
 use std::borrow::Cow;
 
+/// Compile-time embedded CSS stylesheets sourced from `assets/styles/`.
+///
+/// Backed by [`rust_embed`], so asset data is baked into the binary and
+/// available without filesystem access at runtime.
 #[derive(Embed)]
 #[folder = "../../assets/styles/"]
 pub struct Builtins;
@@ -22,6 +26,7 @@ impl Builtins {
         Self::iter().filter(|f| f.ends_with(".css")).collect()
     }
 
+    /// Returns `true` if a builtin asset with the given name exists.
     pub fn exists(name: impl AsRef<str>) -> bool {
         Self::get(name.as_ref()).is_some()
     }

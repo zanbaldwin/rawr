@@ -21,6 +21,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum ErrorKind {
     #[display("chrome/chromium not detected on your system")]
     ChromeNotFound,
+    /// The Chrome process exceeded the allowed execution time.
     ChromeTimeout,
     /// Chrome exited with a non-zero exit code.
     /// If the exit code is zero, then Chrome either timed-out, killed by signal, or crashed.
@@ -28,6 +29,7 @@ pub enum ErrorKind {
     ChromeFailed(#[error(not(source))] i32),
     /// Asset was not loadable (either file or builtin).
     AssetNotFound(#[error(not(source))] String),
+    /// An underlying I/O operation failed (file read, temp file creation, etc.).
     Io,
 }
 

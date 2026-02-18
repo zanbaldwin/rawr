@@ -1,0 +1,25 @@
+[package]
+name = "rawr-library"
+description = ""
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+async-stream = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+futures = { workspace = true }
+rawr-cache = { path = "../cache" }
+rawr-compress = { path = "../compress" }
+rawr-extract = { path = "../extract" }
+rawr-storage = { path = "../storage" }
+rslug = { workspace = true }
+tracing = { workspace = true }
+upon = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+time = { workspace = true }

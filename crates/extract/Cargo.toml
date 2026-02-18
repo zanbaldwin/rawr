@@ -17,6 +17,7 @@ derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 html5ever = { workspace = true }
+memchr = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true }
 tendril = { workspace = true }

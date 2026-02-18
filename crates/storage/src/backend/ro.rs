@@ -7,7 +7,8 @@
 use async_trait::async_trait;
 use std::path::Path;
 
-use crate::{BackendHandle, StorageBackend, backend::FileInfoStream, error::Result, file::FileInfo};
+use crate::backend::{BoxSyncRead, BoxSyncWrite, FileInfoStream};
+use crate::{BackendHandle, StorageBackend, error::Result, file::FileInfo};
 
 /// Read-only storage backend.
 ///
@@ -45,9 +46,18 @@ impl StorageBackend for ReadOnlyBackend {
         self.inner.read_head(path, bytes).await
     }
 
+    async fn reader(&self, path: &Path) -> Result<BoxSyncRead> {
+        self.inner.reader(path).await
+    }
+
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         tracing::info!(path = %path.display(), bytes = data.len(), "Skipping write during read-only mode");
         Ok(())
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxSyncWrite> {
+        tracing::info!(path = %path.display(), "Skipping writer during read-only mode");
+        Ok(Box::new(std::io::sink()))
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {

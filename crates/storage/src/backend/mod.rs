@@ -24,10 +24,13 @@ use crate::error::Result;
 use crate::file::FileInfo;
 use async_trait::async_trait;
 use futures::{Stream, TryStreamExt};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 type FileInfoStream<'a> = Pin<Box<dyn Stream<Item = Result<FileInfo>> + Send + 'a>>;
+type BoxSyncRead = Box<dyn Read + Send + 'static>;
+type BoxSyncWrite = Box<dyn Write + Send + 'static>;
 
 enum WalkEntry {
     File(FileInfo),
@@ -60,6 +63,46 @@ enum WalkEntry {
 ///     } else {
 ///         Ok(0)
 ///     }
+/// }
+/// ```
+///
+/// # Streaming
+/// Read a compressed file, validate its decompressed contents, then
+/// re-compress into a different format — all without buffering the
+/// entire file in memory:
+///
+/// ```
+/// use std::path::Path;
+/// use rawr_compress::Compression;
+/// use rawr_storage::backend::StorageBackend;
+/// use rawr_storage::error::{ErrorKind, Result};
+///
+/// async fn transcode_validated(
+///     backend: &dyn StorageBackend,
+///     source: &Path,
+///     target: &Path,
+/// ) -> Result<u64> {
+///     let source_reader = backend.reader(source).await?;
+///     let source_format = Compression::from_path(source);
+///
+///     let target_writer = backend.writer(target).await?;
+///     let target_format = Compression::from_path(target);
+///
+///     let result_of_thread = tokio::task::spawn_blocking(move || -> Result<u64> {
+///         // Decompress
+///         let mut peekable = source_format
+///             .peekable_reader(source_reader)
+///             .map_err(ErrorKind::compression)?;
+///         // Validate
+///         let head = peekable.peek(15).map_err(ErrorKind::compression)?;
+///         assert!(head.starts_with(b"<!DOCTYPE html>"), "not valid HTML5");
+///         // Recompress
+///         let mut compressor = target_format
+///             .wrap_writer(target_writer)
+///             .map_err(ErrorKind::compression)?;
+///         peekable.copy_into(&mut compressor).map_err(ErrorKind::compression)
+///     }).await;
+///     result_of_thread.unwrap()
 /// }
 /// ```
 #[async_trait]
@@ -185,6 +228,39 @@ pub trait StorageBackend: Send + Sync {
     /// ```
     async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>>;
 
+    /// Open a file for streaming reads.
+    ///
+    /// Returns a `'static` boxed [`Read`](std::io::Read) suitable for use
+    /// inside [`spawn_blocking`](tokio::task::spawn_blocking). The async
+    /// setup (opening the file/connection) happens before returning.
+    /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the file
+    /// does not exist.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    /// use rawr_compress::Compression;
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
+    /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
+    ///
+    /// let path = Path::new("work.html.bz2");
+    /// let file_reader = backend.reader(path).await?;
+    /// let format = Compression::from_path(path);
+    ///
+    /// // Wrap with decompression and read in a blocking task
+    /// let html: Vec<u8> = tokio::task::spawn_blocking(move || {
+    ///     let mut buf = Vec::new();
+    ///     // The decompressor sync Reader can't be sent between threads.
+    ///     let mut decompressor = format.wrap_reader(file_reader).unwrap();
+    ///     std::io::Read::read_to_end(&mut decompressor, &mut buf).unwrap();
+    ///     buf
+    /// }).await.unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    async fn reader(&self, path: &Path) -> Result<BoxSyncRead>;
+
     /// Write file contents.
     ///
     /// Creates a new file or overwrites an existing file with the provided data.
@@ -202,6 +278,41 @@ pub trait StorageBackend: Send + Sync {
     /// # }
     /// ```
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()>;
+
+    /// Open a file for streaming writes.
+    ///
+    /// Returns a `'static` boxed [`Write`](std::io::Write) suitable for use
+    /// inside [`spawn_blocking`](tokio::task::spawn_blocking). The async
+    /// setup happens before returning.
+    ///
+    /// # Notes
+    /// - Implementations should create parent directories as needed.
+    /// - Callers should call `flush()` before dropping to ensure data is
+    ///   written and errors are propagated. Some backends (e.g., S3) buffer
+    ///   all data and only upload on `flush()`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    /// use rawr_compress::Compression;
+    /// # use rawr_storage::{backend::StorageBackend, error::Result};
+    /// # async fn example(backend: &dyn StorageBackend) -> Result<()> {
+    ///
+    /// let path = Path::new("work.html.bz2");
+    /// let raw_writer = backend.writer(path).await?;
+    /// let html = b"<html><body>Hello</body></html>";
+    /// let target_format = Compression::from_path(path);
+    ///
+    /// // Wrap with compression and write in a blocking task
+    /// tokio::task::spawn_blocking(move || {
+    ///     let mut compressor = target_format.wrap_writer(raw_writer).unwrap();
+    ///     std::io::Write::write_all(&mut compressor, html).unwrap();
+    /// }).await.unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    async fn writer(&self, path: &Path) -> Result<BoxSyncWrite>;
 
     /// Delete a file.
     ///

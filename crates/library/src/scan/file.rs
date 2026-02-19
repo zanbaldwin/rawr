@@ -5,7 +5,7 @@ use rawr_cache::{ExistenceResult, Repository};
 use rawr_extract::extract;
 use rawr_extract::models::Version;
 use rawr_storage::BackendHandle;
-use rawr_storage::file::{Discovered, FileInfo, Processed};
+use rawr_storage::file::{FileInfo, HashState, Processed};
 
 /// Indicates how a scan result was obtained.
 ///
@@ -26,15 +26,20 @@ pub struct Scan {
     pub effort: ScanEffort,
 }
 
-pub async fn scan_file(backend: &BackendHandle, cache: &Repository, file: FileInfo<Discovered>) -> LibraryResult<Scan> {
+pub async fn scan_file<S: HashState>(
+    backend: &BackendHandle,
+    cache: &Repository,
+    file: FileInfo<S>,
+) -> LibraryResult<Scan> {
     scan_file_inner(backend, cache, file).await.or_raise(|| LibraryErrorKind::Scan)
 }
 
-pub(crate) async fn scan_file_inner(
+pub(crate) async fn scan_file_inner<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,
-    file: FileInfo<Discovered>,
+    file: FileInfo<S>,
 ) -> ScanResult<Scan> {
+    let file = file.strip_hashes();
     let existing = cache.get_by_target_path(backend.name(), &file.path).await.or_raise(|| ErrorKind::Cache)?;
     if let Some((cached_file, version)) = existing
         && file.size == cached_file.size

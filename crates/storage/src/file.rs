@@ -171,6 +171,10 @@ impl<S: HashState> FileInfo<S> {
     pub fn into_meta(self) -> FileMeta {
         self.meta
     }
+
+    pub fn strip_hashes(self) -> FileInfo<Discovered> {
+        self.meta.into()
+    }
 }
 impl<S: HashState> Deref for FileInfo<S> {
     type Target = FileMeta;

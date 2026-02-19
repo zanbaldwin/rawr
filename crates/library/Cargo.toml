@@ -17,11 +17,13 @@ rawr-compress = { path = "../compress" }
 rawr-extract = { path = "../extract" }
 rawr-storage = { path = "../storage" }
 rslug = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 upon = { workspace = true }
 
 [dev-dependencies]
+rawr-storage = { path = "../storage", features = ["mock"] }
 rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 time = { workspace = true }

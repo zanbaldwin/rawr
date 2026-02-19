@@ -1,5 +1,5 @@
 pub(crate) mod error;
-mod file;
+pub(crate) mod file;
 mod stream;
 
 pub use self::file::{Scan, ScanEffort, scan_file};

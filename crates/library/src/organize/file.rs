@@ -1,0 +1,104 @@
+use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
+use crate::organize::Context;
+use crate::organize::conflict::handle_conflict;
+use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
+use exn::ResultExt;
+use rawr_cache::Repository;
+use rawr_compress::Compression;
+use rawr_storage::BackendHandle;
+use rawr_storage::error::ErrorKind as StorageErrorKind;
+use rawr_storage::file::{FileInfo, HashState};
+use std::io::{self, Cursor};
+use std::ops::Deref;
+use std::path::PathBuf;
+
+pub enum Action {
+    /// File was renamed to the correct path.
+    Renamed(PathBuf),
+    /// File was already at the correct path.
+    AlreadyCorrect(PathBuf),
+    /// File record cleaned up (no longer exists on filesystem).
+    CleanedUp(PathBuf),
+}
+
+pub async fn organize_file<S: HashState>(
+    backend: &BackendHandle,
+    cache: &Repository,
+    ctx: &Context,
+    file: FileInfo<S>,
+) -> LibraryResult<Action> {
+    organize_file_inner(backend, cache, ctx, file, vec![]).await.or_raise(|| LibraryErrorKind::Organize)
+}
+
+pub(crate) async fn organize_file_inner<S: HashState>(
+    backend: &BackendHandle,
+    cache: &Repository,
+    ctx: &Context,
+    file: FileInfo<S>,
+    depth: Vec<PathBuf>,
+) -> OrganizeResult<Action> {
+    if file.target != backend.name() {
+        exn::bail!(OrganizeErrorKind::Storage);
+    }
+
+    let Some((file, version)) =
+        cache.get_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)?
+    else {
+        cache.delete_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)?;
+        return Ok(Action::CleanedUp(file.path.clone()));
+    };
+
+    let compression_source = file.compression;
+    let compression_target = ctx.compression.unwrap_or(compression_source);
+
+    let correct_location =
+        ctx.template.generate_with_ext(version, "html", compression_target).or_raise(|| OrganizeErrorKind::Template)?;
+    if file.path == correct_location {
+        return Ok(Action::AlreadyCorrect(file.path.clone()));
+    }
+
+    if let Some(existing) = match backend.stat(&correct_location).await {
+        Ok(f) => Some(f),
+        Err(e) if matches!(e.deref(), StorageErrorKind::NotFound(_)) => None,
+        Err(e) => Err(e).or_raise(|| OrganizeErrorKind::Storage)?,
+    } {
+        match handle_conflict(backend, cache, ctx, &file, existing, depth).await {
+            Ok(Some(r)) => return Ok(r),
+            Ok(None) => (), // continue...
+            Err(e) => return Err(e),
+        }
+    }
+    // Target location is now free. If there was a cache entry at the target location
+    // it isn't there now, delete old entry. Silently ignore errors if it couldn't
+    // be deleted, it's a dangling record anyway.
+    _ = cache.delete_by_target_path(&file.target, &file.path).await;
+
+    if compression_source == compression_target {
+        // The file is already compressed using the correct format, a simple rename will do.
+        backend.rename(&file.path, &correct_location).await.or_raise(|| OrganizeErrorKind::Storage)?;
+    } else {
+        let converted = convert(
+            &backend.read(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
+            compression_source,
+            compression_target,
+        )
+        .or_raise(|| OrganizeErrorKind::Compression)?;
+        backend.write(&correct_location, &converted).await.or_raise(|| OrganizeErrorKind::Storage)?;
+    }
+
+    // Update the cache with the new location, but silently ignore errors since
+    // it can be cleaned up on the next library scan operation.
+    _ = cache.update_target_path(&file.target, &file.path, &correct_location).await;
+    Ok(Action::Renamed(correct_location))
+}
+
+/// Convert from one compression format to another
+fn convert(data: &[u8], source: Compression, target: Compression) -> OrganizeResult<Vec<u8>> {
+    let reader = Cursor::new(data);
+    let mut decompressor = source.wrap_reader(reader).or_raise(|| OrganizeErrorKind::Compression)?;
+    let mut writer = Cursor::new(Vec::new());
+    let mut compressor = target.wrap_writer(&mut writer).or_raise(|| OrganizeErrorKind::Compression)?;
+    io::copy(&mut decompressor, &mut compressor).or_raise(|| OrganizeErrorKind::Compression)?;
+    drop(compressor);
+    Ok(writer.into_inner())
+}

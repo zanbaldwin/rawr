@@ -1,4 +1,4 @@
-//! Library Error Types
+//! Organize Error Types
 //!
 //! This module provides structured errors using `exn` for automatic location
 //! tracking and error tree construction. See `ERRORS.md` for design rationale.
@@ -7,7 +7,6 @@
 //!       more crates. Designing errors in Rust is **hard** and I don't want
 //!       to resort to anyhow+thiserror just because I don't want to deal with it.
 
-pub use crate::scan::error::ErrorKind as ScanErrorKind;
 use derive_more::{Display, Error};
 
 /// A library error with automatic location tracking.
@@ -17,10 +16,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Display, Error)]
 pub enum ErrorKind {
-    Scan,
-    Organize,
-    #[display("issue with path generation from template")]
+    Compression,
+    Cache,
+    Storage,
     Template,
+    Scan,
+    Conflict,
 }
 
 impl ErrorKind {

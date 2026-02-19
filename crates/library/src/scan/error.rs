@@ -8,7 +8,6 @@
 //!       to resort to anyhow+thiserror just because I don't want to deal with it.
 
 use derive_more::{Display, Error};
-use std::path::PathBuf;
 
 /// A library error with automatic location tracking.
 pub type Error = exn::Exn<ErrorKind>;
@@ -21,8 +20,7 @@ pub enum ErrorKind {
     Storage,
     Compression,
     Extract,
-    #[display("File scan failed: {}", _0.display())]
-    ScanFailed(#[error(not(source))] PathBuf),
+    ScanFailed,
 }
 
 impl ErrorKind {

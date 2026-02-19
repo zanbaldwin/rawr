@@ -4,15 +4,18 @@ use crate::scan::error::{ErrorKind as ScanErrorKind, Result as ScanResult};
 use crate::scan::file::scan_file_inner;
 use async_stream::stream;
 use exn::ResultExt;
+use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt};
 use rawr_cache::Repository;
 use rawr_storage::BackendHandle;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
 
+const MAX_PROCESS_CONCURRENCY: usize = 100;
+
 pub enum ScanEvent {
     Started,
-    FileDiscovered { path: PathBuf },
+    FileDiscovered(PathBuf),
     DiscoveryComplete(u64),
     Scanned(Box<Scan>),
     Complete,
@@ -39,6 +42,7 @@ fn scan_inner<'a>(
 ) -> impl Stream<Item = ScanResult<ScanEvent>> + 'a {
     stream! {
         yield Ok(ScanEvent::Started);
+
         // Three options:
         // 1. We fetch all the files into memory first, then we can tell the
         //    caller "we found X files!" via ScanEvent::DiscoveryComplete(X).
@@ -48,19 +52,69 @@ fn scan_inner<'a>(
         //    soon as possible BUT but we also process files in our queue while
         //    that's going on (yay tokio select!) DOUBLE BUT it's the most
         //    complex because streams are hard, yo.
-        // ... guess which one we're implementing, kiddos!
+        // ... guess which one we're gonna implement, kiddos!
+
+        // Well fuck, processing needs to return a future for tokio::select
+        // to work. So much for "a queue of files will be easy!". Do I really
+        // want to push thousands and thousands of futures onto the heap?
+        // How many bytes do state machines require?? They could possibly
+        // contain the bytes of the entire decompressed HTML file?! With
+        // thousands of files at several megabytes that would cause a heap
+        // overflow. Plus, what the hell do I use instead of a Vec?
+        // LeVecDeFutures::new()???
+
+        // Oh. LeVecDeFutures wasn't actually far off. `futures::stream::FuturesUnordered`
+        // exists and is literally a collection of futures. Damn, I'm good.
+        // Oh, and I was wrong about heap size: it'll keep growing into swap. But a
+        // ulimit could be set and that's essentially the same thing as max heap size.
+        // Either way, let's not request 10's of GB of heap, shall we?
+
+        // Okay, so I thought `FuturesUnordered::buffer_unordered(MAX_PROCESS_CONCURRENCY)`
+        // was a super-convenient perfect way forward, but `futures::stream::BufferUnordered`
+        // doesn't allow adding more futures to it once it's been constructed, so we won't
+        // be able to process files before discovery is complete (Option 1).
+        // Adding `if !discovery_complete && processing.len() < MAX_PROCESS_CONCURRENCY`
+        // guard clause to the select arm is basically the same as Option 2. It's not the end
+        // of the world, but there'd be no point in having progress bars in the TUI. And I
+        // want my goddamn progress bars!
+        // So we need a buffer of our buffer. A process queue for our process queue?
+        // And we have to make sure that it doesn't start/poll the futures, so I was
+        // right all along: we need a LeVecDeFutures!! I am not looking forward to figuring
+        // out the type signature of that.
+
+        // This is ending up waaay harder than I thought it was going to be, I'm neck-deep
+        // in docs.rs pages, and this entire time VSCode has highlighted this entire fucking
+        // function as "unreachable statement" so I don't even get IDE completions while writing it.
+
+        // The code compiles! The LSP is giving me type information again! Hallelujah!
+        // I've got `processing` (max: 100) and `not_processing_yet`. When a file is
+        // processed it'll grab another future from the "not yet" pile into the queue.
+        // The code compiles, but it seems too easy. There's a bug in here somewhere, I know it.
+
+        // Refactor the existing code and structs and enums to make the code pretty
+        // because I'm procrastinating... I'm so used to Clippy telling me I'm a
+        // dumb dumb that I don't know what to do when it doesn't say anything.
+
         let mut file_stream = pin!(backend.list_stream(prefix.as_deref()));
         let mut discovery_complete = false;
         let mut discovered = 0u64;
-        let mut processing = Vec::new();
+        let mut not_processing_yet = Vec::new();
+        let mut processing = FuturesUnordered::new();
         loop {
             tokio::select! {
                 biased;
+
                 file = file_stream.next(), if !discovery_complete => match file {
                     Some(Ok(file)) => {
                         discovered += 1;
-                        todo!();
-                        yield Ok(ScanEvent::FileDiscovered { path: file.path.clone });
+                        let path = file.path.clone();
+                        let future = scan_file_inner(backend, cache, file); // no `.await` here!
+                        if processing.len() < MAX_PROCESS_CONCURRENCY {
+                            processing.push(future);
+                        } else {
+                            not_processing_yet.push(future);
+                        }
+                        yield Ok(ScanEvent::FileDiscovered(path));
                     },
                     Some(Err(e)) => yield Err(e).or_raise(|| ScanErrorKind::Storage),
                     None => {
@@ -68,22 +122,18 @@ fn scan_inner<'a>(
                         yield Ok(ScanEvent::DiscoveryComplete(discovered));
                     }
                 },
-                // Well fuck, processing needs to return a future for tokio::select
-                // to work. So much for "a queue of files will be easy!". Do I really
-                // want to push thousands and thousands of futures onto the heap?
-                // How many bytes do state machines require?? They could possibly
-                // contain the bytes of the entire decompressed HTML file?! What
-                // the hell do I use instead of a Vec? LeVecDeFutures::new()???
-                Some(file) = processing.next(), if !processing.is_empty() => {
-                    let path = file.path.clone();
-                    yield scan_file_inner(backend, cache, file).await
+
+                Some(result) = processing.next(), if !processing.is_empty() => {
+                    yield result
                         .map(|s| ScanEvent::Scanned(Box::new(s)))
-                        .or_raise(|| ScanErrorKind::ScanFailed(path));
+                        .or_raise(|| ScanErrorKind::ScanFailed);
+                    if let Some(future) = not_processing_yet.pop() {
+                        processing.push(future);
+                    }
                 },
-                else => {
-                    // All done!
-                    break;
-                }
+
+                // All done!
+                else => break,
             }
         }
         yield Ok(ScanEvent::Complete);

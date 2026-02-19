@@ -21,8 +21,8 @@ pub enum ErrorKind {
     Storage,
     Compression,
     Extract,
-    #[display("File scan failed ({_1}): {}", _0.display())]
-    ScanFailed(#[error(not(source))] PathBuf, &'static str),
+    #[display("File scan failed: {}", _0.display())]
+    ScanFailed(#[error(not(source))] PathBuf),
 }
 
 impl ErrorKind {

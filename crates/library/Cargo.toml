@@ -17,6 +17,7 @@ rawr-compress = { path = "../compress" }
 rawr-extract = { path = "../extract" }
 rawr-storage = { path = "../storage" }
 rslug = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 upon = { workspace = true }
 

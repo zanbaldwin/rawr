@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 ///
 /// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let backend = MockBackend::with_files([
+/// let backend = MockBackend::with_data([
 ///     ("works/123.html.gz", b"<html>...</html>"),
 /// ]);
 /// assert!(backend.exists(Path::new("works/123.html.gz")).await?);

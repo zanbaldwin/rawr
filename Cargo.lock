@@ -2489,6 +2489,7 @@ name = "rawr-library"
 version = "0.1.0-beta"
 dependencies = [
  "async-stream",
+ "blake3",
  "derive_more",
  "exn",
  "futures",

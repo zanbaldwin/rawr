@@ -8,6 +8,7 @@ version.workspace = true
 
 [dependencies]
 async-stream = { workspace = true }
+blake3 = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 futures = { workspace = true }

@@ -95,6 +95,11 @@ fn scan_inner<'a>(
         // because I'm procrastinating... I'm so used to Clippy telling me I'm a
         // dumb dumb that I don't know what to do when it doesn't say anything.
 
+        // Add a "just covering my ass" clause in the else block.
+        // I think this is now done, but I've still got this nagging feeling that
+        // I'm missing something. Guess I'll come back to this later on when I
+        // start encountering bugs in the main CLI application...
+
         let mut file_stream = pin!(backend.list_stream(prefix.as_deref()));
         let mut discovery_complete = false;
         let mut discovered = 0u64;
@@ -108,7 +113,13 @@ fn scan_inner<'a>(
                     Some(Ok(file)) => {
                         discovered += 1;
                         let path = file.path.clone();
-                        let future = scan_file_inner(backend, cache, file); // no `.await` here!
+                        // TODO is the initial state of the future at the "here are the
+                        // arguments to the function, and the function body is ready to
+                        // execute on next poll" OR "everything up to the first .await call"?
+                        // Because that could potentially change the size of elements
+                        // in `not_processing_yet` if there are sync operations between
+                        // function call and first await?
+                        let future = scan_file_inner(backend, cache, file);
                         if processing.len() < MAX_PROCESS_CONCURRENCY {
                             processing.push(future);
                         } else {
@@ -132,8 +143,21 @@ fn scan_inner<'a>(
                     }
                 },
 
-                // All done!
-                else => break,
+                else => {
+                    // DONE: Discovery is complete.
+                    // DONE: `processing` queue is empty.
+                    // `not_processing_yet` might not be empty? In what scenario would
+                    // that occur? Personally I don't think this is possible, but that
+                    // doesn't mean I'm confident about it.
+                    if !not_processing_yet.is_empty() {
+                        let yet_to_process = not_processing_yet.len();
+                        let batch = MAX_PROCESS_CONCURRENCY.min(yet_to_process);
+                        processing.extend(not_processing_yet.drain(..batch));
+                    } else {
+                        // All done!
+                        break;
+                    }
+                },
             }
         }
         yield Ok(ScanEvent::Complete);

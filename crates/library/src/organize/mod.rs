@@ -16,8 +16,10 @@
 mod conflict;
 pub mod error;
 mod file;
+mod stream;
 
 pub use self::file::{Action, organize_file};
+pub use self::stream::{OrganizeEvent, organize};
 use crate::PathGenerator;
 use rawr_compress::Compression;
 use rawr_storage::BackendHandle;

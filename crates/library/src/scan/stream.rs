@@ -1,3 +1,4 @@
+use crate::MAX_PROCESS_CONCURRENCY;
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::scan::Scan;
 use crate::scan::error::{ErrorKind as ScanErrorKind, Result as ScanResult};
@@ -10,10 +11,6 @@ use rawr_cache::Repository;
 use rawr_storage::BackendHandle;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
-
-/// Maximum number of files being concurrently extracted. Futures beyond this
-/// limit are queued in memory and promoted as in-flight extractions complete.
-const MAX_PROCESS_CONCURRENCY: usize = 100;
 
 /// Progress events emitted during a streaming [`scan`].
 ///
@@ -67,7 +64,7 @@ fn scan_inner<'a>(
     cache: &'a Repository,
     prefix: Option<PathBuf>,
 ) -> impl Stream<Item = ScanResult<ScanEvent>> + 'a {
-    stream! {
+    stream!({
         yield Ok(ScanEvent::Started);
 
         // Three options:
@@ -188,5 +185,5 @@ fn scan_inner<'a>(
             }
         }
         yield Ok(ScanEvent::Complete);
-    }
+    })
 }

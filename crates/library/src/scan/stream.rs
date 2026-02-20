@@ -11,16 +11,43 @@ use rawr_storage::BackendHandle;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
 
+/// Maximum number of files being concurrently extracted. Futures beyond this
+/// limit are queued in memory and promoted as in-flight extractions complete.
 const MAX_PROCESS_CONCURRENCY: usize = 100;
 
+/// Progress events emitted during a streaming [`scan`].
+///
+/// Events are emitted in a predictable lifecycle:
+/// [`Started`](Self::Started) → [`FileDiscovered`](Self::FileDiscovered) →
+/// [`DiscoveryComplete`](Self::DiscoveryComplete) →
+/// [`Scanned`](Self::Scanned) → [`Complete`](Self::Complete).
+///
+/// **Note:** `FileDiscovered` and `Scanned` events interleave during the
+/// discovery phase, since extraction begins before all files are known.
 pub enum ScanEvent {
+    /// Scanning has begun; emitted exactly once before any other event.
     Started,
+    /// A file was found in the storage backend and queued for processing.
     FileDiscovered(PathBuf),
+    /// All files have been discovered; the total count is now known. Extraction
+    /// of already-queued files may still be in progress.
     DiscoveryComplete(u64),
+    /// A file has been scanned (from cache or fresh extraction). Boxed to keep
+    /// the enum's overall size small.
     Scanned(Box<Scan>),
+    /// All discovered files have been scanned; the stream is finished.
     Complete,
 }
 
+/// Scans all files in a storage backend, emitting [`ScanEvent`]s as progress
+/// is made.
+///
+/// Discovery and extraction run concurrently: up to
+/// `MAX_PROCESS_CONCURRENCY` (100) files are extracted in parallel while new
+/// files are still being discovered. This allows callers (e.g. a TUI) to
+/// show progress bars with known totals as early as possible.
+///
+/// An optional `prefix` restricts scanning to a subdirectory of the backend.
 pub fn scan<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,

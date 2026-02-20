@@ -2,6 +2,9 @@ use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::organize::Context;
 use crate::organize::conflict::handle_conflict;
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
+use crate::scan::Scan;
+use crate::scan::error::ErrorKind as ScanErrorKind;
+use crate::scan::file::scan_file_inner;
 use exn::ResultExt;
 use rawr_cache::Repository;
 use rawr_compress::Compression;
@@ -12,15 +15,41 @@ use std::io::{self, Cursor};
 use std::ops::Deref;
 use std::path::PathBuf;
 
+/// The outcome of (successfully) organizing a single file.
+///
+/// Each variant carries the relevant path — either the new location or the
+/// path that was cleaned up. Consumers can pattern-match to decide whether
+/// to log, report progress, or take further action.
 pub enum Action {
-    /// File was renamed to the correct path.
+    /// File was moved (and optionally re-compressed) to the correct path.
     Renamed(PathBuf),
-    /// File was already at the correct path.
+    /// File was already at the correct path; no work performed.
     AlreadyCorrect(PathBuf),
-    /// File record cleaned up (no longer exists on filesystem).
+    /// File no longer exists on disk (or a duplicate already existed in the
+    /// location it was going to be moved to); its record was cleaned up.
     CleanedUp(PathBuf),
 }
 
+/// Moves a single file to its intended, template-derived location, handling
+/// conflicts and compression conversion.
+///
+/// Looks up the file's [`Version`](rawr_extract::models::Version) in the
+/// [`Repository`] cache, computes the correct path via the [`Context`]'s
+/// [`PathGenerator`](crate::PathGenerator), and takes one of three actions:
+///
+/// - **[`Action::AlreadyCorrect`]** — the file is already where it belongs.
+/// - **[`Action::Renamed`]** — the file was moved (re-compressed if needed).
+/// - **[`Action::CleanedUp`]** — either:
+///   - the file did not exist, and its cache entry was cleaned up, or
+///   - a duplicate of that particular version already existed in the target
+///     location, and the original was cleaned up.
+///
+/// When the target path is occupied by a file of a different version, conflict
+/// resolution recursively relocates the occupant first.
+///
+/// # Errors
+/// Returns [`Exn<LibraryErrorKind::Organize>`](LibraryErrorKind::Organize)
+/// raised from an inner [`Exn<OrganizeErrorKind>`](OrganizeErrorKind).
 pub async fn organize_file<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,
@@ -30,6 +59,8 @@ pub async fn organize_file<S: HashState>(
     organize_file_inner(backend, cache, ctx, file, vec![]).await.or_raise(|| LibraryErrorKind::Organize)
 }
 
+/// Inner implementation that carries a `depth` stack for cycle detection
+/// during recursive conflict resolution.
 pub(crate) async fn organize_file_inner<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,
@@ -41,12 +72,30 @@ pub(crate) async fn organize_file_inner<S: HashState>(
         exn::bail!(OrganizeErrorKind::Storage);
     }
 
-    let Some((file, version)) =
-        cache.get_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)?
-    else {
+    if !backend.exists(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)? {
         cache.delete_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)?;
         return Ok(Action::CleanedUp(file.path.clone()));
-    };
+    }
+
+    let file_path = file.path.clone();
+    let (file, version) =
+        match cache.get_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)? {
+            Some(r) => r,
+            // File not in cache, we need to scan it first to get the metadata for
+            // path generation. This is NOT the intended use-case (organizing files
+            // not already in cache), but the function is public, so...
+            None => match scan_file_inner(backend, cache, file).await {
+                // We scanned the file and now it's cached.
+                Ok(Scan { file, version, .. }) => (file, version),
+                // The file doesn't exist in the cache and, when we tried to perform a scan, it wasn't valid.
+                Err(e) if matches!(e.deref(), ScanErrorKind::Extract) => {
+                    backend.delete(&file_path).await.or_raise(|| OrganizeErrorKind::Storage)?;
+                    return Ok(Action::CleanedUp(file_path));
+                },
+                // An operational error occured during scanning.
+                Err(e) => return Err(e).or_raise(|| OrganizeErrorKind::Scan),
+            },
+        };
 
     let compression_source = file.compression;
     let compression_target = ctx.compression.unwrap_or(compression_source);
@@ -84,6 +133,7 @@ pub(crate) async fn organize_file_inner<S: HashState>(
         )
         .or_raise(|| OrganizeErrorKind::Compression)?;
         backend.write(&correct_location, &converted).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
     }
 
     // Update the cache with the new location, but silently ignore errors since

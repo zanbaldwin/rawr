@@ -1,8 +1,8 @@
-use crate::error::ScanErrorKind;
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
 use crate::organize::file::organize_file_inner;
 use crate::organize::{Action, Context};
 use crate::scan::Scan;
+use crate::scan::error::ErrorKind as ScanErrorKind;
 use crate::scan::file::scan_file_inner;
 use exn::ResultExt;
 use rawr_cache::Repository;
@@ -12,8 +12,28 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use time::UtcDateTime;
 
-const MAX_CONFLICT_DEPTH: usize = 3;
+/// Maximum recursive relocations before bailing with [`OrganizeErrorKind::Conflict`].
+const MAX_CONFLICT_DEPTH: usize = 5;
 
+/// Resolves a path collision between an `incoming` file and an `existing` file
+/// that already occupies the target location.
+///
+/// Returns `Ok(Some(action))` when the conflict is fully resolved and the
+/// caller should use that [`Action`] as the final result. Returns `Ok(None)`
+/// when the existing file has been moved out of the way and the caller should
+/// proceed with its own rename.
+///
+/// **Resolution strategy:**
+/// 1. If the existing file isn't cached, scan it first. If scanning fails
+///    because the file is invalid ([`ScanErrorKind::Extract`]), delete it and
+///    yield the slot.
+/// 2. If both files share the same content hash, they're duplicates — delete
+///    the incoming file and return [`Action::CleanedUp`].
+/// 3. Otherwise, recursively [`organize_file_inner`] the existing file to
+///    relocate it, bounded by `depth` to prevent infinite chains.
+/// 4. If the existing file is already at *its* correct location (i.e. a true
+///    collision), the incoming file is written to the trash backend (if
+///    configured) and an [`OrganizeErrorKind::Conflict`] error is raised.
 pub(crate) async fn handle_conflict<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,
@@ -48,14 +68,15 @@ pub(crate) async fn handle_conflict<S: HashState>(
         return Ok(Some(Action::CleanedUp(incoming.path.clone())));
     }
     // Content hashes are different. Existing file needs relocation.
-    if depth.len() > MAX_CONFLICT_DEPTH {
+    if depth.len() > MAX_CONFLICT_DEPTH || depth.contains(&existing.path) {
         exn::bail!(OrganizeErrorKind::Conflict);
     }
     depth.push(existing.path.clone());
     // Arc-pointer, just clone the damn thing.
     let trash = ctx.trash.clone();
-    match organize_file_inner(backend, cache, ctx, existing, depth).await {
-        // TODO: DANGER: We can't move the existing file out of the way, move to trash?
+    // Pin that sucker! Otherwise you have some weird async recursion error
+    // that is so complicated it makes your brain explode...
+    match Box::pin(organize_file_inner(backend, cache, ctx, existing, depth)).await {
         Ok(Action::AlreadyCorrect(_)) => {
             if let Some(trash) = trash {
                 // Which one do we trash?

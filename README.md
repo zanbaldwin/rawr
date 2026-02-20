@@ -92,7 +92,6 @@ Commands:
   push      Push files from local library to a remote target
   pull      Pull files from a remote target to local library
   stats     Show library statistics
-  help      Print this message or the help of the given subcommand(s)
 
 Options:
   -c, --config <CONFIG>    Path to configuration file
@@ -101,6 +100,15 @@ Options:
   -h, --help               Print help
   -V, --version            Print version
 ```
+
+### Good first contributions
+- `rawr-compress`: add a new compression format gated behind a feature flag
+- `rawr-extract`: extracting additional AO3 metadata fields
+- `rawr-storage`: adding a new storage backend (e.g., WebDAV) gated behind a
+  feature flag
+- `rawr-cache`: adding new queries to the repository
+- `rawr-render`: adding new built-in themes (CSS stylesheets)
+- `rawr-library`: new template variables for path generation
 
 ### License
 This project will remain proprietary, yet source-available, until a version

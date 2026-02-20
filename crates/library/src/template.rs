@@ -66,6 +66,17 @@ use std::{path::PathBuf, str::FromStr};
 use tracing::instrument;
 use upon::{Engine, Template};
 
+pub const DEFAULT_TEMPLATE_IMPORT: &str = r#"
+    {{ fandom|truncate: 255|slug }}/
+    {% if series %}{{ series.id }}-{{ series.name|truncate: 230|slug }}/{% endif %}
+    {{ work }}-{{ hash }}-{{ title|truncate: 220|slug }}
+"#;
+
+pub const DEFAULT_TEMPLATE_EXPORT: &str = r#"
+    {{ fandom|truncate: 255|slug }}/
+    {{ work }}-{{ title|truncate: 220|slug }}
+"#;
+
 /// Generates deterministic filesystem paths from [`Version`] metadata and a
 /// user-defined template string.
 ///
@@ -144,9 +155,10 @@ impl PathGenerator {
         let mut path = self.generate(version)?;
         let compression = compression.into().unwrap_or(Compression::None);
         path.add_extension(ext.as_ref().trim().trim_matches('.'));
-        path.add_extension(compression.extension().trim_matches('.'));
+        if !matches!(compression, Compression::None) {
+            path.add_extension(compression.extension().trim_matches('.'));
+        }
         Ok(path)
-        // Ok(format!("{path}.{}{}", ext.as_ref().trim().trim_matches('.'), compression.extension()))
     }
 
     /// Trims each path segment, joins them with `/`, then validates via

@@ -7,25 +7,49 @@ use rawr_extract::models::Version;
 use rawr_storage::BackendHandle;
 use rawr_storage::file::{FileInfo, HashState, Processed};
 
-/// Indicates how a scan result was obtained.
+/// Indicates how much work was required to produce a [`Scan`] result.
 ///
-/// Used to distinguish between cache hits and actual processing work,
-/// which is useful for progress reporting and performance analysis.
+/// Distinguishes between cache hits and actual extraction work, which is
+/// useful for progress reporting and performance analysis.
 pub enum ScanEffort {
-    /// File was already in the cache with matching hash.
+    /// The file's path and size matched a cache entry — no I/O or extraction
+    /// was performed. Also used when the file hash matches a record at a
+    /// different path (content deduplication).
     Cached,
-    /// File was in cache but hash changed; content was re-extracted.
+    /// The file existed in cache but its hash changed on disk, so the content
+    /// was decompressed and re-extracted.
     Recalculated,
-    /// File was not in cache; content was freshly extracted.
+    /// No cache entry existed for this file; content was freshly decompressed
+    /// and extracted.
     Processed,
 }
 
+/// The result of scanning a single file.
+///
+/// Contains the fully-hashed [`FileInfo`] (with both file and content hashes
+/// computed), the extracted [`Version`] metadata, and a [`ScanEffort`]
+/// indicating whether the result came from cache or fresh extraction.
 pub struct Scan {
     pub file: FileInfo<Processed>,
     pub version: Version,
     pub effort: ScanEffort,
 }
 
+/// Scans a single file, extracting its metadata or returning a cached result.
+///
+/// The file goes through a multi-layered cache lookup before falling back to
+/// full extraction:
+///
+/// 1. **Path + size match** — if the cache has an entry at the same path with
+///    the same file size, the cached result is returned immediately (no I/O).
+/// 2. **Hash match at different path** — if the file's BLAKE3 hash matches a
+///    record elsewhere, the content hash is reused (content deduplication).
+/// 3. **Hash mismatch** — if the path exists in cache but hashes differ, the
+///    old entry is deleted and the file is re-extracted.
+/// 4. **Not found** — the file is decompressed and fully extracted.
+///
+/// The input [`FileInfo`] can be in any [`HashState`]; existing hashes are
+/// stripped and recomputed from the file contents.
 pub async fn scan_file<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,

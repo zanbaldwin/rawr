@@ -14,12 +14,18 @@ pub type Error = exn::Exn<ErrorKind>;
 /// Result type alias for library operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Classifies the subsystem where a scan operation failed.
 #[derive(Debug, Display, Error)]
 pub enum ErrorKind {
+    /// A [`Repository`](rawr_cache::Repository) query or write failed.
     Cache,
+    /// Reading from the [`BackendHandle`](rawr_storage::BackendHandle) failed.
     Storage,
+    /// Decompressing file contents failed.
     Compression,
+    /// Metadata extraction via [`rawr_extract`] failed.
     Extract,
+    /// A file-level scan failed during streaming; wraps the underlying cause.
     ScanFailed,
 }
 

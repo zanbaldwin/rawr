@@ -19,6 +19,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum ErrorKind {
     Scan,
     Organize,
+    Import,
     #[display("issue with path generation from template")]
     Template,
 }

@@ -159,9 +159,7 @@ fn scan_inner<'a>(
                 },
 
                 Some(result) = processing.next(), if !processing.is_empty() => {
-                    yield result
-                        .map(|s| ScanEvent::Scanned(Box::new(s)))
-                        .or_raise(|| ScanErrorKind::ScanFailed);
+                    yield result.map(|s| ScanEvent::Scanned(Box::new(s)));
                     if let Some(future) = not_processing_yet.pop() {
                         processing.push(future);
                     }

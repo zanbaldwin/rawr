@@ -25,8 +25,6 @@ pub enum ErrorKind {
     Compression,
     /// Metadata extraction via [`rawr_extract`] failed.
     Extract,
-    /// A file-level scan failed during streaming; wraps the underlying cause.
-    ScanFailed,
 }
 
 impl ErrorKind {

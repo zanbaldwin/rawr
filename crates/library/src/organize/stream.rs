@@ -1,8 +1,7 @@
-use crate::MAX_PROCESS_CONCURRENCY;
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
-use crate::organize::file::organize_file_inner;
-use crate::organize::{Action, Context};
+use crate::organize::file::{Action, organize_file_inner};
+use crate::{Context, MAX_PROCESS_CONCURRENCY};
 use async_stream::stream;
 use exn::ResultExt;
 use futures::stream::FuturesUnordered;
@@ -83,7 +82,7 @@ fn organize_inner<'a>(
         let mut processing = FuturesUnordered::new();
         processing.extend(futures.drain(..MAX_PROCESS_CONCURRENCY.min(futures.len())));
         while let Some(result) = processing.next().await {
-            yield result.map(OrganizeEvent::Organized).or_raise(|| OrganizeErrorKind::OrganizeFailed);
+            yield result.map(OrganizeEvent::Organized);
             // Pop-n-push, but FIFO instead of LIFO.
             if !futures.is_empty() {
                 processing.push(futures.remove(0));

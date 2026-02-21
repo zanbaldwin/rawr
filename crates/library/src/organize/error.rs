@@ -44,7 +44,6 @@ pub enum ErrorKind {
     /// Recursive conflict resolution exceeded the depth limit or encountered
     /// an irreconcilable collision.
     Conflict,
-    OrganizeFailed,
 }
 
 impl ErrorKind {

@@ -1,6 +1,6 @@
+use crate::Context;
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
-use crate::organize::file::organize_file_inner;
-use crate::organize::{Action, Context};
+use crate::organize::{Action, file::organize_file_inner};
 use crate::scan::Scan;
 use crate::scan::error::ErrorKind as ScanErrorKind;
 use crate::scan::file::scan_file_inner;

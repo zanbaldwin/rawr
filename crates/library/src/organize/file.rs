@@ -1,10 +1,9 @@
+use crate::Context;
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
-use crate::organize::Context;
 use crate::organize::conflict::handle_conflict;
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
-use crate::scan::Scan;
 use crate::scan::error::ErrorKind as ScanErrorKind;
-use crate::scan::file::scan_file_inner;
+use crate::scan::{Scan, file::scan_file_inner};
 use exn::ResultExt;
 use rawr_cache::Repository;
 use rawr_compress::Compression;

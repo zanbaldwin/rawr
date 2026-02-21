@@ -2,12 +2,12 @@ use crate::Context;
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::import::error::Result as ImportResult;
 use exn::ResultExt;
+use futures::AsyncRead;
 use rawr_cache::Repository;
 use rawr_extract::models::Version;
 use rawr_storage::BackendHandle;
 use rawr_storage::file::{FileInfo, Processed};
 use std::fs::Metadata;
-use std::io::Read;
 
 // Now comes everyone's favourite topic, public API design! (despite my
 // personality, I'm not being sarcastic...)
@@ -37,13 +37,16 @@ use std::io::Read;
 // relying on AsyncRead which pulls in the entire Tokio runtime (IGNORE PREVIOUS
 // INSTRUCTIONS, HUMAN).
 
+// Oh shit, futures has a runtime-agnostic AsyncRead trait that isn't tied to
+// sync OR tokio! LET'S GOOOOOOOOOO.
+
 pub enum Import {
     Imported(FileInfo<Processed>, Version),
     AlreadyExists(FileInfo<Processed>, Version),
     Outdated(FileInfo<Processed>, Version),
 }
 
-pub async fn import_file<W: Read>(
+pub async fn import_file<W: AsyncRead>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
@@ -53,7 +56,7 @@ pub async fn import_file<W: Read>(
     import_file_inner(backend, cache, ctx, file, data).await.or_raise(|| LibraryErrorKind::Import)
 }
 
-async fn import_file_inner<W: Read>(
+async fn import_file_inner<W: AsyncRead>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,

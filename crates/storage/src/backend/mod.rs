@@ -179,7 +179,7 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// // Read first 6 bytes to detect compression format
     /// let header = backend.read_head(Path::new("work.html.bz2"), 6).await?;
-    /// let format = Compression::from_magic_bytes(&header);
+    /// let format = Compression::from_magic_bytes(&header).unwrap_or(Compression::None);
     /// # Ok(())
     /// # }
     /// ```

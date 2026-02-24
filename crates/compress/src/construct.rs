@@ -32,11 +32,6 @@ impl FromStr for Compression {
         }
     }
 }
-impl From<&[u8]> for Compression {
-    fn from(value: &[u8]) -> Self {
-        Compression::from_magic_bytes(value)
-    }
-}
 impl Compression {
     /// Detect compression from a file extension.
     #[must_use]
@@ -60,26 +55,30 @@ impl Compression {
 
     /// Detect compression format from magic bytes.
     ///
-    /// Returns `None` variant if no magic bytes match or if the input
+    /// Returns `None` if no magic bytes match or if the input
     /// is too short to detect any format.
+    ///
+    /// **Note:** being unable to definitely detect a compression type and
+    /// returning `None` is **not** the same as stating "this data is not
+    /// compressed" (`Some(Compression::None)`).
     #[must_use]
-    pub fn from_magic_bytes(bytes: &[u8]) -> Self {
+    pub fn from_magic_bytes(bytes: &[u8]) -> Option<Self> {
         // Brotli does not have standardized magic bytes (uses container formats).
         if bytes.starts_with(&BZIP2_MAGIC) {
-            return Compression::Bzip2;
+            return Some(Compression::Bzip2);
         }
         if bytes.starts_with(&GZIP_MAGIC) {
-            return Compression::Gzip;
+            return Some(Compression::Gzip);
         }
         #[cfg(feature = "xz")]
         if bytes.starts_with(&XZ_MAGIC) {
-            return Compression::Xz;
+            return Some(Compression::Xz);
         }
         #[cfg(feature = "zstd")]
         if bytes.starts_with(&ZSTD_MAGIC) {
-            return Compression::Zstd;
+            return Some(Compression::Zstd);
         }
-        Compression::None
+        None
     }
 }
 
@@ -130,15 +129,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case(b"<!DOCTYPE html>", Compression::None)]
-    #[case(b"", Compression::None)]
-    #[case(&[], Compression::None)]
-    #[case(&[0x42, 0x5A, 0x68, 0x39], Compression::Bzip2)]
-    #[case(&[0x1F, 0x8B, 0x08, 0x00], Compression::Gzip)]
-    #[cfg_attr(feature = "xz", case(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00, 0x00], Compression::Xz))]
-    #[cfg_attr(feature = "zstd", case(&[0x28, 0xB5, 0x2F, 0xFD], Compression::Zstd))]
-    fn test_from_magic_bytes_default(#[case] bytes: &[u8], #[case] expected: Compression) {
+    #[case(b"<!DOCTYPE html>", None)]
+    #[case(b"", None)]
+    #[case(&[], None)]
+    #[case(&[0x42, 0x5A, 0x68, 0x39], Some(Compression::Bzip2))]
+    #[case(&[0x1F, 0x8B, 0x08, 0x00], Some(Compression::Gzip))]
+    #[cfg_attr(feature = "xz", case(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00, 0x00], Some(Compression::Xz)))]
+    #[cfg_attr(feature = "zstd", case(&[0x28, 0xB5, 0x2F, 0xFD], Some(Compression::Zstd)))]
+    fn test_from_magic_bytes_default(#[case] bytes: &[u8], #[case] expected: Option<Compression>) {
         assert_eq!(Compression::from_magic_bytes(bytes), expected);
-        assert_eq!(<&[u8] as Into<Compression>>::into(bytes), expected);
     }
 }

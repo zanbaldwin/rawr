@@ -6,23 +6,27 @@
 pub mod cli;
 mod construct;
 pub mod error;
+#[cfg(feature = "async")]
+mod futures;
 mod ops;
 mod peekable;
 mod util;
 
 pub use crate::error::{Error, ErrorKind, Result};
+#[cfg(feature = "async")]
+pub use crate::futures::peekable::AsyncPeekableReader;
 pub use crate::peekable::PeekableReader;
 
 /// Compression format enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Compression {
     /// Uncompressed
+    #[default]
     None,
     /// Brotli compression (.br)
     #[cfg(feature = "brotli")]
     Brotli,
     /// Bzip2 compression (.bz2)
-    #[default]
     Bzip2,
     /// Gzip compression (.gz)
     Gzip,
@@ -40,6 +44,6 @@ mod tests {
 
     #[test]
     fn compression_default() {
-        assert_eq!(Compression::default(), Compression::Bzip2);
+        assert_eq!(Compression::default(), Compression::None);
     }
 }

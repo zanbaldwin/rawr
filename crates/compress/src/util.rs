@@ -58,7 +58,10 @@ impl Compression {
             // just have to assume that it's correct.
             return true;
         }
-        *self == Self::from_magic_bytes(bytes)
+        match Self::from_magic_bytes(bytes) {
+            Some(f) => *self == f,
+            None => matches!(self, Compression::None),
+        }
     }
 }
 
@@ -71,28 +74,10 @@ mod tests {
     #[case(Compression::None, "")]
     #[case(Compression::Bzip2, ".bz2")]
     #[case(Compression::Gzip, ".gz")]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli, ".br"))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz, ".xz"))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd, ".zst"))]
     fn test_extension_default(#[case] format: Compression, #[case] expected: &str) {
-        assert_eq!(format.extension(), expected);
-    }
-
-    #[rstest]
-    #[cfg(feature = "brotli")]
-    #[case(Compression::Brotli, ".br")]
-    fn test_extension_brotli(#[case] format: Compression, #[case] expected: &str) {
-        assert_eq!(format.extension(), expected);
-    }
-
-    #[rstest]
-    #[cfg(feature = "xz")]
-    #[case(Compression::Xz, ".xz")]
-    fn test_extension_xz(#[case] format: Compression, #[case] expected: &str) {
-        assert_eq!(format.extension(), expected);
-    }
-
-    #[rstest]
-    #[cfg(feature = "zstd")]
-    #[case(Compression::Zstd, ".zst")]
-    fn test_extension_zstd(#[case] format: Compression, #[case] expected: &str) {
         assert_eq!(format.extension(), expected);
     }
 }

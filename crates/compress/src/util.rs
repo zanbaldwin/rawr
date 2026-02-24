@@ -48,8 +48,11 @@ impl Compression {
         }
     }
 
-    /// Double-check the detected compression format (from the path
-    /// extension) with the actual contents of the file.
+    /// Verify that `bytes` start with the expected magic bytes for this format.
+    ///
+    /// Useful for cross-checking a format detected from a file extension against
+    /// actual file contents. Returns `true` for Brotli unconditionally,
+    /// since Brotli has no standardized magic bytes.
     #[must_use]
     pub fn check_magic_bytes(&self, bytes: &[u8]) -> bool {
         #[cfg(feature = "brotli")]

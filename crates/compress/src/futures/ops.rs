@@ -1,3 +1,5 @@
+//! Async Compression Operations (feature-gated behind `async`)
+
 use crate::Compression;
 use crate::error::{ErrorKind, Result};
 use async_compression::Level;
@@ -19,6 +21,13 @@ use futures::io::{BufReader as AsyncBufReader, copy as async_copy};
 // required it, so YOU get an Unpin, and YOU get an Unpin!
 
 impl Compression {
+    /// Wrap an async reader with the appropriate decompression layer.
+    /// Automatically wraps with a buffered reader internally.
+    ///
+    /// Async counterpart of [`Compression::wrap_reader`]. Does not throw an
+    /// [`Encoder`](crate::error::ErrorKind::Encoder) error like it's sync
+    /// counterpart because the underlying crate defers them until the
+    /// first read attempt.
     pub fn async_wrap_reader<'a, R: AsyncRead + Unpin + 'a>(&self, reader: R) -> Box<dyn AsyncRead + Unpin + 'a> {
         // `async-compression` requires AsyncBufRead, but AsyncBufRead/AsyncWrite
         // doesn't mirror the sync API of Read/Write. Wrap the incoming AsyncRead
@@ -37,6 +46,15 @@ impl Compression {
         }
     }
 
+    /// Wrap an async writer with the appropriate compression layer.
+    ///
+    /// Async counterpart of [`Compression::wrap_writer`].  Does not throw an
+    /// [`Encoder`](crate::error::ErrorKind::Encoder) error like it's sync
+    /// counterpart because the underlying crate defers them until the
+    /// first write attempt.
+    ///
+    /// The caller **must** call [`AsyncWriteExt::close`] on the returned writer
+    /// to finalize the compressed stream.
     pub fn async_wrap_writer<'a, W: AsyncWrite + Unpin + 'a>(&self, writer: W) -> Box<dyn AsyncWrite + Unpin + 'a> {
         match self {
             Compression::None => Box::new(writer),
@@ -51,6 +69,10 @@ impl Compression {
         }
     }
 
+    /// Compress from an async reader into an async writer, returning bytes copied.
+    /// Automatically wraps the reader in a buffer internally.
+    ///
+    /// Async counterpart of [`Compression::compress_stream`].
     pub async fn async_compress_stream<R, W>(&self, reader: &mut R, writer: &mut W) -> Result<u64>
     where
         R: AsyncRead + Unpin,
@@ -68,6 +90,10 @@ impl Compression {
         Ok(bytes)
     }
 
+    /// Decompress from an async buffered reader to an async writer, returning bytes copied.
+    /// Automatically wraps the reader in a buffer internally.
+    ///
+    /// Async counterpart of [`Compression::decompress_stream`].
     pub async fn async_decompress_stream<R, W>(&self, reader: &mut R, writer: &mut W) -> Result<u64>
     where
         R: AsyncRead + Unpin,

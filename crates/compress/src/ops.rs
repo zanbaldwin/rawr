@@ -38,9 +38,11 @@ impl Compression {
     /// ```
     /// use rawr_compress::Compression;
     ///
-    /// let data = b"Hello, world!";
-    /// let compressed = Compression::Bzip2.compress(data).unwrap();
-    /// assert!(compressed.len() < data.len() || data.len() < 100);
+    /// // This needs to be fairly long because Bzip2 doesn't
+    /// // have a good compression rate with short strings.
+    /// let data: Vec<u8> = b"Hello, world!".repeat(100);
+    /// let compressed = Compression::Bzip2.compress(&data).unwrap();
+    /// assert!(compressed.len() < data.len());
     /// ```
     pub fn compress(&self, input: &[u8]) -> Result<Vec<u8>> {
         let mut output = Vec::new();
@@ -67,6 +69,10 @@ impl Compression {
         Ok(output)
     }
 
+    /// Compress `input` into the provided `output` buffer, returning bytes written.
+    ///
+    /// Unlike [`compress`](Self::compress), this appends to an existing buffer,
+    /// which is useful when building a larger output or reusing allocations.
     #[instrument(skip(input, output), fields(
         format = %self,
         input_size = input.len(),
@@ -118,6 +124,10 @@ impl Compression {
         Ok(size)
     }
 
+    /// Decompress `input` into the provided `output` buffer, returning bytes written.
+    ///
+    /// Returns [`ErrorKind::InvalidData`] if the input is corrupt or not in the
+    /// expected format.
     #[instrument(skip(input, output), fields(
         format = %self,
         input_size = input.len(),
@@ -233,14 +243,16 @@ impl Compression {
     /// use std::io::Cursor;
     /// use rawr_compress::Compression;
     ///
-    /// let input = Cursor::new(b"Hello, world!");
+    /// let mut input = Cursor::new(b"Hello, world!");
     /// let mut output = Vec::new();
-    /// let bytes = Compression::Gzip.compress_stream(input, &mut output).unwrap();
+    /// let bytes = Compression::Gzip.compress_stream(&mut input, &mut output).unwrap();
     /// assert!(bytes > 0);
     /// ```
-    pub fn compress_stream<'a, R: Read, W: Write + 'a>(&self, mut reader: R, writer: W) -> Result<u64> {
+    pub fn compress_stream<R: Read, W: Write>(&self, reader: &mut R, writer: &mut W) -> Result<u64> {
         let mut writer = self.wrap_writer(writer)?;
-        std::io::copy(&mut reader, &mut writer).or_raise(|| ErrorKind::Io)
+        let result = std::io::copy(reader, &mut writer).or_raise(|| ErrorKind::Io);
+        writer.flush().or_raise(|| ErrorKind::Io)?;
+        result
     }
 
     /// Decompress from a reader to a writer, returning bytes written.
@@ -257,15 +269,17 @@ impl Compression {
     /// let original = b"Hello, world!";
     /// let compressed = Compression::Gzip.compress(original).unwrap();
     ///
-    /// let input = Cursor::new(compressed);
+    /// let mut input = Cursor::new(compressed);
     /// let mut output = Vec::new();
-    /// let bytes = Compression::Gzip.decompress_stream(input, &mut output).unwrap();
+    /// let bytes = Compression::Gzip.decompress_stream(&mut input, &mut output).unwrap();
     /// assert_eq!(output, original);
     /// assert_eq!(bytes, original.len() as u64);
     /// ```
-    pub fn decompress_stream<'a, R: Read + 'a, W: Write>(&self, reader: R, mut writer: W) -> Result<u64> {
+    pub fn decompress_stream<R: Read, W: Write>(&self, reader: &mut R, writer: &mut W) -> Result<u64> {
         let mut reader = self.wrap_reader(reader)?;
-        std::io::copy(&mut reader, &mut writer).or_raise(|| ErrorKind::Io)
+        let result = std::io::copy(&mut reader, writer).or_raise(|| ErrorKind::Io);
+        writer.flush().or_raise(|| ErrorKind::Io)?;
+        result
     }
 }
 
@@ -351,15 +365,15 @@ mod tests {
         let original = b"Hello, world! This is a test of streaming compression.";
 
         // Compress via stream
-        let input = Cursor::new(original.as_slice());
+        let mut input = Cursor::new(original.as_slice());
         let mut compressed = Vec::new();
-        let bytes_in = format.compress_stream(input, &mut compressed).unwrap();
+        let bytes_in = format.compress_stream(&mut input, &mut compressed).unwrap();
         assert_eq!(bytes_in, original.len() as u64);
 
         // Decompress via stream
-        let input = Cursor::new(compressed);
+        let mut input = Cursor::new(compressed);
         let mut decompressed = Vec::new();
-        let bytes_out = format.decompress_stream(input, &mut decompressed).unwrap();
+        let bytes_out = format.decompress_stream(&mut input, &mut decompressed).unwrap();
         assert_eq!(bytes_out, original.len() as u64);
         assert_eq!(decompressed, original);
     }
@@ -369,14 +383,14 @@ mod tests {
         use std::io::Cursor;
 
         let original: &[u8] = b"";
-        let input = Cursor::new(original);
+        let mut input = Cursor::new(original);
         let mut compressed = Vec::new();
-        let bytes = Compression::Gzip.compress_stream(input, &mut compressed).unwrap();
+        let bytes = Compression::Gzip.compress_stream(&mut input, &mut compressed).unwrap();
         assert_eq!(bytes, 0);
 
-        let input = Cursor::new(compressed);
+        let mut input = Cursor::new(compressed);
         let mut decompressed = Vec::new();
-        let bytes = Compression::Gzip.decompress_stream(input, &mut decompressed).unwrap();
+        let bytes = Compression::Gzip.decompress_stream(&mut input, &mut decompressed).unwrap();
         assert_eq!(bytes, 0);
         assert!(decompressed.is_empty());
     }

@@ -1,11 +1,18 @@
-//! Compression CLI Helpers
+//! CLI helpers for resolving compression from command-line flags.
+//!
+//! Maps the three-state CLI pattern (`--compress`, `--compress=gz`,
+//! or omitted) into a [`Preference`] that can be resolved against
+//! a configured default and an original file's format.
 
 use crate::Compression;
 use crate::error::Error;
 use std::str::FromStr;
 
+/// Raw CLI flag value: `None` = flag absent, `Some(None)` = flag present
+/// without a value, `Some(Some(..))` = flag present with an explicit format.
 pub type Flag = Option<Option<String>>;
 
+/// Resolved user intent for compression from a CLI invocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Preference {
     /// Compression format was specified on the command-line
@@ -15,6 +22,9 @@ pub enum Preference {
     /// Compression was omitted from the command-line
     NotSpecified,
 }
+
+/// Parse a [`Flag`] into a [`Preference`], validating any explicit format string
+/// via [`Compression::from_str`].
 impl TryFrom<Flag> for Preference {
     type Error = Error;
     fn try_from(value: Flag) -> Result<Self, Self::Error> {
@@ -27,11 +37,18 @@ impl TryFrom<Flag> for Preference {
     }
 }
 impl Preference {
-    pub fn resolve(&self, configured: &Compression, original: Option<&Compression>) -> Compression {
+    /// Determine the final [`Compression`] format to use.
+    ///
+    /// Resolution order:
+    /// - [`Explicit`](Self::Explicit): use the user-specified format
+    /// - [`Implicit`](Self::Implicit): use `configured` (the application default)
+    /// - [`NotSpecified`](Self::NotSpecified): preserve `original` (the source
+    ///   file's format), falling back to [`Compression::None`]
+    pub fn resolve(&self, configured: Compression, original: Option<Compression>) -> Compression {
         match self {
             Self::Explicit(c) => *c,
-            Self::Implicit => *configured,
-            Self::NotSpecified => original.copied().unwrap_or(Compression::None),
+            Self::Implicit => configured,
+            Self::NotSpecified => original.unwrap_or(Compression::None),
         }
     }
 }
@@ -113,6 +130,6 @@ mod tests {
         #[case] source: Option<Compression>,
         #[case] expected: Compression,
     ) {
-        assert_eq!(preference.resolve(&config, source.as_ref()), expected);
+        assert_eq!(preference.resolve(config, source), expected);
     }
 }

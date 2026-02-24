@@ -17,6 +17,7 @@ async = [
     "async-compression/bzip2",
     "async-compression/gzip",
 ]
+cli = []
 
 [dependencies]
 async-compression = { workspace = true, optional = true, features = [

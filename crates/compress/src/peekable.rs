@@ -59,8 +59,8 @@ impl<R: Read> PeekableReader<R> {
 
     /// Stream all data (buffered plus unbuffered) into the specified
     /// writer. Works well with [`Compression::wrap_writer`].
-    pub fn copy_into<W: Write>(self, mut writer: W) -> Result<u64> {
-        std::io::copy(&mut self.into_reader(), &mut writer).or_raise(|| ErrorKind::Io)
+    pub fn copy_into<W: Write>(self, writer: &mut W) -> Result<u64> {
+        std::io::copy(&mut self.into_reader(), writer).or_raise(|| ErrorKind::Io)
     }
 }
 
@@ -86,9 +86,9 @@ impl Compression {
     ///
     /// if is_html5 {
     ///     let target_path = PathBuf::from("path/to/file.html");
-    ///     let target_writer = BufWriter::new(File::create(&target_path).unwrap());
+    ///     let mut target_writer = BufWriter::new(File::create(&target_path).unwrap());
     ///     // Copy the entire decompressed contents of the source file into the target file.
-    ///     peekable.copy_into(target_writer).unwrap();
+    ///     peekable.copy_into(&mut target_writer).unwrap();
     /// }
     /// // Else, discard.
     /// ```

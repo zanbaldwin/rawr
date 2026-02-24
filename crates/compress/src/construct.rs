@@ -9,6 +9,11 @@ const XZ_MAGIC: [u8; 6] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
 #[cfg(feature = "zstd")]
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
 
+/// Parse a compression format from its short name (e.g., `"gz"`, `"bzip2"`).
+///
+/// Matching is case-insensitive. Known formats that are compiled out return
+/// [`ErrorKind::DisabledFormat`]; completely unknown strings return
+/// [`ErrorKind::UnsupportedFormat`].
 impl FromStr for Compression {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

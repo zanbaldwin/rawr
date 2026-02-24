@@ -79,3 +79,69 @@ impl Compression {
         Ok(bytes)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::Compression;
+    use futures::io::{AsyncReadExt, AsyncWriteExt, BufReader, Cursor};
+    use rstest::rstest;
+
+    #[tokio::test]
+    #[rstest]
+    #[case(Compression::Bzip2)]
+    #[case(Compression::Gzip)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    async fn test_async_wrap_reader(#[case] format: Compression) {
+        let original = b"Hello, world!";
+        let compressed = format.compress(original).unwrap();
+        assert_ne!(compressed, original);
+        let cursor = BufReader::new(Cursor::new(compressed));
+        let mut reader = format.async_wrap_reader(cursor);
+        let mut decompressed = Vec::new();
+        reader.read_to_end(&mut decompressed).await.unwrap();
+        assert_eq!(decompressed, original);
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Bzip2)]
+    #[case(Compression::Gzip)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    async fn test_async_wrap_writer(#[case] format: Compression) {
+        let original = b"Hello, world! This is a test of async compression.";
+        let mut compressed = Vec::new();
+        let mut writer = format.async_wrap_writer(Cursor::new(&mut compressed));
+        writer.write_all(original).await.unwrap();
+        writer.close().await.unwrap();
+        drop(writer);
+        assert!(!compressed.is_empty());
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Bzip2)]
+    #[case(Compression::Gzip)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    async fn test_async_stream_roundtrip(#[case] format: Compression) {
+        let original = b"Hello, world! This is a test of async streaming compression.";
+
+        let mut compressed = Cursor::new(Vec::new());
+        let bytes_in = format.async_compress_stream(&mut Cursor::new(original), &mut compressed).await.unwrap();
+        assert_eq!(bytes_in, original.len() as u64);
+
+        let compressed = compressed.into_inner();
+        let mut decompressed = Cursor::new(Vec::new());
+        let mut reader = BufReader::new(Cursor::new(compressed));
+        let bytes_out = format.async_decompress_stream(&mut reader, &mut decompressed).await.unwrap();
+        assert_eq!(bytes_out, original.len() as u64);
+        assert_eq!(decompressed.into_inner(), original);
+    }
+}

@@ -57,3 +57,133 @@ impl Compression {
         self.async_peekable_reader(AsyncBufReader::new(input))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    fn test_data() -> Vec<u8> {
+        b"Hello, world! This is test data for async peekable decompression. \
+          It needs to be long enough to test multiple peek() calls."
+            .to_vec()
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_peek(#[case] format: Compression) {
+        let original = test_data();
+        let compressed = format.compress(&original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix, b"Hello");
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_peek_then_into_bytes(#[case] format: Compression) {
+        let original = test_data();
+        let compressed = format.compress(&original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix = peekable.peek(13).await.unwrap();
+        assert_eq!(prefix, b"Hello, world!");
+        let full = peekable.into_bytes().await.unwrap();
+        assert_eq!(full, original);
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_multiple_peek_calls(#[case] format: Compression) {
+        let original = test_data();
+        let compressed = format.compress(&original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix1 = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix1, b"Hello");
+        let prefix2 = peekable.peek(13).await.unwrap();
+        assert_eq!(prefix2, b"Hello, world!");
+        assert_eq!(peekable.head(), b"Hello, world!");
+        let full = peekable.into_bytes().await.unwrap();
+        assert_eq!(full, original);
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_peek_larger_than_data(#[case] format: Compression) {
+        let original = b"tiny";
+        let compressed = format.compress(original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix = peekable.peek(1000).await.unwrap();
+        assert_eq!(prefix, b"tiny");
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_empty_input(#[case] format: Compression) {
+        let original = b"";
+        let compressed = format.compress(original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix = peekable.peek(100).await.unwrap();
+        assert!(prefix.is_empty());
+        let full = peekable.into_bytes().await.unwrap();
+        assert!(full.is_empty());
+    }
+
+    #[rstest]
+    #[case(Compression::None)]
+    #[case(Compression::Gzip)]
+    #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "xz", case(Compression::Xz))]
+    #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
+    #[tokio::test]
+    async fn test_async_copy_into(#[case] format: Compression) {
+        let original = test_data();
+        let compressed = format.compress(&original).unwrap();
+        let mut peekable = format.async_peekable_data(&compressed).unwrap();
+        let prefix = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix, b"Hello");
+        let mut output = futures::io::Cursor::new(Vec::new());
+        let bytes = peekable.copy_into(&mut output).await.unwrap();
+        assert_eq!(bytes, original.len() as u64);
+        assert_eq!(output.into_inner(), original);
+    }
+
+    #[tokio::test]
+    async fn test_async_drop_without_into_bytes() {
+        let original = test_data();
+        let compressed = Compression::Gzip.compress(&original).unwrap();
+        let mut peekable = Compression::Gzip.async_peekable_data(&compressed).unwrap();
+        let _prefix = peekable.peek(5).await.unwrap();
+        drop(peekable);
+    }
+}

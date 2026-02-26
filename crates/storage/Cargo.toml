@@ -30,6 +30,7 @@ futures = { workspace = true }
 rawr-compress = { path = "../compress" }
 time = { workspace = true, features = ["formatting", "parsing"] }
 tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
+tokio-util = { workspace = true, features = ["io-util"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

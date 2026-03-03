@@ -1,3 +1,4 @@
+pub(crate) mod conflict;
 pub mod error;
 pub mod import;
 pub mod organize;

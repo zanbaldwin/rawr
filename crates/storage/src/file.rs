@@ -97,19 +97,20 @@ mod sealed {
 ///
 /// This trait is sealed and cannot be implemented outside this crate.
 /// The three implementations are [`Discovered`], [`Read`] and [`Processed`].
-pub trait HashState: sealed::Sealed {
+pub trait HashState: sealed::Sealed + Clone {
     /// - `()` for [`Discovered`]
     /// - [`String`] for [`Read`] and [`Processed`]
-    type File;
+    type File: Clone;
     /// - `()` for [`Discovered`] and [`Read`]
     /// - [`String`] for [`Processed`]
-    type Content;
+    type Content: Clone;
 }
 
 /// Hash state: file discovered, hashes not yet computed.
 ///
 /// This is the default state for [`FileInfo`] returned from
 /// [`StorageBackend`](crate::StorageBackend) operations.
+#[derive(Clone)]
 pub struct Discovered;
 impl sealed::Sealed for Discovered {}
 impl HashState for Discovered {
@@ -121,6 +122,7 @@ impl HashState for Discovered {
 ///
 /// [`FileInfo<Read>`] provides the file hash as a [`String`] via
 /// the [`file_hash`](FileInfo::file_hash) field.
+#[derive(Clone)]
 pub struct Read;
 impl sealed::Sealed for Read {}
 impl HashState for Read {
@@ -132,7 +134,7 @@ impl HashState for Read {
 ///
 /// [`FileInfo<Processed>`] provides the content hash as a [`String`] via
 /// the [`content_hash`](FileInfo::content_hash) field.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Processed;
 impl sealed::Sealed for Processed {}
 impl HashState for Processed {
@@ -149,7 +151,7 @@ impl HashState for Processed {
 /// See the [module documentation](self) for usage examples and guidance
 /// on choosing between `FileMeta`, `FileInfo`, `FileInfo<Read>`, and
 /// `FileInfo<Processed>` in function signatures.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileInfo<S: HashState = Discovered> {
     meta: FileMeta,
     /// - `()` in [`Discovered`] state

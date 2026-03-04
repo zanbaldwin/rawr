@@ -1,0 +1,20 @@
+[package]
+name = "rawr-config"
+description = "Configuration loading and validation for rawr"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+derive_more = { workspace = true, features = ["display", "error"] }
+directories = { workspace = true }
+exn = { workspace = true }
+figment = { workspace = true, features = ["yaml", "toml", "json", "env"] }
+serde = { workspace = true, features = ["derive"] }
+rawr-compress = { path = "../compress" }
+tracing = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tempfile = { workspace = true }

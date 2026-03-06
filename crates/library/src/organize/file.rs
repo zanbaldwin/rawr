@@ -114,19 +114,21 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     } {
         match handle_conflict(backend, cache, ctx, (&file, &version), &existing, depth).await {
             Ok(Some(ConflictResolution::TargetNowFree)) => (),
-            // Trash storage backend has been configured.
-            Ok(Some(ConflictResolution::TrashExisting)) if ctx.trash.is_some() => {
-                trash(backend, ctx.trash.as_ref().unwrap(), &existing).await.or_raise(|| OrganizeErrorKind::Storage)?;
+            Ok(Some(ConflictResolution::TrashExisting)) => match ctx.trash.as_ref() {
+                Some(t) => trash(backend, t, &existing).await.or_raise(|| OrganizeErrorKind::Storage)?,
+                None => backend.delete(&existing.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
             },
-            Ok(Some(ConflictResolution::TrashIncoming)) if ctx.trash.is_some() => {
-                trash(backend, ctx.trash.as_ref().unwrap(), &file).await.or_raise(|| OrganizeErrorKind::Storage)?;
+            Ok(Some(ConflictResolution::TrashIncoming)) => {
+                match ctx.trash.as_ref() {
+                    Some(t) => trash(backend, t, &file).await.or_raise(|| OrganizeErrorKind::Storage)?,
+                    None => backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
+                };
                 return Ok(Action::CleanedUp(file.path.clone()));
             },
-            // Trash storage backend has not been configured.
-            Ok(Some(ConflictResolution::DiscardExisting)) | Ok(Some(ConflictResolution::TrashExisting)) => {
+            Ok(Some(ConflictResolution::DiscardExisting)) => {
                 backend.delete(&existing.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
             },
-            Ok(Some(ConflictResolution::DiscardIncoming)) | Ok(Some(ConflictResolution::TrashIncoming)) => {
+            Ok(Some(ConflictResolution::DiscardIncoming)) => {
                 backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
                 return Ok(Action::CleanedUp(file.path.clone()));
             },

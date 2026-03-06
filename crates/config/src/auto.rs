@@ -78,8 +78,8 @@ impl Configurator {
         }
         // Safety: target_names is guaranteed to contain a value.
         let singular_target_name = target_names.pop_last().unwrap();
-        if let Some(dict) = data.values_mut().last()
-            && let Some((_, library)) = get_or_insert_dict(dict, "library")
+        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
+        if let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
             tracing::debug!(setting = "library.targets.import", value = &singular_target_name, "Auto-configuring");
@@ -110,10 +110,9 @@ impl Configurator {
                     })
             })
             .cloned();
+        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
         if let Some(import_value) = import_value
-            // If we pulled an import_value from the provider data, then we know there's at least one data source (dict).
-            && let Some(dict) = data.values_mut().last()
-            && let Some((_, library)) = get_or_insert_dict(dict, "library")
+            && let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
             tracing::debug!(setting = "library.targets.export", value = &import_value, "Auto-configuring");
@@ -129,10 +128,12 @@ impl Configurator {
         let is_database_specified = data.values_mut().any(|dict| {
             get_or_insert_dict(dict, "library").map(|(_, library)| is_value_set(library, "cache")).unwrap_or(false)
         });
-        if !is_database_specified
-            && let Some(dict) = data.values_mut().last()
+        if is_database_specified {
+            return;
+        }
+        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
+        if let Some((library_tag, library)) = get_or_insert_dict(default_profile, "library")
             && let Some(dirs) = ProjectDirs::from("", "", APP_NAME)
-            && let Some((library_tag, library)) = get_or_insert_dict(dict, "library")
         {
             let database = dirs.data_dir().join("cache.db").to_string_lossy().to_string();
             tracing::debug!(setting = "library.cache", value = &database, "Auto-configuring");

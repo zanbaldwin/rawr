@@ -29,7 +29,7 @@ pub trait Validator {
 impl Validator for Config {
     fn validate(&self) -> Vec<ConstraintViolation> {
         let mut errors = Vec::new();
-        validate_library_target(self, &mut errors);
+        validate_library_targets(self, &mut errors);
         validate_targets(self, &mut errors);
         validate_database(self, &mut errors);
         check_duplicate_fandom_renames(self, &mut errors);
@@ -38,16 +38,25 @@ impl Validator for Config {
     }
 }
 
-fn validate_library_target(config: &Config, errors: &mut Vec<ConstraintViolation>) {
-    if !config.targets.contains_key(&config.library.targets.import) {
-        errors.push(ConstraintViolation::error(
-            "library.targets.import",
-            format!(
-                "references undefined target '{}'. Available targets: {}",
-                config.library.targets.import,
-                config.targets.keys().cloned().collect::<Vec<_>>().join(", ")
-            ),
-        ));
+fn validate_library_targets(config: &Config, errors: &mut Vec<ConstraintViolation>) {
+    let library_targets = [
+        ("import", Some(&config.library.targets.import)),
+        ("export", Some(&config.library.targets.export)),
+        ("trash", config.library.targets.trash.as_ref()),
+    ];
+    for (key, target_name) in library_targets {
+        if let Some(target_name) = target_name
+            && !config.targets.contains_key(target_name)
+        {
+            errors.push(ConstraintViolation::error(
+                format!("library.targets.{key}"),
+                format!(
+                    "references undefined target '{}'. Available targets: {}",
+                    target_name,
+                    config.targets.keys().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            ));
+        }
     }
 }
 

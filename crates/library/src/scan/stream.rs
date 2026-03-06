@@ -9,6 +9,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt};
 use rawr_cache::Repository;
 use rawr_storage::BackendHandle;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
 
@@ -127,7 +128,7 @@ fn scan_inner<'a>(
         let mut file_stream = pin!(backend.list_stream(prefix.as_deref()));
         let mut discovery_complete = false;
         let mut discovered = 0u64;
-        let mut not_processing_yet = Vec::new();
+        let mut not_processing_yet = VecDeque::new();
         let mut processing = FuturesUnordered::new();
         loop {
             // I really, REALLY, want to replace this with `futures::select_biased!`
@@ -153,7 +154,7 @@ fn scan_inner<'a>(
                         if processing.len() < MAX_PROCESS_CONCURRENCY {
                             processing.push(future);
                         } else {
-                            not_processing_yet.push(future);
+                            not_processing_yet.push_back(future);
                         }
                         yield Ok(ScanEvent::FileDiscovered(path));
                     },
@@ -166,7 +167,7 @@ fn scan_inner<'a>(
 
                 Some(result) = processing.next(), if !processing.is_empty() => {
                     yield result.map(|s| ScanEvent::Scanned(Box::new(s)));
-                    if let Some(future) = not_processing_yet.pop() {
+                    if let Some(future) = not_processing_yet.pop_front() {
                         processing.push(future);
                     }
                 },

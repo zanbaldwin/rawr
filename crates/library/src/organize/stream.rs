@@ -8,6 +8,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt};
 use rawr_cache::Repository;
 use rawr_storage::BackendHandle;
+use std::collections::VecDeque;
 
 /// Progress events emitted by [`organize`] as it works through a storage
 /// backend's cached files.
@@ -77,15 +78,15 @@ fn organize_inner<'a>(
         // Infallible: a usize (either 32- or 64-bit) will always fit in a u64.
         yield Ok(OrganizeEvent::DiscoveryComplete(u64::try_from(files.len()).unwrap_or(0)));
 
-        let mut futures: Vec<_> =
+        let mut futures: VecDeque<_> =
             files.into_iter().map(|(file, _version)| organize_file_inner(backend, cache, ctx, file, vec![])).collect();
         let mut processing = FuturesUnordered::new();
         processing.extend(futures.drain(..MAX_PROCESS_CONCURRENCY.min(futures.len())));
         while let Some(result) = processing.next().await {
             yield result.map(OrganizeEvent::Organized);
             // Pop-n-push, but FIFO instead of LIFO.
-            if !futures.is_empty() {
-                processing.push(futures.remove(0));
+            if let Some(f) = futures.pop_front() {
+                processing.push(f);
             }
         }
 

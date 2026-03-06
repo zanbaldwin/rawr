@@ -8,7 +8,7 @@ use crate::error::{ErrorKind, Result};
 use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
 use crate::{Database, File, Version};
 use exn::ResultExt;
-use rawr_storage::validate_path;
+use rawr_storage::ValidatedPath;
 use sqlx::SqlitePool;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -84,8 +84,7 @@ impl Repository {
     }
 
     fn sqlx_hates_paths(path: impl AsRef<Path>) -> Result<String> {
-        let buf = validate_path(path.as_ref()).or_raise(|| ErrorKind::InvalidData("path"))?;
-        buf.into_os_string().into_string().map_err(|_| ErrorKind::InvalidData("path").into())
+        Ok(ValidatedPath::new(path).or_raise(|| ErrorKind::InvalidData("path"))?.into())
     }
 
     /* ============== *\

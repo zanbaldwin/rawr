@@ -3,11 +3,12 @@
 //! Wraps another backend and restricts all operations to files with
 //! `.html` base extension (after stripping any compression suffix).
 
-use crate::backend::FileInfoStream;
+use crate::backend::{BoxedReader, BoxedWriter, FileInfoStream, OperatorAware};
 use crate::error::ErrorKind;
 use crate::{BackendHandle, StorageBackend, error::Result, file::FileInfo};
 use async_trait::async_trait;
 use futures::StreamExt;
+use opendal::Operator;
 use rawr_compress::Compression;
 use std::path::Path;
 
@@ -49,20 +50,24 @@ impl HtmlOnlyBackend {
         Self { inner }
     }
 }
-
+impl OperatorAware for HtmlOnlyBackend {
+    fn operator(&self) -> &Operator {
+        self.inner.operator()
+    }
+}
 #[async_trait]
 impl StorageBackend for HtmlOnlyBackend {
     fn name(&self) -> &str {
         self.inner.name()
     }
 
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
-        Box::pin(self.inner.list_stream(prefix).filter(|item| {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
+        Ok(Box::pin(self.inner.list_stream(prefix)?.filter(|item| {
             std::future::ready(match item {
                 Ok(info) => is_html_path(&info.path),
                 Err(_) => true, // propagate errors
             })
-        }))
+        })))
     }
 
     async fn exists(&self, path: &Path) -> Result<bool> {
@@ -116,6 +121,20 @@ impl StorageBackend for HtmlOnlyBackend {
         }
         self.inner.stat(path).await
     }
+
+    async fn reader(&self, path: &Path) -> Result<BoxedReader> {
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.reader(path).await
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
+        if !is_html_path(path) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+        }
+        self.inner.writer(path).await
+    }
 }
 
 #[cfg(test)]
@@ -159,7 +178,7 @@ mod tests {
     /// Helper: create a temp HtmlBackend wrapping a LocalBackend.
     fn setup() -> (tempfile::TempDir, HtmlOnlyBackend) {
         let temp_dir = tempfile::tempdir().unwrap();
-        let local = LocalBackend::new("test", temp_dir.path()).unwrap();
+        let local = LocalBackend::new("test", temp_dir.path(), false).unwrap();
         let backend: BackendHandle = Arc::new(local);
         let html = HtmlOnlyBackend::new(backend);
         (temp_dir, html)

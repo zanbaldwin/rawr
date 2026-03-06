@@ -72,7 +72,7 @@ use crate::error::{Error, ErrorKind, Result};
 use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_extract::models::Version;
-use rawr_storage::validate_path;
+use rawr_storage::ValidatedPath;
 use std::{path::PathBuf, str::FromStr};
 use tracing::instrument;
 use upon::{Engine, Template};
@@ -85,7 +85,7 @@ use upon::{Engine, Template};
 /// compiled template is reusable across many [`generate`](Self::generate) calls.
 ///
 /// Generated paths are normalized (trimmed, deduplicated separators) and
-/// validated by [`rawr_storage::validate_path`] to prevent directory traversal.
+/// validated by [`rawr_storage::ValidatedPath`] to prevent directory traversal.
 pub struct PathGenerator {
     engine: Engine<'static>,
     template: Template<'static>,
@@ -162,10 +162,11 @@ impl PathGenerator {
     }
 
     /// Trims each path segment, joins them with `/`, then validates via
-    /// [`rawr_storage::validate_path`].
+    /// [`rawr_storage::ValidatedPath`].
     fn normalize(s: impl Into<String>) -> Result<PathBuf> {
         let path = s.into().trim().split('/').map(str::trim).collect::<Vec<_>>().join("/");
-        validate_path(&path).or_raise(|| ErrorKind::Template)
+        let validated_path = ValidatedPath::new(path).or_raise(|| ErrorKind::Template)?;
+        Ok(validated_path.into())
     }
 
     /// Builds the [`upon::Value`] map exposed to the template engine.

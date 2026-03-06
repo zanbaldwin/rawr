@@ -7,30 +7,23 @@ license.workspace = true
 version.workspace = true
 
 [features]
-default = []
+default = ["mock", "s3"]
 # Feature intended for use in other crates' dev dependencies.
-mock = []
-s3 = ["dep:aws-sdk-s3"]
+mock = ["opendal/services-memory"]
+s3 = ["opendal/services-s3"]
 
 [dependencies]
 async-stream = { workspace = true }
 # TODO: When `dyn async trait` stabilizes, migrate to native 2024 Edition async traits.
 async-trait = { workspace = true }
-aws-sdk-s3 = { workspace = true, optional = true, features = [
-    "default-https-client",
-    # Doesn't add any additional Tokio deps, but enabled
-    # sleep impls for exponential back-off. Keep it!
-    "rt-tokio",
-] }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 futures = { workspace = true }
+opendal = { workspace = true, features = ["services-fs"] }
 rawr-compress = { path = "../compress" }
 time = { workspace = true, features = ["formatting", "parsing"] }
-tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-aws-smithy-mocks = "0.2"
 tempfile = "3.13"
 tokio = { workspace = true, features = ["macros", "rt"] }

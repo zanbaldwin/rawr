@@ -22,8 +22,6 @@ aws-sdk-s3 = { workspace = true, optional = true, features = [
     # sleep impls for exponential back-off. Keep it!
     "rt-tokio",
 ] }
-blake3 = { workspace = true }
-crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 futures = { workspace = true }

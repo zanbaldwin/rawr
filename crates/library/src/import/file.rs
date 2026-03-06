@@ -166,6 +166,8 @@ async fn import_file_inner_if_storage_had_async_traits<R: AsyncRead + Unpin>(
     //       Not a bug per-se, just inefficient.
     match organize_file_inner(backend, cache, ctx, file_info.clone(), vec![]).await.or_raise(|| ErrorKind::Organize)? {
         Action::CleanedUp(path) => {
+            cache.delete_by_target_path(&file_info.target, &file_info.path).await.or_raise(|| ErrorKind::Cache)?;
+            backend.delete(&file_info.path).await.or_raise(|| ErrorKind::Storage)?;
             file_info.path = path;
             // CleanedUp can mean two things in organize:
             // - File didn't exist on disk (shouldn't happen — we just wrote it)

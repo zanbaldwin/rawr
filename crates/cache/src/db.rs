@@ -85,18 +85,12 @@ impl Database {
 
     /// Apply additional PRAGMA settings that aren't exposed via SqliteConnectOptions.
     async fn apply_pragmas(conn: &mut SqliteConnection, _meta: PoolConnectionMetadata) -> sqlx::Result<()> {
-        sqlx::query(
-            r#"
-                PRAGMA locking_mode = NORMAL;
-                PRAGMA wal_autocheckpoint = 800;
-                PRAGMA cache_size = -8192;
-                PRAGMA temp_store = MEMORY;
-                PRAGMA mmap_size = 33554432;
-                PRAGMA analysis_limit = 1000;
-            "#,
-        )
-        .execute(conn)
-        .await?;
+        sqlx::query(r#"PRAGMA locking_mode = NORMAL;"#).execute(&mut *conn).await?;
+        sqlx::query(r#"PRAGMA wal_autocheckpoint = 800;"#).execute(&mut *conn).await?;
+        sqlx::query(r#"PRAGMA cache_size = -8192;"#).execute(&mut *conn).await?;
+        sqlx::query(r#"PRAGMA temp_store = MEMORY;"#).execute(&mut *conn).await?;
+        sqlx::query(r#"PRAGMA mmap_size = 33554432;"#).execute(&mut *conn).await?;
+        sqlx::query(r#"PRAGMA analysis_limit = 1000;"#).execute(&mut *conn).await?;
         Ok(())
     }
 

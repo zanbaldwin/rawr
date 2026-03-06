@@ -12,25 +12,32 @@
 //!
 //! # Template Variables
 //!
-//! | Variable            | Type              | Description                              |
-//! |---------------------|-------------------|------------------------------------------|
-//! | `work`              | `String`          | The AO3 work ID                          |
-//! | `title`             | `String`          | Work title                               |
-//! | `rating`            | `Option<String>`  | Short rating code (e.g. `"G"`, `"T"`)    |
-//! | `words`             | `u64`             | Word count                               |
-//! | `chapters.written`  | `u64`             | Number of posted chapters                 |
-//! | `chapters.total`    | `Option<u64>`     | Planned total chapters                    |
-//! | `fandom`            | `String`          | Alphabetically-first fandom name          |
-//! | `series.id`         | `Option<u64>`     | ID of the lowest-ID series                |
-//! | `series.name`       | `Option<String>`  | Name of that series                       |
-//! | `series.position`   | `Option<u64>`     | Position within that series               |
-//! | `hash`              | `String`          | Zero-padded 8-hex-digit CRC32 of content  |
+//! | Variable            | Type             | Description                                 |
+//! |---------------------|------------------|---------------------------------------------|
+//! | `work`              | `String`         | The AO3 work ID                             |
+//! | `title`             | `String`         | Work title                                  |
+//! | `rating`            | `Option<String>` | Short rating code (e.g. `"G"`, `"T"`)       |
+//! | `words`             | `u64`            | Word count                                  |
+//! | `chapters.written`  | `u64`            | Number of posted chapters                   |
+//! | `chapters.total`    | `Option<u64>`    | Planned total chapters                      |
+//! | `fandom`            | `String`         | Alphabetically-first fandom name            |
+//! | `series`            | `Option<Dict>`   | Collection; the lowest-ID series, if exists |
+//! | `series.id`         | `?u64`           | ID of the lowest-ID series                  |
+//! | `series.name`       | `?String`        | Name of that series                         |
+//! | `series.position`   | `?u64`           | Position within that series                 |
+//! | `hash`              | `String`         | Zero-padded 8-hex-digit CRC32 of content    |
+//!
+//! > **IMPORTANT:** in order to save multiple versions of the same work, you
+//! > **must** include the `hash` variable in your path templates. It is the only
+//! > way to avoid copies of the same work (eg, `13/15` and `14/15` chapters) do
+//! > not conflict with each other.
 //!
 //! # Example
 //!
 //! ```
 //! # fn main() {
 //! use rawr_library::PathGenerator;
+//! use rawr_compress::Compression;
 //! # use rawr_extract::models::*;
 //! # use std::path::Path;
 //! # use std::str::FromStr;
@@ -52,8 +59,12 @@
 //! # };
 //!
 //! let generator: PathGenerator = "{{ fandom|slug }}/{{ work }}-{{ title|slug }}".parse().unwrap();
+//!
 //! let path = generator.generate(&version).unwrap();
 //! assert_eq!(path, Path::new("marvel/12345-my-story"));
+//!
+//! let path = generator.generate_with_ext(&version, "html", Compression::Gzip).unwrap();
+//! assert_eq!(path, Path::new("marvel/12345-my-story.html.gz"));
 //! # }
 //! ```
 
@@ -65,17 +76,6 @@ use rawr_storage::validate_path;
 use std::{path::PathBuf, str::FromStr};
 use tracing::instrument;
 use upon::{Engine, Template};
-
-pub const DEFAULT_TEMPLATE_IMPORT: &str = r#"
-    {{ fandom|truncate: 255|slug }}/
-    {% if series %}{{ series.id }}-{{ series.name|truncate: 230|slug }}/{% endif %}
-    {{ work }}-{{ hash }}-{{ title|truncate: 220|slug }}
-"#;
-
-pub const DEFAULT_TEMPLATE_EXPORT: &str = r#"
-    {{ fandom|truncate: 255|slug }}/
-    {{ work }}-{{ title|truncate: 220|slug }}
-"#;
 
 /// Generates deterministic filesystem paths from [`Version`] metadata and a
 /// user-defined template string.

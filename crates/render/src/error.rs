@@ -24,7 +24,6 @@ pub enum ErrorKind {
     /// The Chrome process exceeded the allowed execution time.
     ChromeTimeout,
     /// Chrome exited with a non-zero exit code.
-    /// If the exit code is zero, then Chrome either timed-out, killed by signal, or crashed.
     #[display("Chrome exited with code: {_0}")]
     ChromeFailed(#[error(not(source))] i32),
     /// Asset was not loadable (either file or builtin).
@@ -36,6 +35,9 @@ pub enum ErrorKind {
 impl ErrorKind {
     /// Returns `true` if retrying might succeed.
     pub fn is_retryable(&self) -> bool {
-        false
+        match self {
+            Self::ChromeTimeout | Self::Io => true,
+            _ => false,
+        }
     }
 }

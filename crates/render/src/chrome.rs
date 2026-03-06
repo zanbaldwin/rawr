@@ -1,8 +1,15 @@
 use crate::error::{ErrorKind, Result};
 use exn::ResultExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use tracing::instrument;
+
+/// Maximum time to wait for Chrome to finish rendering before killing.
+const CHROME_TIMEOUT: Duration = Duration::from_secs(180);
+/// How often to poll for process completion.
+const CHROME_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Represents a Chrome/Chromium executable.
 #[derive(Debug)]
@@ -57,7 +64,6 @@ impl Chrome {
                 c
             },
         };
-        // TODO set command timeout to 180 seconds. Spawn in a subprocess.
         cmd.args([
             "--headless=new",
             "--disable-gpu",
@@ -69,7 +75,20 @@ impl Chrome {
             &format!("--print-to-pdf={}", pdf.display()),
             &format!("file://{}", html.display()),
         ]);
-        let output = cmd.output().or_raise(|| ErrorKind::Io)?;
+        let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().or_raise(|| ErrorKind::Io)?;
+        let deadline = Instant::now() + CHROME_TIMEOUT;
+        'child: loop {
+            match child.try_wait().or_raise(|| ErrorKind::Io)? {
+                Some(_) => break 'child,
+                None if Instant::now() >= deadline => {
+                    _ = child.kill();
+                    _ = child.wait();
+                    exn::bail!(ErrorKind::ChromeTimeout);
+                },
+                None => sleep(CHROME_POLL_INTERVAL),
+            }
+        }
+        let output = child.wait_with_output().or_raise(|| ErrorKind::Io)?;
         if !output.status.success() {
             tracing::warn!(
                 stdout = %String::from_utf8_lossy(&output.stdout),
@@ -80,7 +99,7 @@ impl Chrome {
         match output.status.code() {
             Some(0) => Ok(()),
             Some(c) => exn::bail!(ErrorKind::ChromeFailed(c)),
-            None => exn::bail!(ErrorKind::ChromeFailed(0)),
+            None => exn::bail!(ErrorKind::ChromeTimeout),
         }
     }
 }

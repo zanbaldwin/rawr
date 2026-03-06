@@ -5,9 +5,15 @@
 //! indicating success on return.
 
 use async_trait::async_trait;
+use opendal::Operator;
 use std::path::Path;
 
-use crate::{BackendHandle, StorageBackend, backend::FileInfoStream, error::Result, file::FileInfo};
+use crate::{
+    BackendHandle, StorageBackend,
+    backend::{BoxedReader, BoxedWriter, FileInfoStream, OperatorAware},
+    error::Result,
+    file::FileInfo,
+};
 
 /// Read-only storage backend.
 ///
@@ -22,14 +28,18 @@ impl ReadOnlyBackend {
         Self { inner }
     }
 }
-
+impl OperatorAware for ReadOnlyBackend {
+    fn operator(&self) -> &Operator {
+        self.inner.operator()
+    }
+}
 #[async_trait]
 impl StorageBackend for ReadOnlyBackend {
     fn name(&self) -> &str {
         self.inner.name()
     }
 
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
         self.inner.list_stream(prefix)
     }
 
@@ -62,5 +72,14 @@ impl StorageBackend for ReadOnlyBackend {
 
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
         self.inner.stat(path).await
+    }
+
+    async fn reader(&self, path: &Path) -> Result<BoxedReader> {
+        self.inner.reader(path).await
+    }
+
+    async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
+        tracing::info!(path = %path.display(), "Skipping writer during read-only mode");
+        Ok(Box::new(futures::io::sink()))
     }
 }

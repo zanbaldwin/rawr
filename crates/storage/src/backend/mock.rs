@@ -1,25 +1,23 @@
 //! In-memory storage backend for testing.
 
-use super::FileInfoStream;
+use super::opendal_util::map_opendal_error;
 use crate::StorageBackend;
+use crate::ValidatedPath;
+use crate::backend::OperatorAware;
 use crate::error::{ErrorKind, Result};
-use crate::file::FileInfo;
-use crate::path::validate as validate_path;
-use async_stream::stream;
 use async_trait::async_trait;
-use rawr_compress::Compression;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use futures::AsyncWriteExt;
+use futures::io::copy as async_copy;
+use opendal::Operator;
+use opendal::services::Memory;
+use std::path::Path;
 use std::{fs::File, io::Read};
-use time::UtcDateTime;
-use tokio::sync::RwLock;
 
 /// In-memory storage backend for testing.
 ///
-/// Files are stored in a `HashMap` behind a [`RwLock`], so all trait methods
-/// can operate on `&self` without external synchronisation. Ideal for unit
-/// tests that need a [`StorageBackend`] without filesystem or network
-/// dependencies.
+/// Files are stored in an OpenDAL [`Memory`] operator, providing the same
+/// interface as local/S3 backends without filesystem or network dependencies.
+/// Ideal for unit tests that need a [`StorageBackend`].
 ///
 /// # Examples
 ///
@@ -27,7 +25,6 @@ use tokio::sync::RwLock;
 /// use rawr_storage::backend::{MockBackend, StorageBackend};
 /// use std::path::Path;
 ///
-/// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let backend = MockBackend::with_data([
 ///     ("works/123.html.gz", b"<html>...</html>"),
@@ -41,10 +38,13 @@ use tokio::sync::RwLock;
 /// ```
 pub struct MockBackend {
     name: String,
-    storage: RwLock<HashMap<PathBuf, (UtcDateTime, Vec<u8>)>>,
+    operator: Operator,
 }
-
 impl MockBackend {
+    fn new_operator() -> Operator {
+        Operator::new(Memory::default()).expect("Memory operator construction is infallible").finish()
+    }
+
     /// Create a mock backend pre-populated with files.
     ///
     /// Panics if any path fails validation (e.g. path traversal). If test
@@ -60,22 +60,20 @@ impl MockBackend {
     ///     ("dir/two.html", b"data file 2"),
     /// ]);
     /// ```
-    pub fn with_data(files: impl IntoIterator<Item = (impl Into<PathBuf>, impl Into<Vec<u8>>)>) -> Self {
-        let mut map = HashMap::new();
-        let now = UtcDateTime::now();
+    pub fn with_data(files: impl IntoIterator<Item = (impl AsRef<Path>, impl Into<Vec<u8>>)>) -> Self {
+        let operator = Self::new_operator();
+        let blocking = operator.blocking();
         for (path, data) in files {
-            let path = path.into();
-            let Ok(validated) = validate_path(&path) else {
+            let Ok(validated_path) = ValidatedPath::new(path.as_ref()) else {
                 // The panic here is DELIBERATE. MockBackend is intended to be
                 // used in tests; panics are expected. There is no error result.
-                panic!("MockBackend::with_data(): invalid path {}", path.display());
+                panic!("MockBackend::with_data(): invalid path {}", path.as_ref().display());
             };
-            map.insert(validated, (now, data.into()));
+            let Ok(_) = blocking.write(validated_path.as_str(), data.into()) else {
+                panic!("MockBackend::with_data(): could not write data to path {}", path.as_ref().display());
+            };
         }
-        Self {
-            name: "mock".to_string(),
-            storage: RwLock::new(map),
-        }
+        Self { name: "mock".to_string(), operator }
     }
 
     /// Mock storage backend from real test fixtures.
@@ -90,26 +88,23 @@ impl MockBackend {
     ///     "../../tests/fixtures/work2.html",
     /// ]);
     /// ```
-    pub fn from_files<P: Into<PathBuf>>(files: impl IntoIterator<Item = P>) -> Self {
-        let mut map: HashMap<_, (UtcDateTime, Vec<u8>)> = HashMap::new();
-        let now = UtcDateTime::now();
+    pub fn from_files<P: AsRef<Path>>(files: impl IntoIterator<Item = P>) -> Self {
+        let operator = Self::new_operator();
+        let blocking = operator.blocking();
         for path in files {
-            let path = path.into();
+            let path = path.as_ref();
             if !path.exists() {
                 panic!("MockBackend::with_files(): file does not exist {}", path.display());
             }
-            let mut file = File::open(&path).unwrap();
+            let mut file = File::open(path).unwrap();
             let mut contents = Vec::new();
             file.read_to_end(&mut contents).unwrap();
             // Place files directly into the root of the storage backend,
             // instead of needing to validating custom locations.
-            let filename = PathBuf::from(path.file_name().unwrap());
-            map.insert(filename, (now, contents));
+            let filename = path.file_name().unwrap().to_str().unwrap();
+            blocking.write(filename, contents).unwrap();
         }
-        Self {
-            name: "mock".to_string(),
-            storage: RwLock::new(map),
-        }
+        Self { name: "mock".to_string(), operator }
     }
 
     /// Change the name of the mock backend.
@@ -125,101 +120,49 @@ impl MockBackend {
         self.name = name.into();
         self
     }
-
-    fn file_info(&self, path: &Path, size: u64, inserted: UtcDateTime) -> FileInfo {
-        FileInfo::new(self.name(), path, size, inserted, Compression::from_path(path))
-    }
 }
 impl Default for MockBackend {
     fn default() -> Self {
-        let files: [(&str, &str); 0] = [];
-        Self::with_data(files)
+        Self {
+            name: "mock".to_string(),
+            operator: Self::new_operator(),
+        }
     }
 }
 
+impl OperatorAware for MockBackend {
+    fn operator(&self) -> &Operator {
+        &self.operator
+    }
+}
 #[async_trait]
 impl StorageBackend for MockBackend {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> FileInfoStream<'a> {
-        let validated_prefix = match prefix.map(validate_path).transpose() {
-            Ok(pfx) => pfx,
-            Err(e) => return Box::pin(futures::stream::once(async { Err(e) })),
-        };
-
-        Box::pin(stream! {
-            // Snapshot matching entries under the read lock, then drop it
-            // before yielding to avoid holding the lock across yield points.
-            let entries: Vec<(PathBuf, (UtcDateTime, u64))> = {
-                let guard = self.storage.read().await;
-                guard
-                    .iter()
-                    .filter(|(path, _)| match &validated_prefix {
-                        Some(pfx) => path.starts_with(pfx),
-                        None => true,
-                    })
-                    .map(|(path, (inserted, data))| (path.clone(), (*inserted, data.len() as u64)))
-                    .collect()
-            };
-            for (path, (inserted, size)) in entries {
-                yield Ok(self.file_info(&path, size, inserted));
-            }
-        })
-    }
-
-    async fn exists(&self, path: &Path) -> Result<bool> {
-        let path = validate_path(path)?;
-        Ok(self.storage.read().await.contains_key(&path))
-    }
-
-    async fn read(&self, path: &Path) -> Result<Vec<u8>> {
-        let path = validate_path(path)?;
-        let (_inserted, data) =
-            self.storage.read().await.get(&path).cloned().ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(path)))?;
-        Ok(data)
-    }
-
-    async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
-        let path = validate_path(path)?;
-        let guard = self.storage.read().await;
-        let (_inserted, data) = guard.get(&path).ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(path.clone())))?;
-        let end = bytes.min(data.len());
-        Ok(data[..end].to_vec())
-    }
-
-    async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        let path = validate_path(path)?;
-        self.storage.write().await.insert(path, (UtcDateTime::now(), data.to_vec()));
-        Ok(())
-    }
-
-    async fn delete(&self, path: &Path) -> Result<()> {
-        let path = validate_path(path)?;
-        self.storage.write().await.remove(&path).map(|_| ()).ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(path)))
-    }
-
+    // Memory service doesn't support rename natively — use copy+delete.
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        let from = validate_path(from)?;
-        let to = validate_path(to)?;
-        let mut guard = self.storage.write().await;
-        let data = guard.remove(&from).ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(from)))?;
-        guard.insert(to, data);
+        let validated_from = ValidatedPath::new(from)?;
+        if !self.exists(from).await? {
+            exn::bail!(ErrorKind::NotFound(from.to_path_buf()));
+        }
+        let mut reader = self.reader(from).await?;
+        let mut writer = self.writer(to).await?;
+        async_copy(&mut reader, &mut writer).await.map_err(ErrorKind::Io)?;
+        writer.close().await.map_err(ErrorKind::Io)?;
+        self.operator.delete(validated_from.as_str()).await.map_err(|e| map_opendal_error(e, from))?;
         Ok(())
-    }
-
-    async fn stat(&self, path: &Path) -> Result<FileInfo> {
-        let path = validate_path(path)?;
-        let guard = self.storage.read().await;
-        let (inserted, data) = guard.get(&path).ok_or_else(|| exn::Exn::from(ErrorKind::NotFound(path.clone())))?;
-        Ok(self.file_info(&path, data.len() as u64, *inserted))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ErrorKind;
+    use futures::io::{AsyncReadExt, AsyncWriteExt};
+    use rawr_compress::Compression;
+    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_write_and_read() {
@@ -293,6 +236,7 @@ mod tests {
         assert_eq!(info.path, PathBuf::from("file.html.bz2"));
         assert_eq!(info.size, 5);
         assert_eq!(info.compression, Compression::Bzip2);
+        assert_eq!(info.file_hash, ());
     }
 
     #[tokio::test]
@@ -327,5 +271,34 @@ mod tests {
     #[should_panic(expected = "invalid path")]
     fn test_with_files_panics_on_bad_path() {
         MockBackend::with_data([("../escape", Vec::from(*b"bad"))]);
+    }
+
+    #[tokio::test]
+    async fn test_reader() {
+        let backend = MockBackend::with_data([("file.txt", Vec::from(*b"hello world"))]);
+        let mut reader = backend.reader(Path::new("file.txt")).await.unwrap();
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf).await.unwrap();
+        assert_eq!(buf, b"hello world");
+    }
+
+    #[tokio::test]
+    async fn test_reader_not_found() {
+        let backend = MockBackend::default();
+        let Err(err) = backend.reader(Path::new("missing.txt")).await else {
+            panic!("expected NotFound error");
+        };
+        assert!(matches!(&*err, ErrorKind::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_writer() {
+        let backend = MockBackend::default();
+        let mut writer = backend.writer(Path::new("file.txt")).await.unwrap();
+        writer.write_all(b"hello ").await.unwrap();
+        writer.write_all(b"world").await.unwrap();
+        writer.close().await.unwrap();
+        let data = backend.read(Path::new("file.txt")).await.unwrap();
+        assert_eq!(data, b"hello world");
     }
 }

@@ -125,7 +125,13 @@ fn scan_inner<'a>(
         // I'm missing something. Guess I'll come back to this later on when I
         // start encountering bugs in the main CLI application...
 
-        let mut file_stream = pin!(backend.list_stream(prefix.as_deref()));
+        let mut file_stream = match backend.list_stream(prefix.as_deref()) {
+            Ok(s) => pin!(s),
+            Err(e) => {
+                yield Err(e).or_raise(|| ScanErrorKind::Storage);
+                return;
+            },
+        };
         let mut discovery_complete = false;
         let mut discovered = 0u64;
         let mut not_processing_yet = VecDeque::new();

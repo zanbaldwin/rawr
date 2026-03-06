@@ -71,14 +71,18 @@ impl Compression {
 
     /// Compress `input` into the provided `output` buffer, returning bytes written.
     ///
-    /// Unlike [`compress`](Self::compress), this appends to an existing buffer,
-    /// which is useful when building a larger output or reusing allocations.
+    /// Unlike [`compress`](Self::compress), this inserts into an existing buffer
+    /// (overwriting existing data), which is useful when building a larger
+    /// output or reusing allocations.
     #[instrument(skip(input, output), fields(
         format = %self,
         input_size = input.len(),
         output_size
     ))]
     pub fn compress_into(&self, input: &[u8], output: &mut Vec<u8>) -> Result<usize> {
+        // Compressed output will become corrupt if there is already data in the
+        // buffer, plus it messes with the "number of bytes written" output value.
+        output.truncate(0);
         let size = match self {
             Compression::None => {
                 output.extend_from_slice(input);
@@ -134,6 +138,11 @@ impl Compression {
         output_size
     ))]
     pub fn decompress_into(&self, input: &[u8], output: &mut Vec<u8>) -> Result<usize> {
+        // While there won't be corruption issues appending decompressed data to
+        // a non-zero buffer, it will mess with the "number of bytes written"
+        // output value... not to mention that it will mess with extraction and
+        // is considered undefined behaviour.
+        output.truncate(0);
         let size = match self {
             Compression::None => {
                 output.extend_from_slice(input);

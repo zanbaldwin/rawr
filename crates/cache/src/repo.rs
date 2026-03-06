@@ -10,6 +10,7 @@ use crate::{Database, File, Version};
 use exn::ResultExt;
 use rawr_storage::validate_path;
 use sqlx::SqlitePool;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 use tracing::instrument;
@@ -258,7 +259,8 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         let pairs = rows.into_iter().map(|r| r.try_into());
         let mut map = group_by_version(pairs)?;
-        map.sort_by(|(a, _), (b, _)| b.cmp(a));
+        // TODO: If Ordering::Less the correct value? Or Greater? I should write some tests for that... eventually...
+        map.sort_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap_or(Ordering::Less));
         Ok(map)
     }
 

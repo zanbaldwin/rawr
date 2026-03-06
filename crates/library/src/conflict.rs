@@ -6,10 +6,13 @@ use crate::scan::error::ErrorKind as ScanErrorKind;
 use crate::scan::file::scan_file_inner;
 use exn::ResultExt;
 use rawr_cache::Repository;
+use rawr_extract::models::Version;
 use rawr_storage::BackendHandle;
 use rawr_storage::file::{FileInfo, HashState, Processed};
+use std::cmp::Ordering;
 use std::ops::Deref;
 use std::path::PathBuf;
+use time::UtcDateTime;
 
 /// Maximum recursive relocations before bailing.
 const MAX_CONFLICT_DEPTH: usize = 5;
@@ -50,11 +53,12 @@ pub(crate) async fn handle_conflict<S: HashState>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
-    incoming: &FileInfo<Processed>,
+    incoming: (&FileInfo<Processed>, &Version),
     existing: &FileInfo<S>,
     mut depth: Vec<PathBuf>,
 ) -> LibraryResult<Option<ConflictResolution>> {
-    let (existing, _existing_version) = match cache
+    let (incoming_file, incoming_version) = incoming;
+    let (existing_file, existing_version) = match cache
         .get_by_target_path(&existing.target, &existing.path)
         .await
         .or_raise(|| LibraryErrorKind::Conflict)?
@@ -71,7 +75,7 @@ pub(crate) async fn handle_conflict<S: HashState>(
             Err(e) => return Err(e).or_raise(|| LibraryErrorKind::Conflict),
         },
     };
-    if incoming.content_hash == existing.content_hash {
+    if incoming_file.content_hash == existing_file.content_hash {
         // The existing file is already the correct version. Since we calcuate target
         // locations from immutable metadata (and detect compression using file extension),
         // it's safe to assume that the existing file is exactly where it needs to be.
@@ -81,20 +85,40 @@ pub(crate) async fn handle_conflict<S: HashState>(
         return Ok(Some(ConflictResolution::DiscardIncoming));
     }
     // Content hashes are different. Existing file needs relocation.
-    if depth.len() > MAX_CONFLICT_DEPTH || depth.contains(&existing.path) {
+    if depth.len() > MAX_CONFLICT_DEPTH || depth.contains(&existing_file.path) {
         exn::bail!(LibraryErrorKind::Conflict);
     }
-    depth.push(existing.path.clone());
+    depth.push(existing_file.path.clone());
     // Pin that sucker! Otherwise you have some weird async recursion error
     // that is so complicated it makes your brain explode...
-    match Box::pin(organize_file_inner(backend, cache, ctx, existing, depth)).await {
+    match Box::pin(organize_file_inner(backend, cache, ctx, existing_file, depth)).await {
         // No conflict resolution is possible, return None.
-        Ok(Action::AlreadyCorrect(_)) => {
-            // TODO: Calculate is either of the files can be trashed.
-            // Otherwise...
-            Ok(None)
+        Ok(Action::AlreadyCorrect(_)) => match incoming_version.partial_cmp(&existing_version) {
+            None => Ok(None),
+            Some(Ordering::Greater) => Ok(Some(ConflictResolution::TrashExisting)),
+            Some(_) => Ok(Some(ConflictResolution::TrashIncoming)),
         },
         Ok(Action::Renamed(_)) | Ok(Action::CleanedUp(_)) => Ok(Some(ConflictResolution::TargetNowFree)),
         Err(e) => Err(e).or_raise(|| LibraryErrorKind::Conflict),
     }
+}
+
+pub(crate) async fn trash<S: HashState>(
+    backend: &BackendHandle,
+    trash: &BackendHandle,
+    file: &FileInfo<S>,
+) -> LibraryResult<()> {
+    let contents = backend.read(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    trash.write(&make_trash_name(file), &contents).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    backend.delete(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    Ok(())
+}
+
+pub(crate) fn make_trash_name<S: HashState>(file: &FileInfo<S>) -> PathBuf {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(file.target.as_bytes());
+    hasher.update(file.path.as_os_str().as_encoded_bytes());
+    hasher.update(file.size.to_le_bytes().as_ref());
+    let now = UtcDateTime::now();
+    PathBuf::from(format!("{}-{}.html{}", hasher.finalize(), now.unix_timestamp(), file.compression.extension()))
 }

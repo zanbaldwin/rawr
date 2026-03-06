@@ -20,6 +20,7 @@ pub enum ErrorKind {
     Scan,
     Organize,
     Import,
+    Conflict,
     #[display("issue with path generation from template")]
     Template,
 }

@@ -1,5 +1,5 @@
 use crate::Context;
-use crate::conflict::{ConflictResolution, handle_conflict};
+use crate::conflict::{ConflictResolution, handle_conflict, trash};
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
 use crate::scan::error::ErrorKind as ScanErrorKind;
@@ -13,7 +13,6 @@ use rawr_storage::file::{FileInfo, HashState};
 use std::io::{self, Cursor};
 use std::ops::Deref;
 use std::path::PathBuf;
-use time::UtcDateTime;
 
 /// The outcome of (successfully) organizing a single file.
 ///
@@ -100,8 +99,10 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     let compression_source = file.compression;
     let compression_target = ctx.compression.unwrap_or(compression_source);
 
-    let correct_location =
-        ctx.template.generate_with_ext(version, "html", compression_target).or_raise(|| OrganizeErrorKind::Template)?;
+    let correct_location = ctx
+        .template
+        .generate_with_ext(&version, "html", compression_target)
+        .or_raise(|| OrganizeErrorKind::Template)?;
     if file.path == correct_location {
         return Ok(Action::AlreadyCorrect(file.path.clone()));
     }
@@ -111,14 +112,14 @@ pub(crate) async fn organize_file_inner<S: HashState>(
         Err(e) if matches!(e.deref(), StorageErrorKind::NotFound(_)) => None,
         Err(e) => Err(e).or_raise(|| OrganizeErrorKind::Storage)?,
     } {
-        match handle_conflict(backend, cache, ctx, &file, &existing, depth).await {
+        match handle_conflict(backend, cache, ctx, (&file, &version), &existing, depth).await {
             Ok(Some(ConflictResolution::TargetNowFree)) => (),
             // Trash storage backend has been configured.
             Ok(Some(ConflictResolution::TrashExisting)) if ctx.trash.is_some() => {
-                trash(backend, ctx.trash.as_ref().unwrap(), &existing).await?;
+                trash(backend, ctx.trash.as_ref().unwrap(), &existing).await.or_raise(|| OrganizeErrorKind::Storage)?;
             },
             Ok(Some(ConflictResolution::TrashIncoming)) if ctx.trash.is_some() => {
-                trash(backend, ctx.trash.as_ref().unwrap(), &file).await?;
+                trash(backend, ctx.trash.as_ref().unwrap(), &file).await.or_raise(|| OrganizeErrorKind::Storage)?;
                 return Ok(Action::CleanedUp(file.path.clone()));
             },
             // Trash storage backend has not been configured.
@@ -159,23 +160,6 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     // it can be cleaned up on the next library scan operation.
     _ = cache.update_target_path(&file.target, &file.path, &correct_location).await;
     Ok(Action::Renamed(correct_location))
-}
-
-async fn trash<S: HashState>(backend: &BackendHandle, trash: &BackendHandle, file: &FileInfo<S>) -> OrganizeResult<()> {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(file.target.as_bytes());
-    hasher.update(file.path.as_os_str().as_encoded_bytes());
-    hasher.update(&file.size.to_le_bytes());
-    let trash_name = PathBuf::from(format!(
-        "{}-{}.html{}",
-        hasher.finalize(),
-        UtcDateTime::now().unix_timestamp(),
-        file.compression.extension()
-    ));
-    let contents = backend.read(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
-    trash.write(&trash_name, &contents).await.or_raise(|| OrganizeErrorKind::Storage)?;
-    backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
-    Ok(())
 }
 
 /// Convert from one compression format to another

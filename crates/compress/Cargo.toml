@@ -14,6 +14,7 @@ zstd = ["dep:zstd", "async-compression?/zstd"]
 async = [
     "dep:async-compression",
     "dep:futures",
+    "dep:rawr-asyncutils",
     "async-compression/bzip2",
     "async-compression/gzip",
 ]
@@ -29,6 +30,7 @@ derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 flate2 = { workspace = true }
 futures = { workspace = true, optional = true }
+rawr-asyncutils = { path = "../asyncutils", optional = true }
 tracing = { workspace = true }
 xz2 = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }

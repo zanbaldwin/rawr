@@ -8,6 +8,8 @@
 //!       to resort to anyhow+thiserror just because I don't want to deal with it.
 
 use derive_more::{Display, Error};
+use rawr_extract::models::Version;
+use rawr_storage::file::{FileInfo, Processed};
 
 /// An import error with automatic location tracking via [`exn::Exn`].
 pub type Error = exn::Exn<ErrorKind>;
@@ -26,8 +28,15 @@ pub enum ErrorKind {
     Storage,
     /// The [`PathGenerator`](crate::PathGenerator) could not render a path.
     Template,
+    /// Metadata extraction via [`rawr_extract`] failed (not a valid AO3 HTML file).
+    Extract,
     /// Importing the file required organizing others out of the way.
     Organize,
+    /// The target path was occupied and the conflict could not be resolved.
+    /// Carries the would-have-been FileInfo and the Version that failed to import.
+    #[display("unresolvable conflict at target path")]
+    Conflict(#[error(not(source))] Box<(FileInfo<Processed>, Version)>),
+    Io,
 }
 
 impl ErrorKind {

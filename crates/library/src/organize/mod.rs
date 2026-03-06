@@ -13,7 +13,7 @@
 //! the resulting [`Action`]s from passing each discovered file to [`organize_file`]
 //! (accepting any [`HashState`](rawr_storage::file::HashState)).
 
-pub mod error;
+pub(crate) mod error;
 pub(crate) mod file;
 mod stream;
 

@@ -2690,6 +2690,7 @@ version = "0.1.0-beta"
 dependencies = [
  "async-stream",
  "blake3",
+ "crc32fast",
  "derive_more",
  "exn",
  "futures",

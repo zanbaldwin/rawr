@@ -14,7 +14,7 @@
 //!
 //! Bzip2 and Gzip are always available. Optional formats (Brotli, XZ, Zstd)
 //! are behind feature flags. Async counterparts require the `async` feature
-//! and use [`futures`](::futures::io) traits (not Tokio).
+//! and use `futures` traits (not Tokio).
 //!
 //! All compression uses the highest available level for each format,
 //! prioritizing storage space over speed.
@@ -29,8 +29,6 @@ mod ops;
 mod peekable;
 mod util;
 
-#[cfg(feature = "async")]
-pub use crate::futures::peekable::AsyncPeekableReader;
 pub use crate::peekable::PeekableReader;
 
 /// A supported compression format.

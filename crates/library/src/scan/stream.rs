@@ -130,6 +130,12 @@ fn scan_inner<'a>(
         let mut not_processing_yet = Vec::new();
         let mut processing = FuturesUnordered::new();
         loop {
+            // I really, REALLY, want to replace this with `futures::select_biased!`
+            // so I can completely remove Tokio as a dependency entirely, but I
+            // haven't figured out a good way to replicate those if-guards :(
+            // I think futures' "complete" arm is a close replacement, but it's
+            // just not the same.
+            // Plus Tokio's is compile-time whereas futures' is run-time.
             tokio::select! {
                 biased;
 

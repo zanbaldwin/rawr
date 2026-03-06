@@ -1,0 +1,15 @@
+[package]
+name = "rawr-asyncutils"
+description = "Because I'm an idiot that's decided to make my life more difficult"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+futures = { workspace = true }
+pin-project-lite = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

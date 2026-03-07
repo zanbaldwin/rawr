@@ -66,9 +66,21 @@ impl FromStr for Rating {
         })
     }
 }
-
 impl Display for Rating {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.as_str())
+    }
+}
+#[cfg(feature = "serde")]
+impl serde::Serialize for Rating {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_short_str())
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Rating {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = <&str>::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }

@@ -1,9 +1,8 @@
 use crate::Version;
 use crate::error::{Error, ErrorKind};
-use crate::models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy};
 use exn::ResultExt;
-use serde_json::{from_str as from_json, to_string as to_json};
 use rawr_extract::models as extract;
+use serde_json::{from_str as from_json, to_string as to_json};
 use time::UtcDateTime;
 
 #[derive(sqlx::FromRow)]
@@ -32,30 +31,25 @@ pub(crate) struct VersionRow {
 impl TryFrom<&Version> for VersionRow {
     type Error = Error;
     fn try_from(version: &Version) -> Result<Self, Self::Error> {
-        let authors = version.metadata.authors.iter().map(AuthorProxy::from).collect::<Vec<_>>();
-        let fandoms = version.metadata.fandoms.iter().map(FandomProxy::from).collect::<Vec<_>>();
-        let series = version.metadata.series.iter().map(SeriesPositionProxy::from).collect::<Vec<_>>();
-        let warnings = version.metadata.warnings.iter().map(WarningProxy::from).collect::<Vec<_>>();
-        let tags = version.metadata.tags.iter().map(TagProxy::from).collect::<Vec<_>>();
         Ok(Self {
             content_hash: version.hash.clone(),
             content_crc32: i64::from(version.crc32),
             work_id: i64::try_from(version.metadata.work_id).or_raise(|| ErrorKind::InvalidData("work id"))?,
             content_size: i64::try_from(version.length).or_raise(|| ErrorKind::InvalidData("content size"))?,
             title: version.metadata.title.clone(),
-            authors: to_json(&authors).or_raise(|| ErrorKind::InvalidData("authors"))?,
-            fandoms: to_json(&fandoms).or_raise(|| ErrorKind::InvalidData("fandoms"))?,
-            series: to_json(&series).or_raise(|| ErrorKind::InvalidData("series"))?,
+            authors: to_json(&version.metadata.authors).or_raise(|| ErrorKind::InvalidData("authors"))?,
+            fandoms: to_json(&version.metadata.fandoms).or_raise(|| ErrorKind::InvalidData("fandoms"))?,
+            series: to_json(&version.metadata.series).or_raise(|| ErrorKind::InvalidData("series"))?,
             chapters_written: i64::from(version.metadata.chapters.written),
             chapters_total: version.metadata.chapters.total.map(i64::from),
             words: i64::try_from(version.metadata.words).or_raise(|| ErrorKind::InvalidData("words"))?,
             summary: version.metadata.summary.as_ref().map(|s| s.to_string()),
             rating: version.metadata.rating.map(|r| r.as_short_str().to_string()),
-            warnings: to_json(&warnings).or_raise(|| ErrorKind::InvalidData("warnings"))?,
+            warnings: to_json(&version.metadata.warnings).or_raise(|| ErrorKind::InvalidData("warnings"))?,
             lang: version.metadata.language.name.clone(),
             published_on: version.metadata.published.midnight().as_utc().unix_timestamp(),
             last_modified: version.metadata.last_modified.midnight().as_utc().unix_timestamp(),
-            tags: to_json(&tags).or_raise(|| ErrorKind::InvalidData("tags"))?,
+            tags: to_json(&version.metadata.tags).or_raise(|| ErrorKind::InvalidData("tags"))?,
             extracted_at: version.extracted_at.unix_timestamp(),
         })
     }
@@ -70,21 +64,9 @@ impl TryFrom<VersionRow> for Version {
             metadata: extract::Metadata {
                 work_id: u64::try_from(row.work_id).or_raise(|| ErrorKind::InvalidData("work id"))?,
                 title: row.title,
-                authors: from_json::<Vec<AuthorProxy>>(&row.authors)
-                    .or_raise(|| ErrorKind::InvalidData("authors"))?
-                    .into_iter()
-                    .map(extract::Author::from)
-                    .collect::<Vec<_>>(),
-                fandoms: from_json::<Vec<FandomProxy>>(&row.fandoms)
-                    .or_raise(|| ErrorKind::InvalidData("fandoms"))?
-                    .into_iter()
-                    .map(extract::Fandom::from)
-                    .collect::<Vec<_>>(),
-                series: from_json::<Vec<SeriesPositionProxy>>(&row.series)
-                    .or_raise(|| ErrorKind::InvalidData("series"))?
-                    .into_iter()
-                    .map(extract::SeriesPosition::from)
-                    .collect::<Vec<_>>(),
+                authors: from_json(&row.authors).or_raise(|| ErrorKind::InvalidData("authors"))?,
+                fandoms: from_json(&row.fandoms).or_raise(|| ErrorKind::InvalidData("fandoms"))?,
+                series: from_json(&row.series).or_raise(|| ErrorKind::InvalidData("series"))?,
                 chapters: extract::Chapters::new(
                     u32::try_from(row.chapters_written).or_raise(|| ErrorKind::InvalidData("chapters written"))?,
                     row.chapters_total
@@ -96,16 +78,8 @@ impl TryFrom<VersionRow> for Version {
                     .rating
                     .map(|r| r.parse::<extract::Rating>().or_raise(|| ErrorKind::InvalidData("rating")))
                     .transpose()?,
-                warnings: from_json::<Vec<WarningProxy>>(&row.warnings)
-                    .or_raise(|| ErrorKind::InvalidData("warnings"))?
-                    .into_iter()
-                    .map(extract::Warning::from)
-                    .collect::<Vec<_>>(),
-                tags: from_json::<Vec<TagProxy>>(&row.tags)
-                    .or_raise(|| ErrorKind::InvalidData("tags"))?
-                    .into_iter()
-                    .map(extract::Tag::from)
-                    .collect::<Vec<_>>(),
+                warnings: from_json(&row.warnings).or_raise(|| ErrorKind::InvalidData("warnings"))?,
+                tags: from_json(&row.tags).or_raise(|| ErrorKind::InvalidData("tags"))?,
                 summary: row.summary,
                 // Infallible: Language accepts any string.
                 language: row.lang.parse::<extract::Language>().unwrap(),
@@ -136,7 +110,7 @@ mod tests {
             work_id: 12345,
             content_size: 1024,
             title: "Winnie the Pooh's Teatime Cookbook".to_string(),
-            authors: r#"[{"u":"aamilne82"}]"#.to_string(),
+            authors: r#"["aamilne82"]"#.to_string(),
             fandoms: r#"["Winnie-the-Pooh - A. A. Milne"]"#.to_string(),
             series: "[]".to_string(),
             chapters_written: 6,
@@ -148,7 +122,7 @@ mod tests {
             lang: "English".to_string(),
             published_on: 820450800,
             last_modified: 820450800,
-            tags: r#"[{"n":"Piglet (Winnie-the-Pooh)","k":"C"}]"#.to_string(),
+            tags: r#"[{"name":"Piglet (Winnie-the-Pooh)","kind":"Character"}]"#.to_string(),
             extracted_at: 1771177811,
         };
         let model = Version::try_from(row).unwrap();

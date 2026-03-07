@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 /// A tag applied to a work.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tag {
     /// Tag text
     pub name: String,
@@ -14,6 +15,7 @@ pub struct Tag {
 
 /// Tag type enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TagKind {
     /// Relationship tags (e.g., "Character A/Character B")
     Relationship,
@@ -47,5 +49,68 @@ impl FromStr for TagKind {
             "freeform" => Self::Freeform,
             _ => exn::bail!(ErrorKind::ParseError { field: "tag_kind", value: s.to_string() }),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use serde_json::{from_str as from_json, to_string as to_json};
+
+    #[rstest]
+    #[case(Tag{name: "Draco/Harry".to_string(), kind: TagKind::Relationship}, r#"{"name":"Draco/Harry","kind":"Relationship"}"#)]
+    #[case(Tag{name: "Draco Malfoy".to_string(), kind: TagKind::Character}, r#"{"name":"Draco Malfoy","kind":"Character"}"#)]
+    #[case(Tag{name: "Fluff".to_string(), kind: TagKind::Freeform}, r#"{"name":"Fluff","kind":"Freeform"}"#)]
+    fn test_tag_serialize(#[case] input: Tag, #[case] expected: impl AsRef<str>) {
+        let json = to_json(&input).unwrap();
+        assert_eq!(json.as_str(), expected.as_ref());
+    }
+
+    #[rstest]
+    #[case(Tag{name: "Draco/Harry".to_string(), kind: TagKind::Relationship}, r#"{"name":"Draco/Harry","kind":"Relationship"}"#)]
+    #[case(Tag{name: "Draco Malfoy".to_string(), kind: TagKind::Character}, r#"{"name":"Draco Malfoy","kind":"Character"}"#)]
+    #[case(Tag{name: "Fluff".to_string(), kind: TagKind::Freeform}, r#"{"name":"Fluff","kind":"Freeform"}"#)]
+    fn test_tag_deserialize(#[case] expected: Tag, #[case] input: impl AsRef<str>) {
+        let obj = from_json::<Tag>(input.as_ref()).unwrap();
+        assert_eq!(obj, expected);
+    }
+
+    #[test]
+    fn test_tag_vec_serialize() {
+        let input = vec![
+            Tag {
+                name: "Draco/Harry".to_string(),
+                kind: TagKind::Relationship,
+            },
+            Tag {
+                name: "Fluff".to_string(),
+                kind: TagKind::Freeform,
+            },
+        ];
+        let json = to_json(&input).unwrap();
+        assert_eq!(
+            json.as_str(),
+            r#"[{"name":"Draco/Harry","kind":"Relationship"},{"name":"Fluff","kind":"Freeform"}]"#
+        );
+    }
+
+    #[test]
+    fn test_tag_vec_deserialize() {
+        let expected = vec![
+            Tag {
+                name: "Draco/Harry".to_string(),
+                kind: TagKind::Relationship,
+            },
+            Tag {
+                name: "Fluff".to_string(),
+                kind: TagKind::Freeform,
+            },
+        ];
+        let obj = from_json::<Vec<Tag>>(
+            r#"[{"name":"Draco/Harry","kind":"Relationship"},{"name":"Fluff","kind":"Freeform"}]"#,
+        )
+        .unwrap();
+        assert_eq!(obj, expected);
     }
 }

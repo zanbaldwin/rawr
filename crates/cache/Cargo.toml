@@ -9,8 +9,8 @@ version.workspace = true
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
-facet = { workspace = true }
-facet-json = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 rawr-compress = { path = "../compress" }
 rawr-extract = { path = "../extract" }
 rawr-storage = { path = "../storage" }

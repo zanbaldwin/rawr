@@ -2,7 +2,7 @@ use crate::Version;
 use crate::error::{Error, ErrorKind};
 use crate::models::facet::{AuthorProxy, FandomProxy, SeriesPositionProxy, TagProxy, WarningProxy};
 use exn::ResultExt;
-use facet_json::{from_str as from_json, to_string as to_json};
+use serde_json::{from_str as from_json, to_string as to_json};
 use rawr_extract::models as extract;
 use time::UtcDateTime;
 

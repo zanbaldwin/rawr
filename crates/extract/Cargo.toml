@@ -9,6 +9,7 @@ version.workspace = true
 [features]
 default = ["markdown"]
 markdown = ["dep:fast_html2md"]
+serde = ["dep:serde"]
 
 [dependencies]
 blake3 = { workspace = true }
@@ -19,6 +20,7 @@ fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 html5ever = { workspace = true }
 memchr = { workspace = true }
 regex = { workspace = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 scraper = { workspace = true }
 tendril = { workspace = true }
 time = { workspace = true, features = ["formatting", "parsing"] }
@@ -26,3 +28,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

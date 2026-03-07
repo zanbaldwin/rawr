@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 /// Archive warning enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Warning {
     /// No Archive Warnings Apply
     NoWarningsApply,
@@ -64,5 +65,50 @@ impl TryFrom<String> for Warning {
 impl Display for Warning {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use serde_json::{from_str as from_json, to_string as to_json};
+
+    #[rstest]
+    #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
+    #[case(Warning::CreatorChoseNotToUse, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
+    #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
+    #[case(Warning::Underage, r#""Underage""#)]
+    #[case(Warning::NonCon, r#""NonCon""#)]
+    fn test_warning_serialize(#[case] input: Warning, #[case] expected: impl AsRef<str>) {
+        let json = to_json(&input).unwrap();
+        assert_eq!(json.as_str(), expected.as_ref());
+    }
+
+    #[rstest]
+    #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
+    #[case(Warning::CreatorChoseNotToUse, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
+    #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
+    #[case(Warning::Underage, r#""Underage""#)]
+    #[case(Warning::NonCon, r#""NonCon""#)]
+    fn test_warning_deserialize(#[case] expected: Warning, #[case] input: impl AsRef<str>) {
+        let obj = from_json::<Warning>(input.as_ref()).unwrap();
+        assert_eq!(obj, expected);
+    }
+
+    #[test]
+    fn test_warning_vec_serialize() {
+        let input = vec![Warning::GraphicViolence, Warning::MajorCharacterDeath];
+        let json = to_json(&input).unwrap();
+        assert_eq!(json.as_str(), r#"["GraphicViolence","MajorCharacterDeath"]"#);
+    }
+
+    #[test]
+    fn test_warning_vec_deserialize() {
+        let expected = vec![Warning::GraphicViolence, Warning::MajorCharacterDeath];
+        let obj = from_json::<Vec<Warning>>(r#"["GraphicViolence","MajorCharacterDeath"]"#).unwrap();
+        assert_eq!(obj, expected);
     }
 }

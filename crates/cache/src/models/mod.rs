@@ -1,4 +1,3 @@
-mod facet;
 mod file;
 mod join;
 mod version;

@@ -1,11 +1,11 @@
 use rawr_extract::models as extract;
 
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) struct AuthorProxy {
-    #[facet(rename = "u")]
+    #[serde(rename = "u")]
     username: String,
-    #[facet(rename = "p", default, transparent, skip_serializing_if = Option::is_none)]
+    #[serde(rename = "p", default, skip_serializing_if = "Option::is_none")]
     pseudonym: Option<String>,
 }
 impl From<&extract::Author> for AuthorProxy {
@@ -25,9 +25,9 @@ impl From<AuthorProxy> for extract::Author {
     }
 }
 
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
-#[facet(transparent)]
+#[serde(transparent)]
 pub(crate) struct FandomProxy(String);
 impl From<&extract::Fandom> for FandomProxy {
     fn from(fandom: &extract::Fandom) -> Self {
@@ -40,12 +40,12 @@ impl From<FandomProxy> for extract::Fandom {
     }
 }
 
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) struct SeriesPositionProxy {
     pub id: u64,
     pub name: String,
-    #[facet(rename = "pos")]
+    #[serde(rename = "pos")]
     pub position: u32,
 }
 impl From<&extract::SeriesPosition> for SeriesPositionProxy {
@@ -67,12 +67,12 @@ impl From<SeriesPositionProxy> for extract::SeriesPosition {
     }
 }
 
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) struct TagProxy {
-    #[facet(rename = "n")]
+    #[serde(rename = "n")]
     name: String,
-    #[facet(rename = "k")]
+    #[serde(rename = "k")]
     kind: TagKindProxy,
 }
 impl From<&extract::Tag> for TagProxy {
@@ -90,7 +90,7 @@ impl From<TagProxy> for extract::Tag {
 }
 
 #[repr(u8)]
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) enum TagKindProxy {
     R,
@@ -117,7 +117,7 @@ impl From<TagKindProxy> for extract::TagKind {
 }
 
 #[repr(u8)]
-#[derive(facet::Facet)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) enum WarningProxy {
     NoWarningsApply,
@@ -155,7 +155,7 @@ impl From<WarningProxy> for extract::Warning {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use facet_json::{from_str as from_json, to_string as to_json};
+    use serde_json::{from_str as from_json, to_string as to_json};
     use rstest::rstest;
 
     #[rstest]

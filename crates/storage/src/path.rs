@@ -14,11 +14,6 @@ use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
-// Internal boundary-conversation helper trait. Probably shouldn't
-// use this, and just be specific with my conversions.
-pub(crate) trait TryValidatePath: TryInto<ValidatedPath, Error = Error> {}
-impl<T: TryInto<ValidatedPath, Error = Error>> TryValidatePath for T {}
-
 /// Validates a storage path for security and correctness.
 /// Ensures that paths don't escape the storage root (no `..` traversal).
 ///
@@ -48,7 +43,7 @@ impl<T: TryInto<ValidatedPath, Error = Error>> TryValidatePath for T {}
 ///     "correct/path.html"
 /// );
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedPath(String);
 impl Deref for ValidatedPath {
     type Target = String;
@@ -74,68 +69,67 @@ impl ValidatedPath {
                     // Null bytes pass through Path::components() on Unix but cause
                     // truncation in C-based syscalls — reject them explicitly.
                     if s.as_encoded_bytes().contains(&0) {
-                        exn::bail!(ErrorKind::InvalidPath(path.to_path_buf()));
+                        exn::bail!(ErrorKind::InvalidPath(path.display().to_string()));
                     }
-                    components.push(s.to_str().ok_or_raise(|| ErrorKind::InvalidPath(path.to_path_buf()))?)
+                    components.push(s.to_str().ok_or_raise(|| ErrorKind::InvalidPath(path.display().to_string()))?)
                 },
                 Component::CurDir | Component::RootDir => {},
                 // Yeah, fuck off Windows.
-                Component::Prefix(_) => exn::bail!(ErrorKind::InvalidPath(path.to_path_buf())),
+                Component::Prefix(_) => exn::bail!(ErrorKind::InvalidPath(path.display().to_string())),
                 Component::ParentDir => {
                     if components.pop().is_none() {
-                        exn::bail!(ErrorKind::InvalidPath(path.to_path_buf()));
+                        exn::bail!(ErrorKind::InvalidPath(path.display().to_string()));
                     }
                 },
             }
         }
         if components.is_empty() {
-            exn::bail!(ErrorKind::InvalidPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::InvalidPath(path.display().to_string()));
         }
         Ok(Self(components.join("/")))
     }
 
-    pub fn to_path_buf(&self) -> PathBuf {
-        PathBuf::from(self.deref())
-    }
-}
-impl AsRef<Path> for ValidatedPath {
-    fn as_ref(&self) -> &Path {
+    /// Reference to Validated Path as `std` Path
+    ///
+    /// Can't implement `AsRef<Path>` for ValidatedPath (breaks the blanket
+    /// impl), so this is the compromise.
+    pub fn as_path(&self) -> &Path {
         Path::new(self.deref())
     }
 }
-impl AsRef<str> for ValidatedPath {
-    fn as_ref(&self) -> &str {
-        self.deref()
+
+pub trait TryValidatePath {
+    fn try_validate(self) -> Result<ValidatedPath>;
+}
+impl<T: AsRef<Path>> TryValidatePath for T {
+    fn try_validate(self) -> Result<ValidatedPath> {
+        ValidatedPath::new(self)
     }
 }
-impl TryFrom<&Path> for ValidatedPath {
-    type Error = Error;
-    fn try_from(value: &Path) -> std::result::Result<Self, Self::Error> {
-        Self::new(value)
+/// Zero-allocation passing of already validated paths.
+impl TryValidatePath for ValidatedPath {
+    fn try_validate(self) -> Result<ValidatedPath> {
+        Ok(self)
     }
 }
-impl TryFrom<PathBuf> for ValidatedPath {
-    type Error = Error;
-    fn try_from(value: PathBuf) -> std::result::Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-impl TryFrom<&str> for ValidatedPath {
-    type Error = Error;
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-impl TryFrom<String> for ValidatedPath {
-    type Error = Error;
-    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
-        Self::new(value)
+impl TryValidatePath for &ValidatedPath {
+    fn try_validate(self) -> Result<ValidatedPath> {
+        Ok(self.clone())
     }
 }
 impl FromStr for ValidatedPath {
     type Err = Error;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Self::new(s)
+        s.try_validate()
+    }
+}
+// TODO: impl<T> TryFrom<T> for ValidatedPath where T: TryValidatePath {}
+//       But it would require to not implement TryValidatePath for ValidatedPath,
+//       which I want for zero-allocation passing of already validated paths.
+
+impl AsRef<str> for ValidatedPath {
+    fn as_ref(&self) -> &str {
+        self.deref().as_ref()
     }
 }
 impl From<ValidatedPath> for String {
@@ -146,6 +140,12 @@ impl From<ValidatedPath> for String {
 impl From<ValidatedPath> for PathBuf {
     fn from(value: ValidatedPath) -> Self {
         PathBuf::from(value.0)
+    }
+}
+
+impl PartialEq<str> for ValidatedPath {
+    fn eq(&self, other: &str) -> bool {
+        self.deref() == other
     }
 }
 

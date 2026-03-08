@@ -1,9 +1,8 @@
 use crate::File;
 use crate::error::{Error, ErrorKind};
-use exn::{OptionExt, ResultExt};
+use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_storage::file as storage;
-use std::path::PathBuf;
 use time::UtcDateTime;
 
 #[derive(sqlx::FromRow)]
@@ -21,7 +20,7 @@ impl TryFrom<&File> for FileRow {
     fn try_from(file: &File) -> Result<Self, Self::Error> {
         Ok(Self {
             target: file.target.clone(),
-            path: file.path.to_str().ok_or_raise(|| ErrorKind::InvalidData("path"))?.to_string(),
+            path: file.path.to_string(),
             compression: file.compression.to_string(),
             file_size: i64::try_from(file.size).or_raise(|| ErrorKind::InvalidData("file size"))?,
             file_hash: file.file_hash.clone(),
@@ -35,12 +34,13 @@ impl TryFrom<FileRow> for File {
     fn try_from(row: FileRow) -> Result<Self, Self::Error> {
         let meta = storage::FileMeta::new(
             row.target,
-            PathBuf::from(row.path),
+            row.path,
             row.compression.parse::<Compression>().or_raise(|| ErrorKind::InvalidData("compression format"))?,
             u64::try_from(row.file_size).or_raise(|| ErrorKind::InvalidData("file size"))?,
             UtcDateTime::from_unix_timestamp(row.discovered_at)
                 .or_raise(|| ErrorKind::InvalidData("discovery date"))?,
-        );
+        )
+        .or_raise(|| ErrorKind::InvalidData("path"))?;
         Ok(meta.with_file_hash(row.file_hash).with_content_hash(row.content_hash))
     }
 }
@@ -72,11 +72,12 @@ mod tests {
     fn test_model_to_row() {
         let model = FileInfo::new(
             "local".to_string(),
-            PathBuf::from("winnie-the-pooh/12345-teatime-cookbook.html.gz"),
+            "winnie-the-pooh/12345-teatime-cookbook.html.gz",
             1024,
             UtcDateTime::now(),
             Compression::Gzip,
         )
+        .expect("path to be valid")
         .with_file_hash("6f1b17063da8508541eb76dac260748a2d815c2c88b27cefb6205c90ae16fef5")
         .with_content_hash("692ed948ccd76c2230efe90175a519a3092b1862ab049704b7221738e56028ca");
         let row = FileRow::try_from(&model).unwrap();

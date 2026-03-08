@@ -8,7 +8,7 @@ use crate::error::{ErrorKind, Result};
 use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
 use crate::{Database, File, Version};
 use exn::ResultExt;
-use rawr_storage::ValidatedPath;
+use rawr_storage::{TryValidatePath, ValidatedPath};
 use sqlx::SqlitePool;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ impl Repository {
     /// match the version's content hash.
     #[instrument(skip_all, fields(
         target = file.target,
-        path = %file.path.display(),
+        path = %file.path,
         file_hash = file.file_hash,
         content_hash = version.hash,
         work_id = version.metadata.work_id,
@@ -165,11 +165,12 @@ impl Repository {
     pub async fn get_by_target_path(
         &self,
         target: impl AsRef<str>,
-        path: impl AsRef<Path>,
+        path: impl TryValidatePath,
     ) -> Result<Option<FileResult>> {
+        let path = path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
         let row: Option<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_target_path.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path)?)
+            .bind(path.as_str())
             .fetch_optional(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -177,9 +178,10 @@ impl Repository {
     }
 
     /// Look up all file records matching a relative path, regardless of target.
-    pub async fn get_by_path_across_targets(&self, path: impl AsRef<Path>) -> Result<Vec<FileResult>> {
+    pub async fn get_by_path_across_targets(&self, path: impl TryValidatePath) -> Result<Vec<FileResult>> {
+        let path = path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
         let row: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/get_by_path_across_targets.sql"))
-            .bind(Self::sqlx_hates_paths(path)?)
+            .bind(Self::sqlx_hates_paths(path.as_str())?)
             .fetch_all(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -385,16 +387,18 @@ impl Repository {
     pub async fn update_target_path(
         &self,
         target: impl AsRef<str>,
-        old_path: impl AsRef<Path>,
-        new_path: impl AsRef<Path>,
+        old_path: impl TryValidatePath,
+        new_path: impl TryValidatePath,
     ) -> Result<bool> {
+        let old_path = old_path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
+        let new_path = new_path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
         if self.dry_run {
             return Ok(true);
         }
         let result = sqlx::query(include_str!("../queries/update_target_path.sql"))
-            .bind(Self::sqlx_hates_paths(new_path)?)
+            .bind(Self::sqlx_hates_paths(new_path.as_str())?)
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(old_path)?)
+            .bind(Self::sqlx_hates_paths(old_path.as_str())?)
             .execute(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -419,7 +423,7 @@ impl Repository {
     pub async fn exists(
         &self,
         target: impl AsRef<str>,
-        path: impl AsRef<Path>,
+        path: impl TryValidatePath,
         file_hash: impl AsRef<str>,
     ) -> Result<ExistenceResult> {
         if let Some((file, version)) = self.get_by_target_path(target, path).await? {
@@ -436,10 +440,11 @@ impl Repository {
 
     /// Check if a file record exists at the given target and path, without
     /// fetching the full row.
-    pub async fn target_path_exists(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
+    pub async fn target_path_exists(&self, target: impl AsRef<str>, path: impl TryValidatePath) -> Result<bool> {
+        let path = path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
         let row: (i64,) = sqlx::query_as(include_str!("../queries/target_path_exists.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path)?)
+            .bind(path.as_str())
             .fetch_one(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -571,14 +576,16 @@ impl Repository {
     /// up orphans if `retain_deleted_versions` is not enabled.
     ///
     /// Returns `true` if a record was deleted, `false` if the path was not found.
-    #[instrument(skip_all, fields(target = target.as_ref(), path = %path.as_ref().display()))]
-    pub async fn delete_by_target_path(&self, target: impl AsRef<str>, path: impl AsRef<Path>) -> Result<bool> {
+    #[instrument(skip_all, fields(target = target.as_ref(), path))]
+    pub async fn delete_by_target_path(&self, target: impl AsRef<str>, path: impl TryValidatePath) -> Result<bool> {
+        let path = path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
+        tracing::Span::current().record("path", path.as_str());
         if self.dry_run {
             return Ok(true);
         }
         let result = sqlx::query(include_str!("../queries/delete_by_target_path.sql"))
             .bind(target.as_ref())
-            .bind(Self::sqlx_hates_paths(path)?)
+            .bind(Self::sqlx_hates_paths(path.as_str())?)
             .execute(&self.pool)
             .await
             .or_raise(|| ErrorKind::Database)?;
@@ -740,6 +747,7 @@ mod tests {
 
     fn make_test_file(path: &str, content_hash: &str) -> File {
         FileMeta::new(DEFAULT_TARGET, path, Compression::Bzip2, 123, UtcDateTime::now())
+            .unwrap()
             .with_file_hash("file_hash_123")
             .with_content_hash(content_hash)
     }

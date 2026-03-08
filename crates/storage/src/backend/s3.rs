@@ -9,7 +9,7 @@
 //! Credentials are provided explicitly via the configuration file. Each
 //! target specifies its own `key_id` and `key_secret`.
 
-use super::opendal_util::map_opendal_error;
+use super::map_opendal_error;
 use crate::backend::OperatorAware;
 use crate::error::{ErrorKind, Result};
 use crate::{StorageBackend, ValidatedPath};
@@ -18,7 +18,6 @@ use futures::{AsyncWriteExt, io::copy as async_copy};
 use opendal::Operator;
 use opendal::layers::{ConcurrentLimitLayer, RetryLayer};
 use opendal::services::S3;
-use std::path::Path;
 
 /// S3-compatible storage backend.
 ///
@@ -103,31 +102,29 @@ impl StorageBackend for S3Backend {
         &self.name
     }
 
-    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        let validated_from = ValidatedPath::new(from)?;
-        let validated_to = ValidatedPath::new(to)?;
+    async fn rename(&self, from: &ValidatedPath, to: &ValidatedPath) -> Result<()> {
         // S3 doesn't support rename natively. OpenDAL may implement it via
         // copy+delete, or we may need to do it ourselves.
-        match self.operator.rename(validated_from.as_str(), validated_to.as_str()).await {
+        match self.operator.rename(from.as_str(), to.as_str()).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == opendal::ErrorKind::Unsupported => {
                 // Fallback: copy then delete (same approach as prior aws-sdk-s3 impl)
                 if !self.exists(from).await? {
-                    exn::bail!(ErrorKind::NotFound(from.to_path_buf()));
+                    exn::bail!(ErrorKind::NotFound(from.to_string()));
                 }
                 let mut reader = self.reader(from).await?;
                 let mut writer = self.writer(to).await?;
                 async_copy(&mut reader, &mut writer).await.map_err(ErrorKind::Io)?;
                 writer.close().await.map_err(ErrorKind::Io)?;
-                if let Err(e) = self.operator.delete(validated_from.as_str()).await {
+                if let Err(e) = self.operator.delete(from.as_str()).await {
                     tracing::warn!(
-                        source = %from.display(), target = %to.display(), error = %e,
+                        source = %from, target = %to, error = %e,
                         "S3 rename: copy succeeded but delete failed, file may be duplicated"
                     );
                 }
                 Ok(())
             },
-            Err(e) => Err(map_opendal_error(e, from).into()),
+            Err(e) => Err(map_opendal_error(e, from.to_string()).into()),
         }
     }
 }

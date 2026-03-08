@@ -51,6 +51,10 @@ use time::UtcDateTime;
 // This requires me to back back to implementing AsyncRead/Write on the storage
 // backend. I gave up on that once already, let's go for round two!
 
+// UPDATE: We've got Readers! We've got Writers! We've got OpenDAL and first-class
+// ValidatedPath struct! Only thing left is to swap out Paths for Validated Path
+// and the whole "temp_path is a string" will get resolved and this module is ready!
+
 pub enum Import {
     Imported(FileInfo<Processed>, Version),
     AlreadyExists(FileInfo<Processed>, Version),
@@ -64,12 +68,10 @@ pub async fn import_file<R: AsyncRead + Unpin>(
     source_compression: Compression,
     data: R,
 ) -> LibraryResult<Import> {
-    import_file_inner_if_storage_had_async_traits(backend, cache, ctx, source_compression, data)
-        .await
-        .or_raise(|| LibraryErrorKind::Import)
+    import_file_inner(backend, cache, ctx, source_compression, data).await.or_raise(|| LibraryErrorKind::Import)
 }
 
-async fn import_file_inner_if_storage_had_async_traits<R: AsyncRead + Unpin>(
+async fn import_file_inner<R: AsyncRead + Unpin>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
@@ -151,6 +153,7 @@ async fn import_file_inner_if_storage_had_async_traits<R: AsyncRead + Unpin>(
     };
     // 8. Build FileInfo<Processed> with computed hashes.
     let mut file_info = FileInfo::new(backend.name(), temp_path, *file_size.lock().unwrap(), now, target_compression)
+        .or_raise(|| ErrorKind::Storage)?
         .with_file_hash(file_hasher.lock().unwrap().finalize().to_string())
         .with_content_hash(&version.hash);
 
@@ -184,10 +187,3 @@ async fn import_file_inner_if_storage_had_async_traits<R: AsyncRead + Unpin>(
     let is_outdated = pre_import_best.as_ref().is_some_and(|(best_version, _)| version < *best_version);
     if is_outdated { Ok(Import::Outdated(file_info, version)) } else { Ok(Import::Imported(file_info, version)) }
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Hypothetical StorageBackend streaming methods
-// ──────────────────────────────────────────────────────────────────────────────
-//
-// async fn reader(&self, path: &Path) -> Result<Box<dyn AsyncRead + Unpin + Send + 'static>>;
-// async fn writer(&self, path: &Path) -> Result<Box<dyn AsyncWrite + Unpin + Send + 'static>>;

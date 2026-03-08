@@ -48,24 +48,24 @@ impl LocalBackend {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(name: impl Into<String>, root: impl AsRef<Path>, auto_create: bool) -> Result<Self> {
-        let root = root.as_ref().to_path_buf();
-        if !root.is_absolute() {
-            exn::bail!(ErrorKind::InvalidPath(root));
+    pub fn new(name: impl Into<String>, root: impl AsRef<str>, auto_create: bool) -> Result<Self> {
+        let root_str = root.as_ref();
+        let root_path = Path::new(root_str);
+        if !root_path.is_absolute() {
+            exn::bail!(ErrorKind::InvalidPath(root_str.to_string()));
         }
-        if root.exists() {
-            if !root.is_dir() {
-                exn::bail!(ErrorKind::InvalidPath(root));
+        if root_path.exists() {
+            if !root_path.is_dir() {
+                exn::bail!(ErrorKind::InvalidPath(root_str.to_string()));
             }
         } else if auto_create {
             // Use non-async here; it'll only happen once on library initialization
             // and it's not worth the hassle of making the constructor async.
-            sync_create_dir(&root).map_err(ErrorKind::Io)?;
+            sync_create_dir(&root_path).map_err(ErrorKind::Io)?;
         } else {
-            exn::bail!(ErrorKind::PermissionDenied(root));
+            exn::bail!(ErrorKind::PermissionDenied(root_str.to_string()));
         }
 
-        let root_str = root.to_str().ok_or_else(|| ErrorKind::InvalidPath(root.clone()))?;
         let builder = Fs::default().root(root_str);
         let operator = Operator::new(builder)
             .map_err(|e| ErrorKind::BackendError(e.to_string()))?
@@ -90,17 +90,16 @@ impl StorageBackend for LocalBackend {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::ValidatedPath;
     use crate::error::ErrorKind;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
     use rawr_compress::Compression;
-    use std::path::PathBuf;
-
-    use super::*;
 
     #[test]
     fn test_new_requires_absolute_path() {
         let temp_dir = tempfile::tempdir().unwrap();
-        assert!(LocalBackend::new("name", temp_dir.path(), false).is_ok());
+        assert!(LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).is_ok());
         assert!(LocalBackend::new("name", "relative/path", false).is_err());
         assert!(LocalBackend::new("name", "./relative", false).is_err());
     }
@@ -108,66 +107,66 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let data = b"Hello, world!";
-        backend.write(Path::new("test.txt"), data).await.unwrap();
-        let read_data = backend.read(Path::new("test.txt")).await.unwrap();
+        backend.write(&ValidatedPath::new("test.txt").unwrap(), data).await.unwrap();
+        let read_data = backend.read(&ValidatedPath::new("test.txt").unwrap()).await.unwrap();
         assert_eq!(read_data, data);
     }
 
     #[tokio::test]
     async fn test_prefix() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let data = b"Hello, world!";
-        backend.write(Path::new("FandomA/Sub/file.html"), data).await.unwrap();
-        backend.write(Path::new("FandomA/Subdir/file.html"), data).await.unwrap();
-        backend.write(Path::new("FandomA/Subfile.html"), data).await.unwrap();
-        let mut files = backend.list(Some(Path::new("FandomA/Sub"))).await.unwrap();
+        backend.write(&ValidatedPath::new("FandomA/Sub/file.html").unwrap(), data).await.unwrap();
+        backend.write(&ValidatedPath::new("FandomA/Subdir/file.html").unwrap(), data).await.unwrap();
+        backend.write(&ValidatedPath::new("FandomA/Subfile.html").unwrap(), data).await.unwrap();
+        let mut files = backend.list(Some(&ValidatedPath::new("FandomA/Sub").unwrap())).await.unwrap();
         assert_eq!(files.len(), 1);
-        assert_eq!(files.pop().unwrap().path, Path::new("FandomA/Sub/file.html"));
+        assert_eq!(&files.pop().unwrap().path, "FandomA/Sub/file.html");
     }
 
     #[tokio::test]
     async fn test_write_creates_directories() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("a/b/c/file.txt"), b"data").await.unwrap();
-        assert!(backend.exists(Path::new("a/b/c/file.txt")).await.unwrap());
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("a/b/c/file.txt").unwrap(), b"data").await.unwrap();
+        assert!(backend.exists(&ValidatedPath::new("a/b/c/file.txt").unwrap()).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_exists() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        assert!(!backend.exists(Path::new("nonexistent.txt")).await.unwrap());
-        backend.write(Path::new("exists.txt"), b"data").await.unwrap();
-        assert!(backend.exists(Path::new("exists.txt")).await.unwrap());
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        assert!(!backend.exists(&ValidatedPath::new("nonexistent.txt").unwrap()).await.unwrap());
+        backend.write(&ValidatedPath::new("exists.txt").unwrap(), b"data").await.unwrap();
+        assert!(backend.exists(&ValidatedPath::new("exists.txt").unwrap()).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_read_head() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let data = b"0123456789ABCDEF";
-        backend.write(Path::new("file.txt"), data).await.unwrap();
-        let head = backend.read_head(Path::new("file.txt"), 5).await.unwrap();
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), data).await.unwrap();
+        let head = backend.read_head(&ValidatedPath::new("file.txt").unwrap(), 5).await.unwrap();
         assert_eq!(head, b"01234");
         // Reading more bytes than file size returns entire file
-        let all = backend.read_head(Path::new("file.txt"), 100).await.unwrap();
+        let all = backend.read_head(&ValidatedPath::new("file.txt").unwrap(), 100).await.unwrap();
         assert_eq!(all, data);
     }
 
     #[tokio::test]
     async fn test_delete() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("file.txt"), b"data").await.unwrap();
-        assert!(backend.exists(Path::new("file.txt")).await.unwrap());
-        backend.delete(Path::new("file.txt")).await.unwrap();
-        assert!(!backend.exists(Path::new("file.txt")).await.unwrap());
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), b"data").await.unwrap();
+        assert!(backend.exists(&ValidatedPath::new("file.txt").unwrap()).await.unwrap());
+        backend.delete(&ValidatedPath::new("file.txt").unwrap()).await.unwrap();
+        assert!(!backend.exists(&ValidatedPath::new("file.txt").unwrap()).await.unwrap());
         // Deleting nonexistent file returns error
-        let result = backend.delete(Path::new("nonexistent.txt")).await;
+        let result = backend.delete(&ValidatedPath::new("nonexistent.txt").unwrap()).await;
         let err = result.unwrap_err();
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
     }
@@ -175,32 +174,38 @@ mod tests {
     #[tokio::test]
     async fn test_rename() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("old.txt"), b"data").await.unwrap();
-        backend.rename(Path::new("old.txt"), Path::new("new.txt")).await.unwrap();
-        assert!(!backend.exists(Path::new("old.txt")).await.unwrap());
-        assert!(backend.exists(Path::new("new.txt")).await.unwrap());
-        let data = backend.read(Path::new("new.txt")).await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("old.txt").unwrap(), b"data").await.unwrap();
+        backend
+            .rename(&ValidatedPath::new("old.txt").unwrap(), &ValidatedPath::new("new.txt").unwrap())
+            .await
+            .unwrap();
+        assert!(!backend.exists(&ValidatedPath::new("old.txt").unwrap()).await.unwrap());
+        assert!(backend.exists(&ValidatedPath::new("new.txt").unwrap()).await.unwrap());
+        let data = backend.read(&ValidatedPath::new("new.txt").unwrap()).await.unwrap();
         assert_eq!(data, b"data");
     }
 
     #[tokio::test]
     async fn test_rename_creates_directories() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("file.txt"), b"data").await.unwrap();
-        backend.rename(Path::new("file.txt"), Path::new("a/b/c/file.txt")).await.unwrap();
-        assert!(backend.exists(Path::new("a/b/c/file.txt")).await.unwrap());
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), b"data").await.unwrap();
+        backend
+            .rename(&ValidatedPath::new("file.txt").unwrap(), &ValidatedPath::new("a/b/c/file.txt").unwrap())
+            .await
+            .unwrap();
+        assert!(backend.exists(&ValidatedPath::new("a/b/c/file.txt").unwrap()).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_stat() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let data = b"Hello, world!";
-        backend.write(Path::new("file.txt"), data).await.unwrap();
-        let info = backend.stat(Path::new("file.txt")).await.unwrap();
-        assert_eq!(info.path, PathBuf::from("file.txt"));
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), data).await.unwrap();
+        let info = backend.stat(&ValidatedPath::new("file.txt").unwrap()).await.unwrap();
+        assert_eq!(&info.path, "file.txt");
         assert_eq!(info.size, data.len() as u64);
         assert_eq!(info.compression, Compression::None);
         assert_eq!(info.file_hash, ());
@@ -209,7 +214,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_empty_directory() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 0);
     }
@@ -217,11 +222,11 @@ mod tests {
     #[tokio::test]
     async fn test_list_returns_all_files() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("file.html"), b"data").await.unwrap();
-        backend.write(Path::new("file.html.bz2"), b"data").await.unwrap();
-        backend.write(Path::new("file.txt"), b"data").await.unwrap();
-        backend.write(Path::new("README.md"), b"data").await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("file.html").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidatedPath::new("file.html.bz2").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidatedPath::new("README.md").unwrap(), b"data").await.unwrap();
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 4);
     }
@@ -229,44 +234,33 @@ mod tests {
     #[tokio::test]
     async fn test_list_with_prefix() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("Fandom1/work1.html.bz2"), b"data").await.unwrap();
-        backend.write(Path::new("Fandom1/work2.html.bz2"), b"data").await.unwrap();
-        backend.write(Path::new("Fandom2/work3.html.bz2"), b"data").await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("Fandom1/work1.html.bz2").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidatedPath::new("Fandom1/work2.html.bz2").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidatedPath::new("Fandom2/work3.html.bz2").unwrap(), b"data").await.unwrap();
         let all_files = backend.list(None).await.unwrap();
         assert_eq!(all_files.len(), 3);
-        let fandom1_files = backend.list(Some(Path::new("Fandom1/"))).await.unwrap();
+        let fandom1_files = backend.list(Some(&ValidatedPath::new("Fandom1/").unwrap())).await.unwrap();
         assert_eq!(fandom1_files.len(), 2);
-        let paths: Vec<_> = fandom1_files.iter().map(|f| &f.path).collect();
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work1.html.bz2")));
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work2.html.bz2")));
+        let paths: Vec<_> = fandom1_files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"Fandom1/work1.html.bz2"));
+        assert!(paths.contains(&"Fandom1/work2.html.bz2"));
     }
 
     #[tokio::test]
     async fn test_list_nonexistent_prefix() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        let files = backend.list(Some(Path::new("nonexistent/"))).await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        let files = backend.list(Some(&ValidatedPath::new("nonexistent/").unwrap())).await.unwrap();
         assert_eq!(files.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_path_security() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        // Attempts to escape the root should fail
-        assert!(backend.read(Path::new("../etc/passwd")).await.is_err());
-        assert!(backend.read(Path::new("etc/../../passwd")).await.is_err());
-        assert!(backend.write(Path::new("../etc/passwd"), b"data").await.is_err());
-        assert!(backend.delete(Path::new("../../file")).await.is_err());
     }
 
     #[tokio::test]
     async fn test_reader() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        backend.write(Path::new("file.txt"), b"hello world").await.unwrap();
-        let mut reader = backend.reader(Path::new("file.txt")).await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        backend.write(&ValidatedPath::new("file.txt").unwrap(), b"hello world").await.unwrap();
+        let mut reader = backend.reader(&ValidatedPath::new("file.txt").unwrap()).await.unwrap();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).await.unwrap();
         assert_eq!(buf, b"hello world");
@@ -275,8 +269,8 @@ mod tests {
     #[tokio::test]
     async fn test_reader_not_found() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        let Err(err) = backend.reader(Path::new("missing.txt")).await else {
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        let Err(err) = backend.reader(&ValidatedPath::new("missing.txt").unwrap()).await else {
             panic!("expected NotFound error");
         };
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
@@ -285,12 +279,12 @@ mod tests {
     #[tokio::test]
     async fn test_writer() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path(), false).unwrap();
-        let mut writer = backend.writer(Path::new("file.txt")).await.unwrap();
+        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
+        let mut writer = backend.writer(&ValidatedPath::new("file.txt").unwrap()).await.unwrap();
         writer.write_all(b"hello ").await.unwrap();
         writer.write_all(b"world").await.unwrap();
         writer.close().await.unwrap();
-        let data = backend.read(Path::new("file.txt")).await.unwrap();
+        let data = backend.read(&ValidatedPath::new("file.txt").unwrap()).await.unwrap();
         assert_eq!(data, b"hello world");
     }
 }

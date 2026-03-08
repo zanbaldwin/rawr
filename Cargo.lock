@@ -2183,6 +2183,7 @@ dependencies = [
  "derive_more",
  "exn",
  "futures",
+ "rawr-asyncutils",
  "rawr-cache",
  "rawr-compress",
  "rawr-extract",

@@ -7,12 +7,11 @@ use crate::scan::{Scan, file::scan_file_inner};
 use exn::ResultExt;
 use rawr_cache::Repository;
 use rawr_compress::Compression;
-use rawr_storage::BackendHandle;
 use rawr_storage::error::ErrorKind as StorageErrorKind;
 use rawr_storage::file::{FileInfo, HashState};
+use rawr_storage::{BackendHandle, ValidPath};
 use std::io::{self, Cursor};
 use std::ops::Deref;
-use std::path::PathBuf;
 
 /// The outcome of (successfully) organizing a single file.
 ///
@@ -21,12 +20,12 @@ use std::path::PathBuf;
 /// to log, report progress, or take further action.
 pub enum Action {
     /// File was moved (and optionally re-compressed) to the correct path.
-    Renamed(PathBuf),
+    Renamed(String),
     /// File was already at the correct path; no work performed.
-    AlreadyCorrect(PathBuf),
+    AlreadyCorrect(String),
     /// File no longer exists on disk (or a duplicate already existed in the
     /// location it was going to be moved to); its record was cleaned up.
-    CleanedUp(PathBuf),
+    CleanedUp(String),
 }
 
 /// Moves a single file to its intended, template-derived location, handling
@@ -65,20 +64,20 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     cache: &Repository,
     ctx: &Context,
     file: FileInfo<S>,
-    depth: Vec<PathBuf>,
+    depth: Vec<ValidPath>,
 ) -> OrganizeResult<Action> {
     if file.target != backend.name() {
         exn::bail!(OrganizeErrorKind::Storage);
     }
 
-    if !backend.exists(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)? {
+    if !backend.exists(file.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)? {
         cache.delete_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)?;
-        return Ok(Action::CleanedUp(file.path.clone()));
+        return Ok(Action::CleanedUp(file.path.to_string()));
     }
 
     let file_path = file.path.clone();
     let (file, version) =
-        match cache.get_by_target_path(&file.target, &file.path).await.or_raise(|| OrganizeErrorKind::Cache)? {
+        match cache.get_by_target_path(&file.target, &file_path).await.or_raise(|| OrganizeErrorKind::Cache)? {
             Some(r) => r,
             // File not in cache, we need to scan it first to get the metadata for
             // path generation. This is NOT the intended use-case (organizing files
@@ -88,8 +87,8 @@ pub(crate) async fn organize_file_inner<S: HashState>(
                 Ok(Scan { file, version, .. }) => (file, version),
                 // The file doesn't exist in the cache and, when we tried to perform a scan, it wasn't valid.
                 Err(e) if matches!(e.deref(), ScanErrorKind::Extract) => {
-                    backend.delete(&file_path).await.or_raise(|| OrganizeErrorKind::Storage)?;
-                    return Ok(Action::CleanedUp(file_path));
+                    backend.delete(file_path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?;
+                    return Ok(Action::CleanedUp(file_path.to_string()));
                 },
                 // An operational error occured during scanning.
                 Err(e) => return Err(e).or_raise(|| OrganizeErrorKind::Scan),
@@ -103,8 +102,8 @@ pub(crate) async fn organize_file_inner<S: HashState>(
         .template
         .generate_with_ext(&version, "html", compression_target)
         .or_raise(|| OrganizeErrorKind::Template)?;
-    if file.path == correct_location {
-        return Ok(Action::AlreadyCorrect(file.path.clone()));
+    if correct_location == file.path.as_path() {
+        return Ok(Action::AlreadyCorrect(file.path.to_string()));
     }
 
     if let Some(existing) = match backend.stat(&correct_location).await {
@@ -116,21 +115,21 @@ pub(crate) async fn organize_file_inner<S: HashState>(
             Ok(Some(ConflictResolution::TargetNowFree)) => (),
             Ok(Some(ConflictResolution::TrashExisting)) => match ctx.trash.as_ref() {
                 Some(t) => trash(backend, t, &existing).await.or_raise(|| OrganizeErrorKind::Storage)?,
-                None => backend.delete(&existing.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
+                None => backend.delete(existing.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?,
             },
             Ok(Some(ConflictResolution::TrashIncoming)) => {
                 match ctx.trash.as_ref() {
                     Some(t) => trash(backend, t, &file).await.or_raise(|| OrganizeErrorKind::Storage)?,
-                    None => backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
+                    None => backend.delete(file.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?,
                 };
-                return Ok(Action::CleanedUp(file.path.clone()));
+                return Ok(Action::CleanedUp(file.path.to_string()));
             },
             Ok(Some(ConflictResolution::DiscardExisting)) => {
-                backend.delete(&existing.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
+                backend.delete(existing.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?;
             },
             Ok(Some(ConflictResolution::DiscardIncoming)) => {
-                backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
-                return Ok(Action::CleanedUp(file.path.clone()));
+                backend.delete(file.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?;
+                return Ok(Action::CleanedUp(file.path.to_string()));
             },
             Err(e) => return Err(e).or_raise(|| OrganizeErrorKind::Conflict),
             Ok(None) => {
@@ -146,22 +145,22 @@ pub(crate) async fn organize_file_inner<S: HashState>(
 
     if compression_source == compression_target {
         // The file is already compressed using the correct format, a simple rename will do.
-        backend.rename(&file.path, &correct_location).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        backend.rename(file.path.as_path(), &correct_location).await.or_raise(|| OrganizeErrorKind::Storage)?;
     } else {
         let converted = convert(
-            &backend.read(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
+            &backend.read(file.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?,
             compression_source,
             compression_target,
         )
         .or_raise(|| OrganizeErrorKind::Compression)?;
         backend.write(&correct_location, &converted).await.or_raise(|| OrganizeErrorKind::Storage)?;
-        backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        backend.delete(file.path.as_path()).await.or_raise(|| OrganizeErrorKind::Storage)?;
     }
 
     // Update the cache with the new location, but silently ignore errors since
     // it can be cleaned up on the next library scan operation.
     _ = cache.update_target_path(&file.target, &file.path, &correct_location).await;
-    Ok(Action::Renamed(correct_location))
+    Ok(Action::Renamed(correct_location.display().to_string()))
 }
 
 /// Convert from one compression format to another

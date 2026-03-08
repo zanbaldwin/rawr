@@ -96,7 +96,7 @@ impl Repository {
     /// match the version's content hash.
     #[instrument(skip_all, fields(
         target = file.target,
-        path = %file.path.display(),
+        path = %file.path,
         file_hash = file.file_hash,
         content_hash = version.hash,
         work_id = version.metadata.work_id,
@@ -742,6 +742,7 @@ mod tests {
 
     fn make_test_file(path: &str, content_hash: &str) -> File {
         FileMeta::new(DEFAULT_TARGET, path, Compression::Bzip2, 123, UtcDateTime::now())
+            .expect("File path to be valid")
             .with_file_hash("file_hash_123")
             .with_content_hash(content_hash)
     }

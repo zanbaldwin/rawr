@@ -90,12 +90,10 @@ impl StorageBackend for LocalBackend {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::error::ErrorKind;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
     use rawr_compress::Compression;
-    use std::path::PathBuf;
-
-    use super::*;
 
     #[test]
     fn test_new_requires_absolute_path() {
@@ -125,7 +123,7 @@ mod tests {
         backend.write(Path::new("FandomA/Subfile.html"), data).await.unwrap();
         let mut files = backend.list(Some(Path::new("FandomA/Sub"))).await.unwrap();
         assert_eq!(files.len(), 1);
-        assert_eq!(files.pop().unwrap().path, Path::new("FandomA/Sub/file.html"));
+        assert_eq!(&files.pop().unwrap().path, "FandomA/Sub/file.html");
     }
 
     #[tokio::test]
@@ -200,7 +198,7 @@ mod tests {
         let data = b"Hello, world!";
         backend.write(Path::new("file.txt"), data).await.unwrap();
         let info = backend.stat(Path::new("file.txt")).await.unwrap();
-        assert_eq!(info.path, PathBuf::from("file.txt"));
+        assert_eq!(&info.path, "file.txt");
         assert_eq!(info.size, data.len() as u64);
         assert_eq!(info.compression, Compression::None);
         assert_eq!(info.file_hash, ());
@@ -237,9 +235,9 @@ mod tests {
         assert_eq!(all_files.len(), 3);
         let fandom1_files = backend.list(Some(Path::new("Fandom1/"))).await.unwrap();
         assert_eq!(fandom1_files.len(), 2);
-        let paths: Vec<_> = fandom1_files.iter().map(|f| &f.path).collect();
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work1.html.bz2")));
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work2.html.bz2")));
+        let paths: Vec<_> = fandom1_files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"Fandom1/work1.html.bz2"));
+        assert!(paths.contains(&"Fandom1/work2.html.bz2"));
     }
 
     #[tokio::test]

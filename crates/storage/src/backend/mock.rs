@@ -162,7 +162,6 @@ mod tests {
     use crate::error::ErrorKind;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
     use rawr_compress::Compression;
-    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_write_and_read() {
@@ -233,7 +232,7 @@ mod tests {
         let backend = MockBackend::default();
         backend.write(Path::new("file.html.bz2"), b"12345").await.unwrap();
         let info = backend.stat(Path::new("file.html.bz2")).await.unwrap();
-        assert_eq!(info.path, PathBuf::from("file.html.bz2"));
+        assert_eq!(&info.path, "file.html.bz2");
         assert_eq!(info.size, 5);
         assert_eq!(info.compression, Compression::Bzip2);
         assert_eq!(info.file_hash, ());
@@ -248,9 +247,9 @@ mod tests {
         ]);
         let files = backend.list(Some(Path::new("Fandom1"))).await.unwrap();
         assert_eq!(files.len(), 2);
-        let paths: Vec<_> = files.iter().map(|f| &f.path).collect();
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work1.html")));
-        assert!(paths.contains(&&PathBuf::from("Fandom1/work2.html")));
+        let paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"Fandom1/work1.html"));
+        assert!(paths.contains(&"Fandom1/work2.html"));
     }
 
     #[tokio::test]

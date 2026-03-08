@@ -73,7 +73,7 @@ pub(crate) async fn scan_file_inner<S: HashState>(
     }
     // All that effort with Read/Write traits? Apparently pointless... Now the
     // entire file contents is going to be stored in the future's state machine.
-    let bytes = backend.read(&file.path).await.or_raise(|| ErrorKind::Storage)?;
+    let bytes = backend.read(file.path.as_path()).await.or_raise(|| ErrorKind::Storage)?;
     let file = file.with_file_hash(blake3::hash(&bytes).to_string());
     let existing = cache.exists(backend.name(), &file.path, &file.file_hash).await.or_raise(|| ErrorKind::Cache)?;
     let effort = match existing {
@@ -82,7 +82,7 @@ pub(crate) async fn scan_file_inner<S: HashState>(
         // is now in question: recalculate.
         ExistenceResult::ExactMatch(_, _) | ExistenceResult::HashMismatch(_, _) => {
             cache.delete_by_target_path(backend.name(), &file.path).await.or_raise(|| ErrorKind::Cache)?;
-            tracing::info!(target = backend.name(), path = %file.path.display(), "Cached file has changed on disk; recalculating");
+            tracing::info!(target = backend.name(), path = %file.path, "Cached file has changed on disk; recalculating");
             ScanEffort::Recalculated
         },
         ExistenceResult::LocatedElsewhere(other, version) => {

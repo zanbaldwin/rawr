@@ -28,5 +28,6 @@ pub fn metadata_to_file_info(backend_name: &str, path: PathBuf, meta: &opendal::
         .and_then(|ts| UtcDateTime::from_unix_timestamp(ts.timestamp()).ok())
         .unwrap_or(UtcDateTime::UNIX_EPOCH);
     let compression = Compression::from_path(&path);
-    FileInfo::new(backend_name, path, size, modified, compression)
+    // Safety: we'll be replace Path(Buf)s complete soon, this expect will disappear with it.
+    FileInfo::new(backend_name, path, size, modified, compression).expect("File path should be valid")
 }

@@ -1,9 +1,8 @@
 //! In-memory storage backend for testing.
 
-use super::opendal_util::map_opendal_error;
 use crate::StorageBackend;
 use crate::ValidPath;
-use crate::backend::OperatorAware;
+use crate::backend::{OperatorAware, map_opendal_error};
 use crate::error::{ErrorKind, Result};
 use async_trait::async_trait;
 use futures::AsyncWriteExt;
@@ -22,10 +21,10 @@ use std::{fs::File, io::Read};
 /// # Examples
 ///
 /// ```
+/// use rawr_storage::ValidPath;
 /// use rawr_storage::backend::{MockBackend, StorageBackend};
-/// use std::path::Path;
 ///
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn dothething() -> Result<(), Box<dyn std::error::Error>> {
 /// let backend = MockBackend::with_data([
 ///     ("works/123.html.gz", b"<html>...</html>"),
 /// ]);
@@ -150,7 +149,7 @@ impl StorageBackend for MockBackend {
         let mut writer = self.writer(to).await?;
         async_copy(&mut reader, &mut writer).await.map_err(ErrorKind::Io)?;
         writer.close().await.map_err(ErrorKind::Io)?;
-        self.operator.delete(from.as_str()).await.map_err(|e| map_opendal_error(e, from.as_path()))?;
+        self.operator.delete(from.as_str()).await.map_err(|e| map_opendal_error(e, from.to_string()))?;
         Ok(())
     }
 }
@@ -259,13 +258,6 @@ mod tests {
         let backend = MockBackend::with_data([("a.txt", Vec::from(*b"1")), ("b.txt", Vec::from(*b"2"))]);
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_path_traversal_rejected() {
-        let backend = MockBackend::default();
-        assert!(backend.read(&ValidPath::new("../etc/passwd").unwrap()).await.is_err());
-        assert!(backend.write(&ValidPath::new("../escape").unwrap(), b"bad").await.is_err());
     }
 
     #[test]

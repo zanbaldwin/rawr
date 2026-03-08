@@ -78,7 +78,7 @@ impl Configurator {
         }
         // Safety: target_names is guaranteed to contain a value.
         let singular_target_name = target_names.pop_last().unwrap();
-        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
+        let default_profile = data.entry(Profile::Default).or_default();
         if let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
@@ -110,7 +110,7 @@ impl Configurator {
                     })
             })
             .cloned();
-        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
+        let default_profile = data.entry(Profile::Default).or_default();
         if let Some(import_value) = import_value
             && let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
@@ -131,7 +131,7 @@ impl Configurator {
         if is_database_specified {
             return;
         }
-        let default_profile = data.entry(Profile::Default).or_insert_with(Dict::new);
+        let default_profile = data.entry(Profile::Default).or_default();
         if let Some((library_tag, library)) = get_or_insert_dict(default_profile, "library")
             && let Some(dirs) = ProjectDirs::from("", "", APP_NAME)
         {

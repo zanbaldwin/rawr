@@ -8,7 +8,6 @@
 //!       to resort to anyhow+thiserror just because I don't want to deal with it.
 
 use derive_more::{Display, Error};
-use std::path::PathBuf;
 
 /// A cache error with automatic location tracking.
 pub type Error = exn::Exn<ErrorKind>;
@@ -24,10 +23,6 @@ pub enum ErrorKind {
     Database,
     #[display("database migration error")]
     Migration,
-    #[display("file not found: ({_0}, {})", _1.display())]
-    FileNotFound(#[error(not(source))] String, PathBuf),
-    #[display("version not found: ({_0})")]
-    VersionNotFound(#[error(not(source))] String),
     /// Serialization/deserialization error.
     #[display("invalid cache data in field {_0}")]
     InvalidData(#[error(not(source))] &'static str),

@@ -20,14 +20,14 @@
 //!     4096,
 //!     UtcDateTime::now(),
 //!     Compression::Gzip,
-//! );
+//! ).unwrap();
 //! // Access metadata fields directly via Deref
-//! println!("{}: {} bytes", file.path.display(), file.size);
+//! println!("{}: {} bytes", file.path, file.size);
 //!
 //! // Attach a hash to transition to Read state
 //! let file = file.with_file_hash("af1349b9f5f9a1a6...");
 //! // file_hash is now a String, not unit ()
-//! println!("{}: {}", file.path.display(), file.file_hash);
+//! println!("{}: {}", file.path, file.file_hash);
 //! ```
 //!
 //! # Choosing a Type for Function Signatures

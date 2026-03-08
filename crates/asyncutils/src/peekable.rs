@@ -67,11 +67,82 @@ impl<R: AsyncRead + Unpin> PeekableReader<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
+    use futures::io::Cursor as AsyncCursor;
 
     fn test_data() -> Vec<u8> {
         b"Hello, world! This is test data for async peekable decompression. \
           It needs to be long enough to test multiple peek() calls."
             .to_vec()
+    }
+
+    #[tokio::test]
+    async fn test_peek() {
+        let data = test_data();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix, b"Hello");
+    }
+
+    #[tokio::test]
+    async fn test_peek_then_into_bytes() {
+        let data = test_data();
+        let original = data.clone();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix = peekable.peek(13).await.unwrap();
+        assert_eq!(prefix, b"Hello, world!");
+        let full = peekable.into_bytes().await.unwrap();
+        assert_eq!(full, original);
+    }
+
+    #[tokio::test]
+    async fn test_peek_then_into_reader() {
+        let data = test_data();
+        let original = data.clone();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix, b"Hello");
+        let mut output = Vec::new();
+        async_copy(&mut peekable.into_reader(), &mut output).await.unwrap();
+        assert_eq!(output, original);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_peek_calls() {
+        let data = test_data();
+        let original = data.clone();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix1 = peekable.peek(5).await.unwrap();
+        assert_eq!(prefix1, b"Hello");
+        let prefix2 = peekable.peek(13).await.unwrap();
+        assert_eq!(prefix2, b"Hello, world!");
+        assert_eq!(peekable.head(), b"Hello, world!");
+        let full = peekable.into_bytes().await.unwrap();
+        assert_eq!(full, original);
+    }
+
+    #[tokio::test]
+    async fn test_peek_larger_than_data() {
+        let data = b"tiny".to_vec();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix = peekable.peek(1000).await.unwrap();
+        assert_eq!(prefix, b"tiny");
+    }
+
+    #[tokio::test]
+    async fn test_empty_input() {
+        let data = Vec::new();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let prefix = peekable.peek(100).await.unwrap();
+        assert!(prefix.is_empty());
+        let full = peekable.into_bytes().await.unwrap();
+        assert!(full.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_drop_without_into_bytes() {
+        let data = test_data();
+        let mut peekable = PeekableReader::new(AsyncCursor::new(data));
+        let _prefix = peekable.peek(5).await.unwrap();
+        drop(peekable);
     }
 }

@@ -2,31 +2,8 @@ use crate::error::{ErrorKind, Result};
 use crate::{Renderer, TempFile, style::CssVariables};
 use exn::ResultExt;
 use std::io::{Cursor, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::instrument;
-
-/// The result of a render operation, holding a reference to the generated PDF.
-///
-/// The PDF lives either at a caller-specified path ([`Persisted`](Self::Persisted))
-/// or in a temporary file ([`Temporary`](Self::Temporary)) that is deleted when
-/// this value is dropped. Use [`path()`](Self::path) to get the location
-/// regardless of variant.
-#[must_use]
-pub enum Output {
-    /// PDF written to the path the caller requested via [`Renderer::render_to`].
-    Persisted(PathBuf),
-    /// PDF written to an auto-managed temporary file. The file is deleted on drop.
-    Temporary(TempFile),
-}
-impl Output {
-    /// Returns the filesystem path to the generated PDF.
-    pub fn path(&self) -> &Path {
-        match self {
-            Self::Persisted(p) => p,
-            Self::Temporary(f) => f.path(),
-        }
-    }
-}
 
 impl Renderer {
     /// Renders HTML to a PDF stored in a temporary file.
@@ -34,10 +11,11 @@ impl Renderer {
     /// Configured styles and optional `CssVariables` are injected before the
     /// closing `</head>` tag. The returned [`Output::Temporary`] is deleted when
     /// dropped — hold the value for as long as you need the PDF.
-    pub fn render<R: Read>(&self, html: R, variables: impl Into<Option<CssVariables>>) -> Result<Output> {
+    #[must_use = "temporary file will be deleted upon drop"]
+    pub fn render<R: Read>(&self, html: R, variables: impl Into<Option<CssVariables>>) -> Result<TempFile> {
         let output = TempFile::new().or_raise(|| ErrorKind::Io)?;
         _ = self.render_to(html, variables, output.path().to_path_buf())?;
-        Ok(Output::Temporary(output))
+        Ok(output)
     }
 
     /// Renders HTML to a PDF at the specified path.
@@ -50,15 +28,16 @@ impl Renderer {
         html: R,
         variables: impl Into<Option<CssVariables>>,
         save_to: impl Into<PathBuf>,
-    ) -> Result<Output> {
+    ) -> Result<PathBuf> {
         let save_to = save_to.into();
         let input = self.persist_html(html, variables.into())?;
         self.chrome.execute(input.path(), &save_to)?;
-        Ok(Output::Persisted(save_to))
+        Ok(save_to)
     }
 
     /// Convenience wrapper around [`render()`](Self::render) that accepts a byte slice.
-    pub fn render_slice(&self, html: &[u8], variables: impl Into<Option<CssVariables>>) -> Result<Output> {
+    #[must_use = "temporary file will be deleted upon drop"]
+    pub fn render_slice(&self, html: &[u8], variables: impl Into<Option<CssVariables>>) -> Result<TempFile> {
         self.render(Cursor::new(html), variables)
     }
 
@@ -68,7 +47,7 @@ impl Renderer {
         html: &[u8],
         variables: impl Into<Option<CssVariables>>,
         save_to: impl Into<PathBuf>,
-    ) -> Result<Output> {
+    ) -> Result<PathBuf> {
         self.render_to(Cursor::new(html), variables, save_to)
     }
 

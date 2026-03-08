@@ -1,7 +1,6 @@
+use crate::maybe::MaybeFile;
 use figment::value::magic::RelativePathBuf;
 use serde::Deserialize;
-
-use crate::maybe::MaybeFile;
 
 fn default_true() -> bool {
     true

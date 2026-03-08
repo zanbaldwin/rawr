@@ -9,8 +9,7 @@
 //! Credentials are provided explicitly via the configuration file. Each
 //! target specifies its own `key_id` and `key_secret`.
 
-use super::opendal_util::map_opendal_error;
-use crate::backend::OperatorAware;
+use crate::backend::{OperatorAware, map_opendal_error};
 use crate::error::{ErrorKind, Result};
 use crate::{StorageBackend, ValidPath};
 use async_trait::async_trait;
@@ -124,7 +123,7 @@ impl StorageBackend for S3Backend {
                 }
                 Ok(())
             },
-            Err(e) => Err(map_opendal_error(e, from.as_path()).into()),
+            Err(e) => Err(map_opendal_error(e, from.to_string()).into()),
         }
     }
 }

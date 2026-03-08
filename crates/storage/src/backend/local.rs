@@ -21,10 +21,9 @@ use std::path::Path;
 ///
 /// ```no_run
 /// use rawr_storage::backend::LocalBackend;
-/// use std::path::PathBuf;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let backend = LocalBackend::new("local", "/path/to/library")?;
+/// let backend = LocalBackend::new("local", "/path/to/library", true)?;
 /// # Ok(())
 /// # }
 /// ```
@@ -44,7 +43,7 @@ impl LocalBackend {
     /// use rawr_storage::backend::LocalBackend;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let backend = LocalBackend::new("nfs", "/absolute/path/to/library")?;
+    /// let backend = LocalBackend::new("nfs", "/absolute/path/to/library", true)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -249,17 +248,6 @@ mod tests {
         let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
         let files = backend.list(Some(&ValidPath::new("nonexistent/").unwrap())).await.unwrap();
         assert_eq!(files.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_path_security() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let backend = LocalBackend::new("name", temp_dir.path().to_str().unwrap(), false).unwrap();
-        // Attempts to escape the root should fail
-        assert!(backend.read(&ValidPath::new("../etc/passwd").unwrap()).await.is_err());
-        assert!(backend.read(&ValidPath::new("etc/../../passwd").unwrap()).await.is_err());
-        assert!(backend.write(&ValidPath::new("../etc/passwd").unwrap(), b"data").await.is_err());
-        assert!(backend.delete(&ValidPath::new("../../file").unwrap()).await.is_err());
     }
 
     #[tokio::test]

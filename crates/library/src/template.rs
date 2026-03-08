@@ -39,7 +39,6 @@
 //! use rawr_library::PathGenerator;
 //! use rawr_compress::Compression;
 //! # use rawr_extract::models::*;
-//! # use std::path::Path;
 //! # use std::str::FromStr;
 //! # use time::{Date, Month, UtcDateTime};
 //! # let version = Version {
@@ -60,11 +59,11 @@
 //!
 //! let generator: PathGenerator = "{{ fandom|slug }}/{{ work }}-{{ title|slug }}".parse().unwrap();
 //!
-//! let path = generator.generate(&version).unwrap();
-//! assert_eq!(path, Path::new("marvel/12345-my-story"));
+//! let path = generator.generate(&version, "", None).unwrap();
+//! assert_eq!(&path, "marvel/12345-my-story");
 //!
-//! let path = generator.generate_with_ext(&version, "html", Compression::Gzip).unwrap();
-//! assert_eq!(path, Path::new("marvel/12345-my-story.html.gz"));
+//! let path = generator.generate(&version, "html", Compression::Gzip).unwrap();
+//! assert_eq!(&path, "marvel/12345-my-story.html.gz");
 //! # }
 //! ```
 

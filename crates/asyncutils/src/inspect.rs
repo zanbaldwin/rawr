@@ -51,7 +51,9 @@ where
     fn poll_read(self: Pin<&mut Self>, cx: &mut task::Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
         let this = self.project();
         let poll = this.inner.poll_read(cx, buf);
-        if let Poll::Ready(Ok(n)) = &poll {
+        if let Poll::Ready(Ok(n)) = &poll
+            && *n > 0
+        {
             (this.f)(&buf[..*n]);
         }
         poll

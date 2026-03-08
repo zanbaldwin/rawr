@@ -29,7 +29,6 @@ mod style;
 
 use crate::chrome::Chrome;
 use crate::error::{Error, Result};
-pub use crate::render::Output;
 pub use crate::style::{StyleConfig, variables::CssVariables};
 
 /// Handle to a temporary file that is deleted when dropped.

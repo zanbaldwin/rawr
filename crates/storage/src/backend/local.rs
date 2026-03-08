@@ -51,21 +51,21 @@ impl LocalBackend {
     pub fn new(name: impl Into<String>, root: impl AsRef<Path>, auto_create: bool) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         if !root.is_absolute() {
-            exn::bail!(ErrorKind::InvalidPath(root));
+            exn::bail!(ErrorKind::InvalidPath(root.display().to_string()));
         }
         if root.exists() {
             if !root.is_dir() {
-                exn::bail!(ErrorKind::InvalidPath(root));
+                exn::bail!(ErrorKind::InvalidPath(root.display().to_string()));
             }
         } else if auto_create {
             // Use non-async here; it'll only happen once on library initialization
             // and it's not worth the hassle of making the constructor async.
             sync_create_dir(&root).map_err(ErrorKind::Io)?;
         } else {
-            exn::bail!(ErrorKind::PermissionDenied(root));
+            exn::bail!(ErrorKind::PermissionDenied(root.display().to_string()));
         }
 
-        let root_str = root.to_str().ok_or_else(|| ErrorKind::InvalidPath(root.clone()))?;
+        let root_str = root.to_str().ok_or_else(|| ErrorKind::InvalidPath(root.display().to_string()))?;
         let builder = Fs::default().root(root_str);
         let operator = Operator::new(builder)
             .map_err(|e| ErrorKind::BackendError(e.to_string()))?

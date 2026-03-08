@@ -12,9 +12,9 @@ use time::UtcDateTime;
 /// Map an [`opendal::Error`] to our [`ErrorKind`].
 pub fn map_opendal_error(e: opendal::Error, path: &Path) -> ErrorKind {
     match e.kind() {
-        opendal::ErrorKind::NotFound => ErrorKind::NotFound(path.to_path_buf()),
-        opendal::ErrorKind::PermissionDenied => ErrorKind::PermissionDenied(path.to_path_buf()),
-        opendal::ErrorKind::AlreadyExists => ErrorKind::AlreadyExists(path.to_path_buf()),
+        opendal::ErrorKind::NotFound => ErrorKind::NotFound(path.display().to_string()),
+        opendal::ErrorKind::PermissionDenied => ErrorKind::PermissionDenied(path.display().to_string()),
+        opendal::ErrorKind::AlreadyExists => ErrorKind::AlreadyExists(path.display().to_string()),
         _ if e.is_temporary() => ErrorKind::Network(e.to_string()),
         _ => ErrorKind::BackendError(e.to_string()),
     }

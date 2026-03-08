@@ -72,7 +72,7 @@ use crate::error::{Error, ErrorKind, Result};
 use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_extract::models::Version;
-use rawr_storage::ValidatedPath;
+use rawr_storage::ValidPath;
 use std::{path::PathBuf, str::FromStr};
 use tracing::instrument;
 use upon::{Engine, Template};
@@ -165,7 +165,7 @@ impl PathGenerator {
     /// [`rawr_storage::ValidatedPath`].
     fn normalize(s: impl Into<String>) -> Result<PathBuf> {
         let path = s.into().trim().split('/').map(str::trim).collect::<Vec<_>>().join("/");
-        let validated_path = ValidatedPath::new(path).or_raise(|| ErrorKind::Template)?;
+        let validated_path = ValidPath::new(path).or_raise(|| ErrorKind::Template)?;
         Ok(validated_path.into())
     }
 

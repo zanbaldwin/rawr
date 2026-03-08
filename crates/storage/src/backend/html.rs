@@ -72,66 +72,66 @@ impl StorageBackend for HtmlOnlyBackend {
 
     async fn exists(&self, path: &Path) -> Result<bool> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.exists(path).await
     }
 
     async fn read(&self, path: &Path) -> Result<Vec<u8>> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.read(path).await
     }
 
     async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.read_head(path, bytes).await
     }
 
     async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.write(path, data).await
     }
 
     async fn delete(&self, path: &Path) -> Result<()> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.delete(path).await
     }
 
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
         if !is_html_path(from) {
-            exn::bail!(ErrorKind::FilteredPath(from.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(from.display().to_string()));
         }
         if !is_html_path(to) {
-            exn::bail!(ErrorKind::FilteredPath(to.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(to.display().to_string()));
         }
         self.inner.rename(from, to).await
     }
 
     async fn stat(&self, path: &Path) -> Result<FileInfo> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.stat(path).await
     }
 
     async fn reader(&self, path: &Path) -> Result<BoxedReader> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.reader(path).await
     }
 
     async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
         if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.to_path_buf()));
+            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
         }
         self.inner.writer(path).await
     }

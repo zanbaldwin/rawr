@@ -3,6 +3,7 @@
 //! Wraps another backend and restricts all operations to files with
 //! `.html` base extension (after stripping any compression suffix).
 
+use crate::ValidPath;
 use crate::backend::{BoxedReader, BoxedWriter, FileInfoStream, OperatorAware};
 use crate::error::ErrorKind;
 use crate::{BackendHandle, StorageBackend, error::Result, file::FileInfo};
@@ -61,77 +62,77 @@ impl StorageBackend for HtmlOnlyBackend {
         self.inner.name()
     }
 
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
-        Ok(Box::pin(self.inner.list_stream(prefix)?.filter(|item| {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a ValidPath>) -> FileInfoStream<'a> {
+        Box::pin(self.inner.list_stream(prefix).filter(|item| {
             std::future::ready(match item {
                 Ok(info) => is_html_path(info.path.as_path()),
                 Err(_) => true, // propagate errors
             })
-        })))
+        }))
     }
 
-    async fn exists(&self, path: &Path) -> Result<bool> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn exists(&self, path: &ValidPath) -> Result<bool> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.exists(path).await
     }
 
-    async fn read(&self, path: &Path) -> Result<Vec<u8>> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn read(&self, path: &ValidPath) -> Result<Vec<u8>> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.read(path).await
     }
 
-    async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn read_head(&self, path: &ValidPath, bytes: usize) -> Result<Vec<u8>> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.read_head(path, bytes).await
     }
 
-    async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn write(&self, path: &ValidPath, data: &[u8]) -> Result<()> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.write(path, data).await
     }
 
-    async fn delete(&self, path: &Path) -> Result<()> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn delete(&self, path: &ValidPath) -> Result<()> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.delete(path).await
     }
 
-    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        if !is_html_path(from) {
-            exn::bail!(ErrorKind::FilteredPath(from.display().to_string()));
+    async fn rename(&self, from: &ValidPath, to: &ValidPath) -> Result<()> {
+        if !is_html_path(from.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(from.to_string()));
         }
-        if !is_html_path(to) {
-            exn::bail!(ErrorKind::FilteredPath(to.display().to_string()));
+        if !is_html_path(to.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(to.to_string()));
         }
         self.inner.rename(from, to).await
     }
 
-    async fn stat(&self, path: &Path) -> Result<FileInfo> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn stat(&self, path: &ValidPath) -> Result<FileInfo> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.stat(path).await
     }
 
-    async fn reader(&self, path: &Path) -> Result<BoxedReader> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn reader(&self, path: &ValidPath) -> Result<BoxedReader> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.reader(path).await
     }
 
-    async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
-        if !is_html_path(path) {
-            exn::bail!(ErrorKind::FilteredPath(path.display().to_string()));
+    async fn writer(&self, path: &ValidPath) -> Result<BoxedWriter> {
+        if !is_html_path(path.as_path()) {
+            exn::bail!(ErrorKind::FilteredPath(path.to_string()));
         }
         self.inner.writer(path).await
     }
@@ -177,7 +178,7 @@ mod tests {
     /// Helper: create a temp HtmlBackend wrapping a LocalBackend.
     fn setup() -> (tempfile::TempDir, HtmlOnlyBackend) {
         let temp_dir = tempfile::tempdir().unwrap();
-        let local = LocalBackend::new("test", temp_dir.path(), false).unwrap();
+        let local = LocalBackend::new("test", temp_dir.path().to_str().unwrap(), false).unwrap();
         let backend: BackendHandle = Arc::new(local);
         let html = HtmlOnlyBackend::new(backend);
         (temp_dir, html)
@@ -186,8 +187,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_filters_by_extension() {
         let (dir, backend) = setup();
-        backend.write(Path::new("file.html"), b"data").await.unwrap();
-        backend.write(Path::new("file.html.bz2"), b"data").await.unwrap();
+        backend.write(&ValidPath::new("file.html").unwrap(), b"data").await.unwrap();
+        backend.write(&ValidPath::new("file.html.bz2").unwrap(), b"data").await.unwrap();
         // Write non-html files directly to filesystem (HtmlBackend gates writes)
         std::fs::write(dir.path().join("file.txt"), b"data").unwrap();
         std::fs::write(dir.path().join("README.md"), b"data").unwrap();
@@ -202,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_rejects_non_html() {
         let (_dir, backend) = setup();
-        let result = backend.read(Path::new("file.txt")).await;
+        let result = backend.read(&ValidPath::new("file.txt").unwrap()).await;
         let err = result.unwrap_err();
         assert!(matches!(&*err, ErrorKind::FilteredPath(_)));
     }
@@ -210,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_rejects_non_html() {
         let (_dir, backend) = setup();
-        let result = backend.write(Path::new("file.txt"), b"data").await;
+        let result = backend.write(&ValidPath::new("file.txt").unwrap(), b"data").await;
         let err = result.unwrap_err();
         assert!(matches!(&*err, ErrorKind::FilteredPath(_)));
     }
@@ -218,7 +219,7 @@ mod tests {
     #[tokio::test]
     async fn test_exists_rejects_non_html() {
         let (_dir, backend) = setup();
-        let result = backend.exists(Path::new("file.txt")).await;
+        let result = backend.exists(&ValidPath::new("file.txt").unwrap()).await;
         let err = result.unwrap_err();
         assert!(matches!(&*err, ErrorKind::FilteredPath(_)));
     }
@@ -227,13 +228,13 @@ mod tests {
     async fn test_rename_validates_both_paths() {
         let (_dir, backend) = setup();
         // html -> non-html: should fail on `to`
-        backend.write(Path::new("a.html"), b"data").await.unwrap();
-        let result = backend.rename(Path::new("a.html"), Path::new("a.txt")).await;
+        backend.write(&ValidPath::new("a.html").unwrap(), b"data").await.unwrap();
+        let result = backend.rename(&ValidPath::new("a.html").unwrap(), &ValidPath::new("a.txt").unwrap()).await;
         assert!(matches!(&*result.unwrap_err(), ErrorKind::FilteredPath(_)));
         // non-html -> html: should fail on `from`
-        let result = backend.rename(Path::new("a.txt"), Path::new("b.html")).await;
+        let result = backend.rename(&ValidPath::new("a.txt").unwrap(), &ValidPath::new("b.html").unwrap()).await;
         assert!(matches!(&*result.unwrap_err(), ErrorKind::FilteredPath(_)));
         // html -> html: should succeed
-        backend.rename(Path::new("a.html"), Path::new("b.html")).await.unwrap();
+        backend.rename(&ValidPath::new("a.html").unwrap(), &ValidPath::new("b.html").unwrap()).await.unwrap();
     }
 }

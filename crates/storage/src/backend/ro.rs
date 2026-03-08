@@ -4,16 +4,12 @@
 //! implementations and prevents write operations from executing, but
 //! indicating success on return.
 
+use crate::backend::{BoxedReader, BoxedWriter, FileInfoStream, OperatorAware};
+use crate::error::Result;
+use crate::file::FileInfo;
+use crate::{BackendHandle, StorageBackend, ValidPath};
 use async_trait::async_trait;
 use opendal::Operator;
-use std::path::Path;
-
-use crate::{
-    BackendHandle, StorageBackend,
-    backend::{BoxedReader, BoxedWriter, FileInfoStream, OperatorAware},
-    error::Result,
-    file::FileInfo,
-};
 
 /// Read-only storage backend.
 ///
@@ -39,47 +35,47 @@ impl StorageBackend for ReadOnlyBackend {
         self.inner.name()
     }
 
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a ValidPath>) -> FileInfoStream<'a> {
         self.inner.list_stream(prefix)
     }
 
-    async fn exists(&self, path: &Path) -> Result<bool> {
+    async fn exists(&self, path: &ValidPath) -> Result<bool> {
         self.inner.exists(path).await
     }
 
-    async fn read(&self, path: &Path) -> Result<Vec<u8>> {
+    async fn read(&self, path: &ValidPath) -> Result<Vec<u8>> {
         self.inner.read(path).await
     }
 
-    async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
+    async fn read_head(&self, path: &ValidPath, bytes: usize) -> Result<Vec<u8>> {
         self.inner.read_head(path, bytes).await
     }
 
-    async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        tracing::info!(path = %path.display(), bytes = data.len(), "Skipping write during read-only mode");
+    async fn write(&self, path: &ValidPath, data: &[u8]) -> Result<()> {
+        tracing::info!(path = %path, bytes = data.len(), "Skipping write during read-only mode");
         Ok(())
     }
 
-    async fn delete(&self, path: &Path) -> Result<()> {
-        tracing::info!(path = %path.display(), "Skipping delete during read-only mode");
+    async fn delete(&self, path: &ValidPath) -> Result<()> {
+        tracing::info!(path = %path, "Skipping delete during read-only mode");
         Ok(())
     }
 
-    async fn rename(&self, from: &Path, _to: &Path) -> Result<()> {
-        tracing::info!(path = %from.display(), "Skipping rename/move during read-only mode");
+    async fn rename(&self, from: &ValidPath, _to: &ValidPath) -> Result<()> {
+        tracing::info!(path = %from, "Skipping rename/move during read-only mode");
         Ok(())
     }
 
-    async fn stat(&self, path: &Path) -> Result<FileInfo> {
+    async fn stat(&self, path: &ValidPath) -> Result<FileInfo> {
         self.inner.stat(path).await
     }
 
-    async fn reader(&self, path: &Path) -> Result<BoxedReader> {
+    async fn reader(&self, path: &ValidPath) -> Result<BoxedReader> {
         self.inner.reader(path).await
     }
 
-    async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
-        tracing::info!(path = %path.display(), "Skipping writer during read-only mode");
+    async fn writer(&self, path: &ValidPath) -> Result<BoxedWriter> {
+        tracing::info!(path = %path, "Skipping writer during read-only mode");
         Ok(Box::new(futures::io::sink()))
     }
 }

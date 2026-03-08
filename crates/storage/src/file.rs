@@ -40,8 +40,10 @@
 //! | [`&FileInfo<Processed>`](FileInfo) | Content hash is required at compile time                  |
 
 use rawr_compress::Compression;
-use std::{ops::Deref, path::PathBuf};
+use std::ops::Deref;
 use time::UtcDateTime;
+
+use crate::{TryValidatePath, ValidPath, error::Result};
 
 // Note to self: I've never used the typestate pattern and I _really_ want to
 // use it here. Come back here in the future when it comes back to bite you
@@ -57,7 +59,7 @@ use time::UtcDateTime;
 pub struct FileMeta {
     pub target: String,
     /// Relative path from the storage root
-    pub path: PathBuf,
+    pub path: ValidPath,
     /// Compression format (detected from the file extension)
     pub compression: Compression,
     pub size: u64,
@@ -66,18 +68,18 @@ pub struct FileMeta {
 impl FileMeta {
     pub fn new(
         target: impl Into<String>,
-        path: impl Into<PathBuf>,
+        path: impl TryValidatePath,
         compression: Compression,
         size: u64,
         discovered_at: UtcDateTime,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             target: target.into(),
-            path: path.into(),
+            path: path.try_validate()?,
             compression,
             size,
             discovered_at,
-        }
+        })
     }
 
     /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].
@@ -189,12 +191,12 @@ impl FileInfo {
     /// Creates a new file info in the [`Discovered`] state.
     pub fn new(
         target: impl Into<String>,
-        path: impl Into<PathBuf>,
+        path: impl TryValidatePath,
         size: u64,
         discovered_at: UtcDateTime,
         compression: Compression,
-    ) -> Self {
-        FileMeta::new(target, path, compression, size, discovered_at).into()
+    ) -> Result<Self> {
+        Ok(FileMeta::new(target, path, compression, size, discovered_at)?.into())
     }
 
     /// Consumes itself to attach a hash, transitioning to [`FileInfo<Read>`].

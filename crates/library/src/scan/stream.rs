@@ -26,7 +26,7 @@ pub enum ScanEvent {
     /// Scanning has begun; emitted exactly once before any other event.
     Started,
     /// A file was found in the storage backend and queued for processing.
-    FileDiscovered(PathBuf),
+    FileDiscovered(String),
     /// All files have been discovered; the total count is now known. Extraction
     /// of already-queued files may still be in progress.
     DiscoveryComplete(u64),
@@ -162,7 +162,7 @@ fn scan_inner<'a>(
                         } else {
                             not_processing_yet.push_back(future);
                         }
-                        yield Ok(ScanEvent::FileDiscovered(path));
+                        yield Ok(ScanEvent::FileDiscovered(path.into()));
                     },
                     Some(Err(e)) => yield Err(e).or_raise(|| ScanErrorKind::Storage),
                     None => {

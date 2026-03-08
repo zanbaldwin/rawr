@@ -64,7 +64,7 @@ impl StorageBackend for HtmlOnlyBackend {
     fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
         Ok(Box::pin(self.inner.list_stream(prefix)?.filter(|item| {
             std::future::ready(match item {
-                Ok(info) => is_html_path(&info.path),
+                Ok(info) => is_html_path(info.path.as_path()),
                 Err(_) => true, // propagate errors
             })
         })))
@@ -142,7 +142,6 @@ mod tests {
     use super::*;
     use crate::{BackendHandle, StorageBackend, backend::LocalBackend, error::ErrorKind};
     use std::path::Path;
-    use std::path::PathBuf;
     use std::sync::Arc;
 
     #[test]
@@ -195,9 +194,9 @@ mod tests {
 
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 2);
-        let paths: Vec<_> = files.iter().map(|f| &f.path).collect();
-        assert!(paths.contains(&&PathBuf::from("file.html")));
-        assert!(paths.contains(&&PathBuf::from("file.html.bz2")));
+        let paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"file.html"));
+        assert!(paths.contains(&"file.html.bz2"));
     }
 
     #[tokio::test]

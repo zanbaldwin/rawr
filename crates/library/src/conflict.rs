@@ -7,8 +7,8 @@ use crate::scan::file::scan_file_inner;
 use exn::ResultExt;
 use rawr_cache::Repository;
 use rawr_extract::models::Version;
-use rawr_storage::BackendHandle;
 use rawr_storage::file::{FileInfo, HashState, Processed};
+use rawr_storage::{BackendHandle, ValidPath};
 use std::cmp::Ordering;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -55,7 +55,7 @@ pub(crate) async fn handle_conflict<S: HashState>(
     ctx: &Context,
     incoming: (&FileInfo<Processed>, &Version),
     existing: &FileInfo<S>,
-    mut depth: Vec<PathBuf>,
+    mut depth: Vec<ValidPath>,
 ) -> LibraryResult<Option<ConflictResolution>> {
     let (incoming_file, incoming_version) = incoming;
     let (existing_file, existing_version) = match cache
@@ -108,16 +108,16 @@ pub(crate) async fn trash<S: HashState>(
     trash: &BackendHandle,
     file: &FileInfo<S>,
 ) -> LibraryResult<()> {
-    let contents = backend.read(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    let contents = backend.read(file.path.as_path()).await.or_raise(|| LibraryErrorKind::Conflict)?;
     trash.write(&make_trash_name(file), &contents).await.or_raise(|| LibraryErrorKind::Conflict)?;
-    backend.delete(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    backend.delete(file.path.as_path()).await.or_raise(|| LibraryErrorKind::Conflict)?;
     Ok(())
 }
 
 pub(crate) fn make_trash_name<S: HashState>(file: &FileInfo<S>) -> PathBuf {
     let mut hasher = blake3::Hasher::new();
     hasher.update(file.target.as_bytes());
-    hasher.update(file.path.as_os_str().as_encoded_bytes());
+    hasher.update(file.path.as_bytes());
     hasher.update(file.size.to_le_bytes().as_ref());
     let now = UtcDateTime::now();
     PathBuf::from(format!("{}-{}.html{}", hasher.finalize(), now.unix_timestamp(), file.compression.extension()))

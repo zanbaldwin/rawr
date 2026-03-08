@@ -5,6 +5,7 @@
 //! S3-compatible services, etc.).
 //!
 
+mod ext;
 mod html;
 mod local;
 #[cfg(feature = "mock")]
@@ -13,6 +14,7 @@ mod ro;
 #[cfg(feature = "s3")]
 mod s3;
 
+pub use self::ext::StorageBackendExt;
 pub use self::html::HtmlOnlyBackend;
 pub use self::local::LocalBackend;
 #[cfg(feature = "mock")]
@@ -46,11 +48,7 @@ pub(crate) trait OperatorAware {
 }
 
 /// Convert OpenDAL [`opendal::Metadata`] into a [`FileInfo`] for a given path.
-pub fn metadata_to_file_info(
-    backend_name: &str,
-    path: impl TryValidatePath,
-    meta: &opendal::Metadata,
-) -> Result<FileInfo> {
+fn metadata_to_file_info(backend_name: &str, path: impl TryValidatePath, meta: &opendal::Metadata) -> Result<FileInfo> {
     let path = path.try_validate()?;
     let size = meta.content_length();
     let modified = meta

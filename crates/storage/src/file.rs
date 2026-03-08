@@ -39,11 +39,10 @@
 //! | [`&FileInfo<Read>`](FileInfo)      | File hash is required at compile time                     |
 //! | [`&FileInfo<Processed>`](FileInfo) | Content hash is required at compile time                  |
 
+use crate::{TryValidatePath, ValidPath, error::Result};
 use rawr_compress::Compression;
 use std::ops::Deref;
 use time::UtcDateTime;
-
-use crate::{TryValidatePath, ValidPath, error::Result};
 
 // Note to self: I've never used the typestate pattern and I _really_ want to
 // use it here. Come back here in the future when it comes back to bite you

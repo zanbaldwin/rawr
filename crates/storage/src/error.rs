@@ -10,7 +10,6 @@
 use derive_more::{Display, Error};
 use rawr_compress::error::{Error as CompressionError, ErrorKind as CompressionErrorKind};
 use std::io::Error as IoError;
-use std::path::PathBuf;
 
 /// A storage error with automatic location tracking.
 pub type Error = exn::Exn<ErrorKind>;
@@ -23,14 +22,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Display, Error)]
 pub enum ErrorKind {
     /// File does not exist
-    #[display("file not found: {}", _0.display())]
-    NotFound(#[error(not(source))] PathBuf),
+    #[display("file not found: {_0}")]
+    NotFound(#[error(not(source))] String),
     /// Access denied (permissions or credentials)
-    #[display("permission denied: {}", _0.display())]
-    PermissionDenied(#[error(not(source))] PathBuf),
+    #[display("permission denied: {_0}")]
+    PermissionDenied(#[error(not(source))] String),
     /// File already exists (for operations that require new files)
-    #[display("file already exists: {}", _0.display())]
-    AlreadyExists(#[error(not(source))] PathBuf),
+    #[display("file already exists: {_0}")]
+    AlreadyExists(#[error(not(source))] String),
     /// Underlying I/O error
     #[display("I/O error: {_0}")]
     Io(IoError),
@@ -38,8 +37,8 @@ pub enum ErrorKind {
     #[display("network error: {_0}")]
     Network(#[error(not(source))] String),
     /// Path contains invalid characters or escapes root
-    #[display("invalid path: {}", _0.display())]
-    InvalidPath(#[error(not(source))] PathBuf),
+    #[display("invalid path: {_0}")]
+    InvalidPath(#[error(not(source))] String),
     /// Backend-specific error
     #[display("backend error: {_0}")]
     BackendError(#[error(not(source))] String),
@@ -47,8 +46,8 @@ pub enum ErrorKind {
     #[display("compression error: {_0}")]
     Compression(CompressionErrorKind),
     /// Path rejected by extension filter (e.g. HtmlBackend)
-    #[display("filtered path: {}", _0.display())]
-    FilteredPath(#[error(not(source))] PathBuf),
+    #[display("filtered path: {_0}")]
+    FilteredPath(#[error(not(source))] String),
 }
 impl From<IoError> for ErrorKind {
     fn from(err: IoError) -> Self {

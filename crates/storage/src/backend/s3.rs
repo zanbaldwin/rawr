@@ -12,7 +12,7 @@
 use super::opendal_util::map_opendal_error;
 use crate::backend::OperatorAware;
 use crate::error::{ErrorKind, Result};
-use crate::{StorageBackend, ValidatedPath};
+use crate::{StorageBackend, ValidPath};
 use async_trait::async_trait;
 use futures::{AsyncWriteExt, io::copy as async_copy};
 use opendal::Operator;
@@ -78,7 +78,7 @@ impl S3Backend {
             builder = builder.endpoint(&ep.into());
         }
         if let Some(pfx) = prefix {
-            let root = ValidatedPath::new(&pfx)?;
+            let root = ValidPath::new(&pfx)?;
             builder = builder.root(root.as_str());
         }
 
@@ -104,8 +104,8 @@ impl StorageBackend for S3Backend {
     }
 
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        let validated_from = ValidatedPath::new(from)?;
-        let validated_to = ValidatedPath::new(to)?;
+        let validated_from = ValidPath::new(from)?;
+        let validated_to = ValidPath::new(to)?;
         // S3 doesn't support rename natively. OpenDAL may implement it via
         // copy+delete, or we may need to do it ourselves.
         match self.operator.rename(validated_from.as_str(), validated_to.as_str()).await {
@@ -113,7 +113,7 @@ impl StorageBackend for S3Backend {
             Err(e) if e.kind() == opendal::ErrorKind::Unsupported => {
                 // Fallback: copy then delete (same approach as prior aws-sdk-s3 impl)
                 if !self.exists(from).await? {
-                    exn::bail!(ErrorKind::NotFound(from.to_path_buf()));
+                    exn::bail!(ErrorKind::NotFound(from.display().to_string()));
                 }
                 let mut reader = self.reader(from).await?;
                 let mut writer = self.writer(to).await?;

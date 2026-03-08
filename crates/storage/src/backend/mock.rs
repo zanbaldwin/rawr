@@ -2,7 +2,7 @@
 
 use super::opendal_util::map_opendal_error;
 use crate::StorageBackend;
-use crate::ValidatedPath;
+use crate::ValidPath;
 use crate::backend::OperatorAware;
 use crate::error::{ErrorKind, Result};
 use async_trait::async_trait;
@@ -64,7 +64,7 @@ impl MockBackend {
         let operator = Self::new_operator();
         let blocking = operator.blocking();
         for (path, data) in files {
-            let Ok(validated_path) = ValidatedPath::new(path.as_ref()) else {
+            let Ok(validated_path) = ValidPath::new(path.as_ref()) else {
                 // The panic here is DELIBERATE. MockBackend is intended to be
                 // used in tests; panics are expected. There is no error result.
                 panic!("MockBackend::with_data(): invalid path {}", path.as_ref().display());
@@ -143,9 +143,9 @@ impl StorageBackend for MockBackend {
 
     // Memory service doesn't support rename natively — use copy+delete.
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        let validated_from = ValidatedPath::new(from)?;
+        let validated_from = ValidPath::new(from)?;
         if !self.exists(from).await? {
-            exn::bail!(ErrorKind::NotFound(from.to_path_buf()));
+            exn::bail!(ErrorKind::NotFound(from.display().to_string()));
         }
         let mut reader = self.reader(from).await?;
         let mut writer = self.writer(to).await?;

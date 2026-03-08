@@ -29,10 +29,10 @@ use std::{fs::File, io::Read};
 /// let backend = MockBackend::with_data([
 ///     ("works/123.html.gz", b"<html>...</html>"),
 /// ]);
-/// assert!(backend.exists(Path::new("works/123.html.gz")).await?);
+/// assert!(backend.exists(&ValidPath::new("works/123.html.gz").unwrap()).await?);
 ///
-/// backend.write(Path::new("works/321.html"), b"data...").await?;
-/// assert!(backend.exists(Path::new("works/321.html")).await?);
+/// backend.write(&ValidPath::new("works/321.html").unwrap(), b"data...").await?;
+/// assert!(backend.exists(&ValidPath::new("works/321.html").unwrap()).await?);
 /// # Ok(())
 /// # }
 /// ```
@@ -142,16 +142,15 @@ impl StorageBackend for MockBackend {
     }
 
     // Memory service doesn't support rename natively — use copy+delete.
-    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        let validated_from = ValidPath::new(from)?;
+    async fn rename(&self, from: &ValidPath, to: &ValidPath) -> Result<()> {
         if !self.exists(from).await? {
-            exn::bail!(ErrorKind::NotFound(from.display().to_string()));
+            exn::bail!(ErrorKind::NotFound(from.to_string()));
         }
         let mut reader = self.reader(from).await?;
         let mut writer = self.writer(to).await?;
         async_copy(&mut reader, &mut writer).await.map_err(ErrorKind::Io)?;
         writer.close().await.map_err(ErrorKind::Io)?;
-        self.operator.delete(validated_from.as_str()).await.map_err(|e| map_opendal_error(e, from))?;
+        self.operator.delete(from.as_str()).await.map_err(|e| map_opendal_error(e, from.as_path()))?;
         Ok(())
     }
 }
@@ -166,8 +165,8 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read() {
         let backend = MockBackend::default();
-        backend.write(Path::new("test.txt"), b"hello").await.unwrap();
-        let data = backend.read(Path::new("test.txt")).await.unwrap();
+        backend.write(&ValidPath::new("test.txt").unwrap(), b"hello").await.unwrap();
+        let data = backend.read(&ValidPath::new("test.txt").unwrap()).await.unwrap();
         assert_eq!(data, b"hello");
     }
 
@@ -177,61 +176,64 @@ mod tests {
             ("a/file.html.gz", Vec::from(*b"compressed")),
             ("b/file.html", Vec::from(*b"plain")),
         ]);
-        assert!(backend.exists(Path::new("a/file.html.gz")).await.unwrap());
-        assert!(backend.exists(Path::new("b/file.html")).await.unwrap());
-        assert!(!backend.exists(Path::new("c/nope")).await.unwrap());
+        assert!(backend.exists(&ValidPath::new("a/file.html.gz").unwrap()).await.unwrap());
+        assert!(backend.exists(&ValidPath::new("b/file.html").unwrap()).await.unwrap());
+        assert!(!backend.exists(&ValidPath::new("c/nope").unwrap()).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_read_not_found() {
         let backend = MockBackend::default();
-        let err = backend.read(Path::new("missing.txt")).await.unwrap_err();
+        let err = backend.read(&ValidPath::new("missing.txt").unwrap()).await.unwrap_err();
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
     }
 
     #[tokio::test]
     async fn test_read_head() {
         let backend = MockBackend::default();
-        backend.write(Path::new("file.txt"), b"0123456789").await.unwrap();
-        let head = backend.read_head(Path::new("file.txt"), 4).await.unwrap();
+        backend.write(&ValidPath::new("file.txt").unwrap(), b"0123456789").await.unwrap();
+        let head = backend.read_head(&ValidPath::new("file.txt").unwrap(), 4).await.unwrap();
         assert_eq!(head, b"0123");
         // More than file size returns everything
-        let all = backend.read_head(Path::new("file.txt"), 100).await.unwrap();
+        let all = backend.read_head(&ValidPath::new("file.txt").unwrap(), 100).await.unwrap();
         assert_eq!(all, b"0123456789");
     }
 
     #[tokio::test]
     async fn test_delete() {
         let backend = MockBackend::default();
-        backend.write(Path::new("file.txt"), b"data").await.unwrap();
-        backend.delete(Path::new("file.txt")).await.unwrap();
-        assert!(!backend.exists(Path::new("file.txt")).await.unwrap());
+        backend.write(&ValidPath::new("file.txt").unwrap(), b"data").await.unwrap();
+        backend.delete(&ValidPath::new("file.txt").unwrap()).await.unwrap();
+        assert!(!backend.exists(&ValidPath::new("file.txt").unwrap()).await.unwrap());
         // Delete nonexistent → NotFound
-        let err = backend.delete(Path::new("file.txt")).await.unwrap_err();
+        let err = backend.delete(&ValidPath::new("file.txt").unwrap()).await.unwrap_err();
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
     }
 
     #[tokio::test]
     async fn test_rename() {
         let backend = MockBackend::default();
-        backend.write(Path::new("old.txt"), b"data").await.unwrap();
-        backend.rename(Path::new("old.txt"), Path::new("new.txt")).await.unwrap();
-        assert!(!backend.exists(Path::new("old.txt")).await.unwrap());
-        assert_eq!(backend.read(Path::new("new.txt")).await.unwrap(), b"data");
+        backend.write(&ValidPath::new("old.txt").unwrap(), b"data").await.unwrap();
+        backend.rename(&ValidPath::new("old.txt").unwrap(), &ValidPath::new("new.txt").unwrap()).await.unwrap();
+        assert!(!backend.exists(&ValidPath::new("old.txt").unwrap()).await.unwrap());
+        assert_eq!(backend.read(&ValidPath::new("new.txt").unwrap()).await.unwrap(), b"data");
     }
 
     #[tokio::test]
     async fn test_rename_not_found() {
         let backend = MockBackend::default();
-        let err = backend.rename(Path::new("missing.txt"), Path::new("new.txt")).await.unwrap_err();
+        let err = backend
+            .rename(&ValidPath::new("missing.txt").unwrap(), &ValidPath::new("new.txt").unwrap())
+            .await
+            .unwrap_err();
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
     }
 
     #[tokio::test]
     async fn test_stat() {
         let backend = MockBackend::default();
-        backend.write(Path::new("file.html.bz2"), b"12345").await.unwrap();
-        let info = backend.stat(Path::new("file.html.bz2")).await.unwrap();
+        backend.write(&ValidPath::new("file.html.bz2").unwrap(), b"12345").await.unwrap();
+        let info = backend.stat(&ValidPath::new("file.html.bz2").unwrap()).await.unwrap();
         assert_eq!(&info.path, "file.html.bz2");
         assert_eq!(info.size, 5);
         assert_eq!(info.compression, Compression::Bzip2);
@@ -245,7 +247,7 @@ mod tests {
             ("Fandom1/work2.html", Vec::from(*b"b")),
             ("Fandom2/work3.html", Vec::from(*b"c")),
         ]);
-        let files = backend.list(Some(Path::new("Fandom1"))).await.unwrap();
+        let files = backend.list(Some(&ValidPath::new("Fandom1").unwrap())).await.unwrap();
         assert_eq!(files.len(), 2);
         let paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
         assert!(paths.contains(&"Fandom1/work1.html"));
@@ -262,8 +264,8 @@ mod tests {
     #[tokio::test]
     async fn test_path_traversal_rejected() {
         let backend = MockBackend::default();
-        assert!(backend.read(Path::new("../etc/passwd")).await.is_err());
-        assert!(backend.write(Path::new("../escape"), b"bad").await.is_err());
+        assert!(backend.read(&ValidPath::new("../etc/passwd").unwrap()).await.is_err());
+        assert!(backend.write(&ValidPath::new("../escape").unwrap(), b"bad").await.is_err());
     }
 
     #[test]
@@ -275,7 +277,7 @@ mod tests {
     #[tokio::test]
     async fn test_reader() {
         let backend = MockBackend::with_data([("file.txt", Vec::from(*b"hello world"))]);
-        let mut reader = backend.reader(Path::new("file.txt")).await.unwrap();
+        let mut reader = backend.reader(&ValidPath::new("file.txt").unwrap()).await.unwrap();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).await.unwrap();
         assert_eq!(buf, b"hello world");
@@ -284,7 +286,7 @@ mod tests {
     #[tokio::test]
     async fn test_reader_not_found() {
         let backend = MockBackend::default();
-        let Err(err) = backend.reader(Path::new("missing.txt")).await else {
+        let Err(err) = backend.reader(&ValidPath::new("missing.txt").unwrap()).await else {
             panic!("expected NotFound error");
         };
         assert!(matches!(&*err, ErrorKind::NotFound(_)));
@@ -293,11 +295,11 @@ mod tests {
     #[tokio::test]
     async fn test_writer() {
         let backend = MockBackend::default();
-        let mut writer = backend.writer(Path::new("file.txt")).await.unwrap();
+        let mut writer = backend.writer(&ValidPath::new("file.txt").unwrap()).await.unwrap();
         writer.write_all(b"hello ").await.unwrap();
         writer.write_all(b"world").await.unwrap();
         writer.close().await.unwrap();
-        let data = backend.read(Path::new("file.txt")).await.unwrap();
+        let data = backend.read(&ValidPath::new("file.txt").unwrap()).await.unwrap();
         assert_eq!(data, b"hello world");
     }
 }

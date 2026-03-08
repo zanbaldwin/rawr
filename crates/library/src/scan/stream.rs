@@ -8,9 +8,8 @@ use exn::ResultExt;
 use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt};
 use rawr_cache::Repository;
-use rawr_storage::BackendHandle;
+use rawr_storage::{BackendHandle, TryValidatePath, ValidPath};
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
 use std::pin::pin;
 
 /// Progress events emitted during a streaming [`scan`].
@@ -49,21 +48,21 @@ pub enum ScanEvent {
 pub fn scan<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,
-    prefix: Option<impl AsRef<Path>>,
-) -> impl Stream<Item = LibraryResult<ScanEvent>> + 'a {
+    prefix: Option<impl TryValidatePath>,
+) -> ScanResult<impl Stream<Item = LibraryResult<ScanEvent>> + 'a> {
     // I've been using AsRef too much, and need to start using Into more.
-    let prefix = prefix.map(|p| p.as_ref().to_path_buf());
-    stream! {
+    let prefix = prefix.map(|p| p.try_validate()).transpose().or_raise(|| ScanErrorKind::Storage)?;
+    Ok(stream! {
         for await event in scan_inner(backend, cache, prefix) {
             yield event.or_raise(|| LibraryErrorKind::Scan);
         }
-    }
+    })
 }
 
 fn scan_inner<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,
-    prefix: Option<PathBuf>,
+    prefix: Option<ValidPath>,
 ) -> impl Stream<Item = ScanResult<ScanEvent>> + 'a {
     stream!({
         yield Ok(ScanEvent::Started);
@@ -125,13 +124,7 @@ fn scan_inner<'a>(
         // I'm missing something. Guess I'll come back to this later on when I
         // start encountering bugs in the main CLI application...
 
-        let mut file_stream = match backend.list_stream(prefix.as_deref()) {
-            Ok(s) => pin!(s),
-            Err(e) => {
-                yield Err(e).or_raise(|| ScanErrorKind::Storage);
-                return;
-            },
-        };
+        let mut file_stream = pin!(backend.list_stream(prefix.as_ref()));
         let mut discovery_complete = false;
         let mut discovered = 0u64;
         let mut not_processing_yet = VecDeque::new();

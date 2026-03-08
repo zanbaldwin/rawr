@@ -11,7 +11,6 @@ use rawr_storage::file::{FileInfo, HashState, Processed};
 use rawr_storage::{BackendHandle, ValidPath};
 use std::cmp::Ordering;
 use std::ops::Deref;
-use std::path::PathBuf;
 use time::UtcDateTime;
 
 /// Maximum recursive relocations before bailing.
@@ -108,17 +107,19 @@ pub(crate) async fn trash<S: HashState>(
     trash: &BackendHandle,
     file: &FileInfo<S>,
 ) -> LibraryResult<()> {
-    let contents = backend.read(file.path.as_path()).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    let contents = backend.read(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
     trash.write(&make_trash_name(file), &contents).await.or_raise(|| LibraryErrorKind::Conflict)?;
-    backend.delete(file.path.as_path()).await.or_raise(|| LibraryErrorKind::Conflict)?;
+    backend.delete(&file.path).await.or_raise(|| LibraryErrorKind::Conflict)?;
     Ok(())
 }
 
-pub(crate) fn make_trash_name<S: HashState>(file: &FileInfo<S>) -> PathBuf {
+pub(crate) fn make_trash_name<S: HashState>(file: &FileInfo<S>) -> ValidPath {
     let mut hasher = blake3::Hasher::new();
     hasher.update(file.target.as_bytes());
     hasher.update(file.path.as_bytes());
     hasher.update(file.size.to_le_bytes().as_ref());
     let now = UtcDateTime::now();
-    PathBuf::from(format!("{}-{}.html{}", hasher.finalize(), now.unix_timestamp(), file.compression.extension()))
+    ValidPath::new(format!("{}-{}.html{}", hasher.finalize(), now.unix_timestamp(), file.compression.extension()))
+        // Safety: we know this is a valid path, we just constructed it ourselves.
+        .unwrap()
 }

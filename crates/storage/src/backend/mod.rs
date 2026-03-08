@@ -86,8 +86,8 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// Default implementation of this method is to collect all the results
     /// from [`list_stream()`](Self::list_stream) into a [`Vec`] before
     /// returning.
-    async fn list(&self, prefix: Option<&Path>) -> Result<Vec<FileInfo>> {
-        self.list_stream(prefix)?.try_collect().await
+    async fn list(&self, prefix: Option<&ValidPath>) -> Result<Vec<FileInfo>> {
+        self.list_stream(prefix).try_collect().await
     }
 
     /// Stream file metadata matching an optional prefix.
@@ -139,19 +139,15 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # }
     /// ```
     // TODO: Change Path to Str?
-    fn list_stream<'a>(&'a self, prefix: Option<&'a Path>) -> Result<FileInfoStream<'a>> {
+    fn list_stream<'a>(&'a self, prefix: Option<&'a ValidPath>) -> FileInfoStream<'a> {
         tracing::trace!(
             backend = self.name(),
-            prefix = %prefix.map(Path::display).unwrap_or_else(|| Path::new("").display()),
+            prefix = %prefix.map(|p|p.as_str()).unwrap_or_default(),
             "stream list of files from storage backend"
         );
-        let validated_prefix = prefix.map(ValidPath::new).transpose()?;
-        let opendal_prefix = validated_prefix
-            .as_ref()
-            .map(|p| format!("{}/", p.as_str().trim_end_matches('/')))
-            .unwrap_or_else(|| "/".to_string());
+        let opendal_prefix = prefix.map(|p| format!("{}/", p.trim_end_matches('/'))).unwrap_or_else(|| "/".to_string());
 
-        Ok(Box::pin(stream! {
+        Box::pin(stream! {
             let mut lister = match self.operator().lister_with(&opendal_prefix).recursive(true).await {
                 Ok(l) => l,
                 Err(e) if matches!(e.kind(), opendal::ErrorKind::NotFound) => return,
@@ -169,7 +165,7 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
                             Ok(p) => p,
                             Err(e) => { yield Err(e); continue; }
                         };
-                        if let Some(pfx) = &validated_prefix && !relative.as_str().starts_with(pfx.as_str()) { continue; }
+                        if let Some(pfx) = &prefix && !relative.as_str().starts_with(pfx.as_str()) { continue; }
                         yield Ok(metadata_to_file_info(self.name(), relative.into(), entry.metadata()));
                     },
                     Err(e) if !matches!(e.kind(), opendal::ErrorKind::NotFound) => {
@@ -178,7 +174,7 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
                     Err(_) => continue,
                 }
             }
-        }))
+        })
     }
 
     /// Check if a file exists.
@@ -195,10 +191,9 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn exists(&self, path: &Path) -> Result<bool> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "check file existence in storage backend");
-        let validated_path = ValidPath::new(path)?;
-        self.operator().exists(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path).into())
+    async fn exists(&self, path: &ValidPath) -> Result<bool> {
+        tracing::trace!(backend = self.name(), path = %path, "check file existence in storage backend");
+        self.operator().exists(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()).into())
     }
 
     /// Read file contents.
@@ -218,10 +213,9 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn read(&self, path: &Path) -> Result<Vec<u8>> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "read file from storage backend");
-        let validated_path = ValidPath::new(path)?;
-        let data = self.operator().read(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
+    async fn read(&self, path: &ValidPath) -> Result<Vec<u8>> {
+        tracing::trace!(backend = self.name(), path = %path, "read file from storage backend");
+        let data = self.operator().read(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(data.to_vec())
     }
 
@@ -250,18 +244,17 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn read_head(&self, path: &Path, bytes: usize) -> Result<Vec<u8>> {
-        tracing::trace!(backend = self.name(), path = %path.display(), bytes, "read initial bytes range of file from storage backend");
-        let validated_path = ValidPath::new(path)?;
-        let meta = self.operator().stat(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
+    async fn read_head(&self, path: &ValidPath, bytes: usize) -> Result<Vec<u8>> {
+        tracing::trace!(backend = self.name(), path = %path, bytes, "read initial bytes range of file from storage backend");
+        let meta = self.operator().stat(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         let actual_len = meta.content_length();
         let end = (bytes as u64).min(actual_len);
         let data = self
             .operator()
-            .read_with(validated_path.as_str())
+            .read_with(path.as_str())
             .range(..end)
             .await
-            .map_err(|e| map_opendal_error(e, path))?;
+            .map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(data.to_vec())
     }
 
@@ -281,10 +274,9 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn write(&self, path: &Path, data: &[u8]) -> Result<()> {
-        tracing::trace!(backend = self.name(), path = %path.display(), bytes = data.len(), "write file to storage backend");
-        let validated_path = ValidPath::new(path)?;
-        self.operator().write(validated_path.as_str(), data.to_vec()).await.map_err(|e| map_opendal_error(e, path))?;
+    async fn write(&self, path: &ValidPath, data: &[u8]) -> Result<()> {
+        tracing::trace!(backend = self.name(), path = %path, bytes = data.len(), "write file to storage backend");
+        self.operator().write(path.as_str(), data.to_vec()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(())
     }
 
@@ -303,13 +295,12 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn delete(&self, path: &Path) -> Result<()> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "delete file from storage backend");
-        let validated_path = ValidPath::new(path)?;
+    async fn delete(&self, path: &ValidPath) -> Result<()> {
+        tracing::trace!(backend = self.name(), path = %path, "delete file from storage backend");
         if !self.exists(path).await? {
-            exn::bail!(ErrorKind::NotFound(path.display().to_string()));
+            exn::bail!(ErrorKind::NotFound(path.to_string()));
         }
-        self.operator().delete(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
+        self.operator().delete(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(())
     }
 
@@ -336,14 +327,9 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        tracing::trace!(backend = self.name(), from = %from.display(), to = %to.display(), "rename file in storage backend");
-        let validated_from = ValidPath::new(from)?;
-        let validated_to = ValidPath::new(to)?;
-        self.operator()
-            .rename(validated_from.as_str(), validated_to.as_str())
-            .await
-            .map_err(|e| map_opendal_error(e, from))?;
+    async fn rename(&self, from: &ValidPath, to: &ValidPath) -> Result<()> {
+        tracing::trace!(backend = self.name(), from = %from, to = %to, "rename file in storage backend");
+        self.operator().rename(from.as_str(), to.as_str()).await.map_err(|e| map_opendal_error(e, from.as_path()))?;
         Ok(())
     }
 
@@ -363,11 +349,10 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// # Ok(())
     /// # }
     /// ```
-    async fn stat(&self, path: &Path) -> Result<FileInfo> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "get file metadata from storage backend");
-        let validated_path = ValidPath::new(path)?;
-        let meta = self.operator().stat(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
-        Ok(metadata_to_file_info(self.name(), validated_path.as_path().to_path_buf(), &meta))
+    async fn stat(&self, path: &ValidPath) -> Result<FileInfo> {
+        tracing::trace!(backend = self.name(), path = %path, "get file metadata from storage backend");
+        let meta = self.operator().stat(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
+        Ok(metadata_to_file_info(self.name(), path.as_path().to_path_buf(), &meta))
     }
 
     /// Open a file for streaming reads.
@@ -375,11 +360,10 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// Returns an async reader that streams file contents incrementally.
     /// Returns [`NotFound`](crate::error::ErrorKind::NotFound) if the file
     /// does not exist.
-    async fn reader(&self, path: &Path) -> Result<BoxedReader> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "open reader to file in storage backend");
-        let validated_path = ValidPath::new(path)?;
-        let reader = self.operator().reader(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
-        let async_read = reader.into_futures_async_read(..).await.map_err(|e| map_opendal_error(e, path))?;
+    async fn reader(&self, path: &ValidPath) -> Result<BoxedReader> {
+        tracing::trace!(backend = self.name(), path = %path, "open reader to file in storage backend");
+        let reader = self.operator().reader(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
+        let async_read = reader.into_futures_async_read(..).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(Box::new(async_read))
     }
 
@@ -390,10 +374,9 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// on the returned writer to finalize the write operation.
     ///
     /// Creates parent directories as needed (consistent with `write()`).
-    async fn writer(&self, path: &Path) -> Result<BoxedWriter> {
-        tracing::trace!(backend = self.name(), path = %path.display(), "open writer to file in storage backend");
-        let validated_path = ValidPath::new(path)?;
-        let writer = self.operator().writer(validated_path.as_str()).await.map_err(|e| map_opendal_error(e, path))?;
+    async fn writer(&self, path: &ValidPath) -> Result<BoxedWriter> {
+        tracing::trace!(backend = self.name(), path = %path, "open writer to file in storage backend");
+        let writer = self.operator().writer(path.as_str()).await.map_err(|e| map_opendal_error(e, path.as_path()))?;
         Ok(Box::new(writer.into_futures_async_write()))
     }
 }

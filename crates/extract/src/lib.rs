@@ -5,14 +5,13 @@ mod extract;
 pub mod models;
 mod truncate;
 
-use exn::ResultExt;
-use time::UtcDateTime;
-use tracing::instrument;
-
 use crate::error::{ErrorKind, Result};
 pub use crate::extract::{Datalist, Extractor, Stats, is_valid};
 use crate::models::Version;
 pub use crate::truncate::{ESTIMATED_HEADER_SIZE_BYTES, safe_html_truncate};
+use exn::ResultExt;
+use time::UtcDateTime;
+use tracing::instrument;
 
 /// Easy, top-level entrypoint for the extraction of [`Version`] from raw HTML bytes.
 ///

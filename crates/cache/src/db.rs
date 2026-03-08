@@ -1,13 +1,12 @@
 //! Database connection and pool management.
 
+use crate::error::{ErrorKind, Result};
 use exn::ResultExt;
 use sqlx::SqliteConnection;
 use sqlx::pool::PoolConnectionMetadata;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteSynchronous};
 use std::path::Path;
 use tracing::instrument;
-
-use crate::error::{ErrorKind, Result};
 
 /// Embedded migrations that are run automatically on connect.
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");

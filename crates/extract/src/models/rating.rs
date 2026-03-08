@@ -1,10 +1,7 @@
-use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
-    str::FromStr,
-};
-
 use super::sanitize;
 use crate::error::{Error, ErrorKind};
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::str::FromStr;
 
 /// Content rating enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

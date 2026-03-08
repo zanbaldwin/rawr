@@ -98,12 +98,8 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     let compression_source = file.compression;
     let compression_target = ctx.compression.unwrap_or(compression_source);
 
-    let correct_location = ctx
-        .template
-        .generate_with_ext(&version, "html", compression_target)
-        .or_raise(|| OrganizeErrorKind::Template)?;
-    // Safety: we'll eventually migrate the PathGenerator to return ValidPath instead of PathBuf.
-    let correct_location = ValidPath::new(correct_location).unwrap();
+    let correct_location =
+        ctx.template.generate(&version, "html", compression_target).or_raise(|| OrganizeErrorKind::Template)?;
     if correct_location == file.path {
         return Ok(Action::AlreadyCorrect(file.path.to_string()));
     }

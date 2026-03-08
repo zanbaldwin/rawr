@@ -69,7 +69,7 @@
 //! ```
 
 use crate::error::{Error, ErrorKind, Result};
-use exn::ResultExt;
+use exn::{OptionExt, ResultExt};
 use rawr_compress::Compression;
 use rawr_extract::models::Version;
 use rawr_storage::ValidPath;
@@ -119,54 +119,51 @@ impl PathGenerator {
     //     template.as_ref().parse()?.with_config(config)
     // }
 
-    /// Renders the template against the given [`Version`]'s metadata, returning
-    /// the normalized path without any file extension.
-    ///
-    /// The resulting path is trimmed, segment-wise normalized, and validated to
-    /// ensure it stays within the library root (no directory traversal).
-    #[instrument(skip_all, fields(work_id = version.as_ref().metadata.work_id))]
-    pub fn generate(&self, version: impl AsRef<Version>) -> Result<PathBuf> {
-        let path = self
-            .template
-            .render(&self.engine, Self::parameters(version.as_ref()))
-            .to_string()
-            .or_raise(|| ErrorKind::Template)?;
-        Self::normalize(path)
-    }
-
-    /// Renders the template and appends a file extension and optional compression suffix.
+    ///  Renders the template against the given [`Version`]'s metadata, returning
+    /// the normalized path with an appended file extension and optional
+    /// compression suffix.
     ///
     /// The extension is dot-separated and trimmed of leading/trailing dots, so both
     /// `"html"` and `".html"` produce the same result. When `compression` is
     /// [`Compression::None`] (or `None`), no compression suffix is appended.
     ///
+    /// The resulting path is trimmed, segment-wise normalized, and validated to
+    /// ensure it stays within the library root (no directory traversal).
+    ///
     /// ```text
-    /// generate(…)                               → "fandom/12345-story"
-    /// generate_with_ext(…, "html", None)        → "fandom/12345-story.html"
-    /// generate_with_ext(…, "html", Some(Bzip2)) → "fandom/12345-story.html.bz2"
-    /// generate_with_ext(…, "html", Bzip2)       → "fandom/12345-story.html.bz2"
+    /// generate(…, "html", None)        → "fandom/12345-story.html"
+    /// generate(…, "html", Some(Bzip2)) → "fandom/12345-story.html.bz2"
+    /// generate(…, "html", Bzip2)       → "fandom/12345-story.html.bz2"
     /// ```
-    pub fn generate_with_ext(
+    #[instrument(skip_all, fields(work_id = version.as_ref().metadata.work_id))]
+    pub fn generate(
         &self,
         version: impl AsRef<Version>,
         ext: impl AsRef<str>,
         compression: impl Into<Option<Compression>>,
-    ) -> Result<PathBuf> {
-        let mut path = self.generate(version)?;
-        let compression = compression.into().unwrap_or(Compression::None);
+    ) -> Result<ValidPath> {
+        let path = self
+            .template
+            .render(&self.engine, Self::parameters(version.as_ref()))
+            .to_string()
+            .or_raise(|| ErrorKind::Template)?;
+        let mut path = PathBuf::from(path);
         path.add_extension(ext.as_ref().trim().trim_matches('.'));
+        let compression = compression.into().unwrap_or(Compression::None);
         if !matches!(compression, Compression::None) {
             path.add_extension(compression.extension().trim_matches('.'));
         }
-        Ok(path)
-    }
-
-    /// Trims each path segment, joins them with `/`, then validates via
-    /// [`rawr_storage::ValidatedPath`].
-    fn normalize(s: impl Into<String>) -> Result<PathBuf> {
-        let path = s.into().trim().split('/').map(str::trim).collect::<Vec<_>>().join("/");
-        let validated_path = ValidPath::new(path).or_raise(|| ErrorKind::Template)?;
-        Ok(validated_path.into())
+        // Additional allocation PathBuf -> String
+        let path = path
+            .to_str()
+            .ok_or_raise(|| ErrorKind::Template)?
+            .trim()
+            .split('/')
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join("/");
+        // Additional allocation String -> Components -> ValidPath(NormalizedString).
+        ValidPath::new(path).or_raise(|| ErrorKind::Template)
     }
 
     /// Builds the [`upon::Value`] map exposed to the template engine.
@@ -257,7 +254,6 @@ mod addons {
 mod tests {
     use super::*;
     use rawr_extract::models::{Chapters, Fandom, Language, Metadata, Rating, Version};
-    use std::path::Path;
     use time::{Date, Month, UtcDateTime};
 
     fn make_test_version(work_id: u64, title: &str, fandom: &str) -> Version {
@@ -291,8 +287,8 @@ mod tests {
         let version = make_test_version(12345, "My Great Story", "Harry Potter");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate(&version).unwrap();
-        assert_eq!(path, Path::new("harry-potter/12345-my-great-story"));
+        let path = generator.generate(&version, "", None).unwrap();
+        assert_eq!(&path, "harry-potter/12345-my-great-story");
     }
 
     #[test]
@@ -301,8 +297,8 @@ mod tests {
         let version = make_test_version(12345, "Story", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate(&version).unwrap();
-        assert_eq!(path, Path::new("12345-deadbeef"));
+        let path = generator.generate(&version, "", None).unwrap();
+        assert_eq!(&path, "12345-deadbeef");
     }
 
     #[test]
@@ -311,9 +307,9 @@ mod tests {
         let version = make_test_version(123, "Title", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        assert!(generator.generate(&version).unwrap().ends_with("123"));
+        assert!(generator.generate(&version, "", None).unwrap().ends_with("123"));
         // Remember we are asserting that the path ends with a specific COMPONENT not string.
-        assert!(generator.generate_with_ext(&version, "html", None).unwrap().ends_with("123.html"));
+        assert!(generator.generate(&version, "html", None).unwrap().ends_with("123.html"));
     }
 
     #[test]
@@ -322,11 +318,11 @@ mod tests {
         let version = make_test_version(123, "Title", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate(&version).unwrap();
-        assert_eq!(path, Path::new("123.html"));
+        let path = generator.generate(&version, "", None).unwrap();
+        assert_eq!(&path, "123.html");
         assert!(!path.ends_with(".html.html"));
-        let path = generator.generate_with_ext(&version, "pdf", Compression::None).unwrap();
-        assert_eq!(path, Path::new("123.html.pdf"));
+        let path = generator.generate(&version, "pdf", Compression::None).unwrap();
+        assert_eq!(&path, "123.html.pdf");
     }
 
     #[test]
@@ -335,7 +331,7 @@ mod tests {
         let version = make_test_version(1, "\"Hello\" World's 'Test'", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        assert_eq!(generator.generate(&version).unwrap(), Path::new("hello-worlds-test.html"));
+        assert_eq!(&generator.generate(&version, "", None).unwrap(), "hello-worlds-test.html");
     }
 
     #[test]
@@ -344,9 +340,9 @@ mod tests {
         let version = make_test_version(1, "A Very Long Title Indeed", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate(&version).unwrap();
+        let path = generator.generate(&version, "", None).unwrap();
         // "A Very Lon" truncated to 10 bytes, then slugified
-        assert_eq!(path, Path::new("a-very-lon"));
+        assert_eq!(&path, "a-very-lon");
     }
 
     #[test]
@@ -355,9 +351,9 @@ mod tests {
         let version = make_test_version(1, "A Very Long Title Indeed", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate(&version).unwrap();
+        let path = generator.generate(&version, "", None).unwrap();
         // "A Very Lon" truncated to 10 bytes, then slugified
-        assert_eq!(path, Path::new("a-very-lon"));
+        assert_eq!(&path, "a-very-lon");
     }
 
     #[test]
@@ -366,8 +362,8 @@ mod tests {
         let version = make_test_version(123, "Title", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate_with_ext(&version, ".html", Compression::Bzip2).unwrap();
-        assert_eq!(path, Path::new("123.html.bz2"));
+        let path = generator.generate(&version, ".html", Compression::Bzip2).unwrap();
+        assert_eq!(&path, "123.html.bz2");
     }
 
     #[test]
@@ -376,7 +372,7 @@ mod tests {
         let version = make_test_version(123, "Title", "Fandom");
 
         let generator: PathGenerator = template.parse().unwrap();
-        let path = generator.generate_with_ext(&version, "pdf", None).unwrap();
-        assert_eq!(path, Path::new("123.pdf"));
+        let path = generator.generate(&version, "pdf", None).unwrap();
+        assert_eq!(&path, "123.pdf");
     }
 }

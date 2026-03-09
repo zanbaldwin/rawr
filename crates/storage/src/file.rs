@@ -89,6 +89,12 @@ impl FileMeta {
             content_hash: (),
         }
     }
+
+    /// For moving/renaming files.
+    pub fn with_path(mut self, path: impl TryValidatePath) -> Result<Self> {
+        self.path = path.try_validate()?;
+        Ok(self)
+    }
 }
 
 mod sealed {
@@ -177,6 +183,12 @@ impl<S: HashState> FileInfo<S> {
 
     pub fn strip_hashes(self) -> FileInfo<Discovered> {
         self.meta.into()
+    }
+
+    // For moving/renaming files.
+    pub fn with_path(mut self, path: impl TryValidatePath) -> Result<Self> {
+        self.meta = self.meta.with_path(path)?;
+        Ok(self)
     }
 }
 impl<S: HashState> Deref for FileInfo<S> {

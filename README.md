@@ -102,13 +102,13 @@ Options:
 ```
 
 ### Good first contributions
-- `rawr-compress`: add a new compression format gated behind a feature flag
-- `rawr-extract`: extracting additional AO3 metadata fields
-- `rawr-storage`: adding a new storage backend (e.g., WebDAV) gated behind a
+- `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs) gated behind a feature flag
+- `rawr-extract`: extracting additional [AO3 metadata fields](crates/extract/src/extract/mod.rs)
+- `rawr-storage`: adding a [new storage backend](crates/storage/src/backend/mod.rs) (e.g., WebDAV) gated behind a
   feature flag
-- `rawr-cache`: adding new queries to the repository
-- `rawr-render`: adding new built-in themes (CSS stylesheets)
-- `rawr-library`: new template variables for path generation
+- `rawr-cache`: adding [new queries](crates/cache/queries/) to the [repository](crates/cache/src/repo.rs)
+- `rawr-render`: adding new [built-in themes](assets/styles/) (CSS stylesheets)
+- `rawr-library`: new [template variables](crates/library/src/template.rs) for path generation
 
 ### License
 This project will remain proprietary, yet source-available, until a version

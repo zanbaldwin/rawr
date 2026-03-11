@@ -35,7 +35,7 @@ impl Compression {
     /// [`Encoder`](crate::error::ErrorKind::Encoder) error like it's sync
     /// counterpart because the underlying crate defers them until the
     /// first read attempt.
-    pub fn async_wrap_reader<'a, R: AsyncRead + Unpin + 'a>(&self, reader: R) -> Box<dyn AsyncRead + Unpin + 'a> {
+    pub fn async_wrap_reader<'a, R: AsyncRead + Unpin + Send + 'a>(&self, reader: R) -> Box<dyn AsyncRead + Unpin + Send + 'a> {
         // `async-compression` requires AsyncBufRead, but AsyncBufRead/AsyncWrite
         // doesn't mirror the sync API of Read/Write. Wrap the incoming AsyncRead
         // in a buffered version, so the callee doesn't need to do it.
@@ -56,10 +56,10 @@ impl Compression {
     /// Create an async peekable decompressor from any async buffered reader.
     ///
     /// Async counterpart of [`Compression::peekable_reader`].
-    pub fn async_peekable_reader<'a, R: AsyncRead + Unpin + 'a>(
+    pub fn async_peekable_reader<'a, R: AsyncRead + Unpin + Send + 'a>(
         &self,
         reader: R,
-    ) -> Result<AsyncPeekableReader<Box<dyn AsyncRead + Unpin + 'a>>> {
+    ) -> Result<AsyncPeekableReader<Box<dyn AsyncRead + Unpin + Send + 'a>>> {
         Ok(AsyncPeekableReader::new(self.async_wrap_reader(reader)))
     }
 
@@ -69,7 +69,7 @@ impl Compression {
     pub fn async_peekable_data<'a>(
         &self,
         input: &'a [u8],
-    ) -> Result<AsyncPeekableReader<Box<dyn AsyncRead + Unpin + 'a>>> {
+    ) -> Result<AsyncPeekableReader<Box<dyn AsyncRead + Unpin + Send + 'a>>> {
         self.async_peekable_reader(AsyncBufReader::new(input))
     }
 
@@ -82,7 +82,7 @@ impl Compression {
     ///
     /// The caller **must** call [`AsyncWriteExt::close`] on the returned writer
     /// to finalize the compressed stream.
-    pub fn async_wrap_writer<'a, W: AsyncWrite + Unpin + 'a>(&self, writer: W) -> Box<dyn AsyncWrite + Unpin + 'a> {
+    pub fn async_wrap_writer<'a, W: AsyncWrite + Unpin + Send + 'a>(&self, writer: W) -> Box<dyn AsyncWrite + Unpin + Send + 'a> {
         match self {
             Compression::None => Box::new(writer),
             #[cfg(feature = "brotli")]
@@ -102,8 +102,8 @@ impl Compression {
     /// Async counterpart of [`Compression::compress_stream`].
     pub async fn async_compress_stream<R, W>(&self, reader: &mut R, writer: &mut W) -> Result<u64>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         // `async-compression` is just my lazy syntactic sugar to wrap sync encoders/decoders,
         // because I don't want to have to do it myself. But compression formats are frame-based,
@@ -123,8 +123,8 @@ impl Compression {
     /// Async counterpart of [`Compression::decompress_stream`].
     pub async fn async_decompress_stream<R, W>(&self, reader: &mut R, writer: &mut W) -> Result<u64>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let reader = self.async_wrap_reader(reader);
         let bytes = async_copy(reader, writer).await.or_raise(|| ErrorKind::Io)?;

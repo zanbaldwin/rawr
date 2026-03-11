@@ -27,7 +27,7 @@ use std::{fs::File, io::Read};
 /// # async fn dothething() -> Result<(), Box<dyn std::error::Error>> {
 /// let backend = MockBackend::with_data([
 ///     ("works/123.html.gz", b"<html>...</html>"),
-/// ]);
+/// ]).await;
 /// assert!(backend.exists(&ValidPath::new("works/123.html.gz").unwrap()).await?);
 ///
 /// backend.write(&ValidPath::new("works/321.html").unwrap(), b"data...").await?;
@@ -54,21 +54,22 @@ impl MockBackend {
     /// ```
     /// use rawr_storage::backend::MockBackend;
     ///
+    /// # async fn example() {
     /// let backend = MockBackend::with_data([
     ///     ("one.html", b"data file 1"),
     ///     ("dir/two.html", b"data file 2"),
-    /// ]);
+    /// ]).await;
+    /// # }
     /// ```
-    pub fn with_data(files: impl IntoIterator<Item = (impl AsRef<Path>, impl Into<Vec<u8>>)>) -> Self {
+    pub async fn with_data(files: impl IntoIterator<Item = (impl AsRef<Path>, impl Into<Vec<u8>>)>) -> Self {
         let operator = Self::new_operator();
-        let blocking = operator.blocking();
         for (path, data) in files {
             let Ok(validated_path) = ValidPath::new(path.as_ref()) else {
                 // The panic here is DELIBERATE. MockBackend is intended to be
                 // used in tests; panics are expected. There is no error result.
                 panic!("MockBackend::with_data(): invalid path {}", path.as_ref().display());
             };
-            let Ok(_) = blocking.write(validated_path.as_str(), data.into()) else {
+            let Ok(_) = operator.write(validated_path.as_str(), data.into()).await else {
                 panic!("MockBackend::with_data(): could not write data to path {}", path.as_ref().display());
             };
         }
@@ -82,14 +83,15 @@ impl MockBackend {
     /// ```no_run
     /// use rawr_storage::backend::MockBackend;
     ///
+    /// # async fn example() {
     /// let backend = MockBackend::from_files([
     ///     "../../tests/fixtures/work1.html",
     ///     "../../tests/fixtures/work2.html",
-    /// ]);
+    /// ]).await;
+    /// # }
     /// ```
-    pub fn from_files<P: AsRef<Path>>(files: impl IntoIterator<Item = P>) -> Self {
+    pub async fn from_files<P: AsRef<Path>>(files: impl IntoIterator<Item = P>) -> Self {
         let operator = Self::new_operator();
-        let blocking = operator.blocking();
         for path in files {
             let path = path.as_ref();
             if !path.exists() {
@@ -101,7 +103,7 @@ impl MockBackend {
             // Place files directly into the root of the storage backend,
             // instead of needing to validating custom locations.
             let filename = path.file_name().unwrap().to_str().unwrap();
-            blocking.write(filename, contents).unwrap();
+            operator.write(filename, contents).await.unwrap();
         }
         Self { name: "mock".to_string(), operator }
     }
@@ -174,7 +176,7 @@ mod tests {
         let backend = MockBackend::with_data([
             ("a/file.html.gz", Vec::from(*b"compressed")),
             ("b/file.html", Vec::from(*b"plain")),
-        ]);
+        ]).await;
         assert!(backend.exists(&ValidPath::new("a/file.html.gz").unwrap()).await.unwrap());
         assert!(backend.exists(&ValidPath::new("b/file.html").unwrap()).await.unwrap());
         assert!(!backend.exists(&ValidPath::new("c/nope").unwrap()).await.unwrap());
@@ -245,7 +247,7 @@ mod tests {
             ("Fandom1/work1.html", Vec::from(*b"a")),
             ("Fandom1/work2.html", Vec::from(*b"b")),
             ("Fandom2/work3.html", Vec::from(*b"c")),
-        ]);
+        ]).await;
         let files = backend.list(Some(&ValidPath::new("Fandom1").unwrap())).await.unwrap();
         assert_eq!(files.len(), 2);
         let paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
@@ -255,20 +257,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_all() {
-        let backend = MockBackend::with_data([("a.txt", Vec::from(*b"1")), ("b.txt", Vec::from(*b"2"))]);
+        let backend = MockBackend::with_data([("a.txt", Vec::from(*b"1")), ("b.txt", Vec::from(*b"2"))]).await;
         let files = backend.list(None).await.unwrap();
         assert_eq!(files.len(), 2);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "invalid path")]
-    fn test_with_files_panics_on_bad_path() {
-        MockBackend::with_data([("../escape", Vec::from(*b"bad"))]);
+    async fn test_with_files_panics_on_bad_path() {
+        MockBackend::with_data([("../escape", Vec::from(*b"bad"))]).await;
     }
 
     #[tokio::test]
     async fn test_reader() {
-        let backend = MockBackend::with_data([("file.txt", Vec::from(*b"hello world"))]);
+        let backend = MockBackend::with_data([("file.txt", Vec::from(*b"hello world"))]).await;
         let mut reader = backend.reader(&ValidPath::new("file.txt").unwrap()).await.unwrap();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).await.unwrap();

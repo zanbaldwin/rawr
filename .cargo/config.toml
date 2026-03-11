@@ -13,6 +13,13 @@ overflow-checks = false
 lto = "fat"
 codegen-units = 1
 
+[profile.flamegraph]
+inherits = "release"
+# Keep DWARF symbols for perf
+debug = true
+# Don't strip symbols
+strip = false
+
 # Needs: `apt install musl-tools` or `dnf install musl-gcc`.
 [target.x86_64-unknown-linux-musl]
 rustflags = [

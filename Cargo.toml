@@ -10,23 +10,27 @@ license = "MIT"
 version = "0.1.0-beta"
 
 [workspace.dependencies]
+async-compression = "^0.4.0"
 async-stream = "^0.3.6"
 async-trait = "^0.1"
-opendal = "^0.51"
+opendal = "^0.55.0"
 blake3 = "^1.8"
 brotli = "^8.0"
 bzip2 = "^0.6.0"
 clap = "^4.5"
+console = "^0.16.2"
 crc32fast = "^1.5"
+ctrlc = "^3.5"
 derive_more = "^2.1"
+dialoguer = "^0.12.0"
 directories = "^6.0"
 exn = "^0.3"
-serde_json = "^1.0"
 fast_html2md = "^0.0.58"
 figment = "^0.10.19"
 flate2 = "^1.1"
 futures = "^0.3.30"
 html5ever = "^0.36.1"
+indicatif = "^0.18.4"
 memchr = "^2.8"
 miette = "^7.6"
 pin-project-lite = "^0.2.17"
@@ -36,14 +40,54 @@ rstest = "^0.26"
 rust-embed = "^8.11"
 scraper = "^0.25.0"
 serde = "^1.0"
+serde_json = "^1.0"
+similar = "^2.7"
 sqlx = "^0.8.6"
 tempfile = "^3.25"
 tendril = "^0.4.3"
 time = "^0.3.47"
 tokio = { version = "^1.49", default-features = false }
 tracing = "^0.1.0"
+tracing-subscriber = "^0.3.22"
 upon = "^0.10.0"
 which = "^8.0"
 xz2 = "^0.1.0"
-async-compression = "^0.4"
 zstd = "^0.13"
+
+[package]
+name = "rawr-cli"
+description = "Rawr CLI Tool"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "rawr"
+path = "src/main.rs"
+
+[features]
+default = ["s3"]
+xz = ["rawr-compress/xz"]
+zstd = ["rawr-compress/zstd"]
+brotli = ["rawr-compress/brotli"]
+s3 = ["rawr-storage/s3"]
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+console = { workspace = true }
+ctrlc = { workspace = true, features = ["termination"] }
+dialoguer = { workspace = true }
+exn = { workspace = true }
+indicatif = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+rawr-cache = { path = "crates/cache" }
+rawr-compress = { path = "crates/compress", features = ["cli"] }
+rawr-config = { path = "crates/config" }
+rawr-extract = { path = "crates/extract" }
+rawr-library = { path = "crates/library" }
+rawr-storage = { path = "crates/storage" }
+futures = { workspace = true }
+similar = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

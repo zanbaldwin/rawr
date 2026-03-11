@@ -146,21 +146,14 @@ impl PathGenerator {
             .render(&self.engine, Self::parameters(version.as_ref()))
             .to_string()
             .or_raise(|| ErrorKind::Template)?;
+        // Additional allocation String -> str -> String
+        let path = path.trim().split('/').map(str::trim).collect::<Vec<_>>().join("/");
         let mut path = PathBuf::from(path);
         path.add_extension(ext.as_ref().trim().trim_matches('.'));
         let compression = compression.into().unwrap_or(Compression::None);
         if !matches!(compression, Compression::None) {
             path.add_extension(compression.extension().trim_matches('.'));
         }
-        // Additional allocation PathBuf -> String
-        let path = path
-            .to_str()
-            .ok_or_raise(|| ErrorKind::Template)?
-            .trim()
-            .split('/')
-            .map(str::trim)
-            .collect::<Vec<_>>()
-            .join("/");
         // Additional allocation String -> Components -> ValidPath(NormalizedString).
         ValidPath::new(path).or_raise(|| ErrorKind::Template)
     }

@@ -61,7 +61,7 @@ pub enum Import {
     Outdated(FileInfo<Processed>, Version),
 }
 
-pub async fn import_file<R: AsyncRead + Unpin>(
+pub async fn import_file<R: AsyncRead + Unpin + Send>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
@@ -71,7 +71,7 @@ pub async fn import_file<R: AsyncRead + Unpin>(
     import_file_inner(backend, cache, ctx, source_compression, data).await.or_raise(|| LibraryErrorKind::Import)
 }
 
-async fn import_file_inner<R: AsyncRead + Unpin>(
+async fn import_file_inner<R: AsyncRead + Unpin + Send>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
@@ -82,6 +82,9 @@ async fn import_file_inner<R: AsyncRead + Unpin>(
     let target_compression = ctx.compression.unwrap_or(source_compression);
     // 1. Build a peekable decompressor that lets us inspect the HTML header
     //    without consuming the full stream.
+    // TODO: Peekable takes ownership of data, meaning that we have to follow
+    //       through with the decompression even if source and target are the
+    //       same compression format. Is `data: R` cloneable?
     let mut peekable = source_compression.async_peekable_reader(data).or_raise(|| ErrorKind::Compression)?;
     // 2. Peek at enough bytes to extract AO3 metadata from the HTML <head>.
     let head = peekable.peek(ESTIMATED_HEADER_SIZE_BYTES).await.or_raise(|| ErrorKind::Compression)?;
@@ -168,7 +171,7 @@ async fn import_file_inner<R: AsyncRead + Unpin>(
             // - A duplicate already existed at the target location (the incoming file was discarded)
             return Ok(Import::AlreadyExists(file_info.with_path(path).or_raise(|| ErrorKind::Storage)?, version));
         },
-        Action::Renamed(path) => {
+        Action::Renamed { to: path, .. } => {
             file_info = file_info.with_path(path).or_raise(|| ErrorKind::Storage)?;
         },
         Action::AlreadyCorrect(_) => (),

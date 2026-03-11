@@ -1,11 +1,15 @@
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::scan::error::{ErrorKind, Result as ScanResult};
 use exn::ResultExt;
+use futures::io::{copy as async_copy, sink};
+use rawr_asyncutils::InspectReader;
 use rawr_cache::{ExistenceResult, Repository};
-use rawr_extract::extract;
 use rawr_extract::models::Version;
+use rawr_extract::{ESTIMATED_HEADER_SIZE_BYTES, Extractor};
 use rawr_storage::BackendHandle;
 use rawr_storage::file::{FileInfo, HashState, Processed};
+use std::sync::{Arc, Mutex};
+use time::UtcDateTime;
 
 /// Indicates how much work was required to produce a [`Scan`] result.
 ///
@@ -71,11 +75,41 @@ pub(crate) async fn scan_file_inner<S: HashState>(
         let effort = ScanEffort::Cached;
         return Ok(Scan { file: cached_file, version, effort });
     }
-    // All that effort with Read/Write traits? Apparently pointless... Now the
-    // entire file contents is going to be stored in the future's state machine.
-    let bytes = backend.read(&file.path).await.or_raise(|| ErrorKind::Storage)?;
-    let file = file.with_file_hash(blake3::hash(&bytes).to_string());
+
+    // Data calculated as the file streams through the decompression pipeline.
+    let file_hasher = Arc::new(Mutex::new(blake3::Hasher::new()));
+    let file_size = Arc::new(Mutex::new(0u64));
+    let mut content_hasher = blake3::Hasher::new();
+    let mut crc_hasher = crc32fast::Hasher::new();
+    let mut content_length = 0u64;
+
+    let file_reader = InspectReader::new(backend.reader(&file.path).await.or_raise(|| ErrorKind::Storage)?, {
+        let file_hasher = file_hasher.clone();
+        let file_size = file_size.clone();
+        move |bytes: &[u8]| {
+            *file_size.lock().unwrap() += bytes.len() as u64;
+            file_hasher.lock().unwrap().update(bytes);
+        }
+    });
+    let mut peekable = file.compression.async_peekable_reader(file_reader).or_raise(|| ErrorKind::Compression)?;
+
+    let head = peekable.peek(ESTIMATED_HEADER_SIZE_BYTES).await.or_raise(|| ErrorKind::Compression)?;
+    let metadata = Extractor::from_long_html(head).metadata().or_raise(|| ErrorKind::Extract)?;
+
+    let mut content_reader = InspectReader::new(peekable.into_reader(), |bytes: &[u8]| {
+        content_hasher.update(bytes);
+        crc_hasher.update(bytes);
+        content_length += bytes.len() as u64;
+    });
+    async_copy(&mut content_reader, &mut sink()).await.or_raise(|| ErrorKind::Io)?;
+
+    let file = file.with_file_hash(file_hasher.lock().unwrap().finalize().to_string());
     let existing = cache.exists(backend.name(), &file.path, &file.file_hash).await.or_raise(|| ErrorKind::Cache)?;
+    // Unfortunately now the "effort" is a little misleading because we calculate
+    // both the file hash and the content hash at the same time as we're streaming
+    // it through the decompression pipeline.
+    // Effort is less about the effort it took, and more just information about
+    // what already existed in the cache.
     let effort = match existing {
         // If we get to this point with an ExactMatch (unlikely) it means that
         // the file hash was the same but the file size wasn't. Data integrity
@@ -96,8 +130,17 @@ pub(crate) async fn scan_file_inner<S: HashState>(
         },
         ExistenceResult::NotFound => ScanEffort::Processed,
     };
-    let content = file.compression.decompress(&bytes).or_raise(|| ErrorKind::Compression)?;
-    let version = extract(&content).or_raise(|| ErrorKind::Extract)?;
+
+    // TODO: table rows are missing file size and discovered_at (both default to zero).
+
+    let version = Version {
+        hash: content_hasher.finalize().to_string(),
+        crc32: crc_hasher.finalize(),
+        length: content_length,
+        metadata,
+        extracted_at: UtcDateTime::now(),
+    };
+
     let file = file.with_content_hash(&version.hash);
     cache.upsert(&file, &version).await.or_raise(|| ErrorKind::Cache)?;
     Ok(Scan { file, version, effort })

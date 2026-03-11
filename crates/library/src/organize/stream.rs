@@ -4,11 +4,12 @@ use crate::organize::file::{Action, organize_file_inner};
 use crate::{Context, MAX_PROCESS_CONCURRENCY};
 use async_stream::stream;
 use exn::ResultExt;
-use futures::stream::FuturesUnordered;
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use rawr_cache::Repository;
 use rawr_storage::BackendHandle;
-use std::collections::VecDeque;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 /// Progress events emitted by [`organize`] as it works through a storage
 /// backend's cached files.
@@ -48,7 +49,7 @@ pub enum OrganizeEvent {
 pub fn organize<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,
-    ctx: &'a Context,
+    ctx: Arc<Context>,
 ) -> impl Stream<Item = LibraryResult<OrganizeEvent>> + 'a {
     // `rustfmt` does not format macro-specific syntax such as
     // `for await` even using the parentheses trick.
@@ -62,7 +63,7 @@ pub fn organize<'a>(
 fn organize_inner<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,
-    ctx: &'a Context,
+    ctx: Arc<Context>,
 ) -> impl Stream<Item = OrganizeResult<OrganizeEvent>> + 'a {
     // `rustfmt` does not format macros that use braces. Wrap in parentheses!
     stream!({
@@ -78,16 +79,21 @@ fn organize_inner<'a>(
         // Infallible: a usize (either 32- or 64-bit) will always fit in a u64.
         yield Ok(OrganizeEvent::DiscoveryComplete(u64::try_from(files.len()).unwrap_or(0)));
 
-        let mut futures: VecDeque<_> =
-            files.into_iter().map(|(file, _version)| organize_file_inner(backend, cache, ctx, file, vec![])).collect();
-        let mut processing = FuturesUnordered::new();
-        processing.extend(futures.drain(..MAX_PROCESS_CONCURRENCY.min(futures.len())));
-        while let Some(result) = processing.next().await {
+        let semaphore = Arc::new(Semaphore::new(MAX_PROCESS_CONCURRENCY));
+        let mut processing = JoinSet::new();
+        for (file, _version) in files {
+            let backend = backend.clone();
+            let cache = cache.clone();
+            let ctx = Arc::clone(&ctx);
+            let semaphore = Arc::clone(&semaphore);
+            processing.spawn(async move {
+                let _permit = semaphore.acquire().await.expect("semaphore closed");
+                organize_file_inner(&backend, &cache, &ctx, file, vec![]).await
+            });
+        }
+        while let Some(result) = processing.join_next().await {
+            let result = result.expect("organize task panicked so we panic");
             yield result.map(OrganizeEvent::Organized);
-            // Pop-n-push, but FIFO instead of LIFO.
-            if let Some(f) = futures.pop_front() {
-                processing.push(f);
-            }
         }
 
         yield Ok(OrganizeEvent::Complete);

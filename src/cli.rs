@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ColorChoice, Parser, Subcommand};
 use std::path::PathBuf;
 
 use crate::command::{OrganizeCommand, ScanCommand};
@@ -18,6 +18,15 @@ pub(crate) struct Cli {
     /// Preview changes without executing
     #[arg(short = 'd', long = "dry-run", global = true, visible_alias = "read-only")]
     pub dry_run: bool,
+    /// Enable verbose output
+    #[arg(short = 'v', long, global = true)]
+    pub verbose: bool,
+    /// Suppress all output except errors
+    #[arg(short = 'q', long, global = true, conflicts_with = "verbose")]
+    pub quiet: bool,
+    /// Control color output [auto, always, never]
+    #[arg(long, global = true, default_value = "auto")]
+    pub color: ColorChoice,
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

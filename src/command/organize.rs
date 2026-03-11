@@ -1,12 +1,9 @@
 use super::Command;
-use super::color;
-use crate::command::TerminalText;
-use crate::command::TextPiece;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
+use crate::output::{Line, Loudness, Palette, Piece, Pipe};
 use clap::Args;
 use futures::StreamExt;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rawr_compress::cli::Preference;
 use rawr_library::Context as LibraryContext;
 use rawr_library::organize::{Action, OrganizeEvent, organize};
@@ -46,16 +43,7 @@ impl Command for OrganizeCommand {
         ));
         let mut stream = pin!(organize(&import_backend, &ctx.cache, lib_ctx));
 
-        let multi = MultiProgress::new();
-        let bar = multi.add(ProgressBar::new(0));
-        bar.enable_steady_tick(std::time::Duration::from_millis(100));
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} Organizing [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) [{elapsed_precise}]",
-                )
-                .expect("valid template"),
-        );
+        let bar = ctx.output.progress_bar("Organizing");
 
         let mut error_count: u64 = 0;
 
@@ -66,10 +54,14 @@ impl Command for OrganizeCommand {
                     bar.set_length(total);
                 },
                 Ok(OrganizeEvent::Organized(action)) => {
-                    // TODO: Would be nice to format_processed() the version too,
-                    // then the diff on the second line. But would that make it
-                    // too crowded?
-                    bar.println(format_action(&action, ctx.use_colour));
+                    let palette = Palette::default();
+                    let pieces = format_action(&action, &palette);
+                    let loudness = match &action {
+                        Action::Renamed { .. } => Loudness::Normal,
+                        Action::AlreadyCorrect(_) => Loudness::Quiet,
+                        Action::CleanedUp(_) => Loudness::Loud,
+                    };
+                    ctx.output.print(&Line::from_pieces(Pipe::Out, loudness, pieces));
                     bar.inc(1);
                 },
                 Ok(OrganizeEvent::Complete) => {
@@ -82,10 +74,13 @@ impl Command for OrganizeCommand {
             }
         }
 
-        multi.clear().ok();
-
         if error_count > 0 {
-            tracing::warn!("{error_count} file(s) failed during organize");
+            let palette = Palette::default();
+            ctx.output.print(&Line::from_pieces(Pipe::Err, Loudness::Loud, [
+                ("warning:", &palette.warning).into(),
+                Piece::space(),
+                (format!("{error_count} file(s) failed during organize"),).into(),
+            ]));
         }
         Ok(ExitCode::SUCCESS)
     }
@@ -109,28 +104,27 @@ fn tokenize_path(path: &str) -> Vec<&str> {
     tokens
 }
 
-fn format_action(action: &Action, use_colour: bool) -> String {
+fn format_action<'a>(action: &'a Action, palette: &'a Palette) -> Vec<Piece<'a>> {
     match action {
         Action::Renamed { from, to } => {
-            if !use_colour {
-                return format!("· {from} -> {to}");
-            }
             let old_tokens = tokenize_path(from);
             let new_tokens = tokenize_path(to);
-            let mut line = vec![TextPiece::new("· ", None)];
-            line.extend(TextDiff::from_slices(&old_tokens, &new_tokens).iter_all_changes().map(|c| {
-                TextPiece::new(
-                    c.value(),
-                    Some(match c.tag() {
-                        ChangeTag::Equal => color::GRAY,
-                        ChangeTag::Delete => color::RED,
-                        ChangeTag::Insert => color::GREEN,
-                    }),
-                )
-            }));
-            line.display(use_colour).into()
+            let mut pieces: Vec<Piece<'_>> = vec![("·", &palette.muted).into(), Piece::space()];
+            for change in TextDiff::from_slices(&old_tokens, &new_tokens).iter_all_changes() {
+                let style = match change.tag() {
+                    ChangeTag::Equal => &palette.muted,
+                    ChangeTag::Delete => &palette.removed,
+                    ChangeTag::Insert => &palette.added,
+                };
+                pieces.push(Piece::fixed(change.value().to_string(), style));
+            }
+            pieces
         },
-        Action::AlreadyCorrect(p) => TextPiece::new(format!("= {p}"), Some(color::GRAY)).display(use_colour).into(),
-        Action::CleanedUp(p) => TextPiece::new(format!("× {p}"), Some(color::RED)).display(use_colour).into(),
+        Action::AlreadyCorrect(p) => {
+            vec![("=", &palette.muted).into(), Piece::space(), (p.as_str(), &palette.muted).into()]
+        },
+        Action::CleanedUp(p) => {
+            vec![("×", &palette.danger).into(), Piece::space(), (p.as_str(), &palette.danger).into()]
+        },
     }
 }

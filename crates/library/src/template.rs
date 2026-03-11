@@ -68,7 +68,7 @@
 //! ```
 
 use crate::error::{Error, ErrorKind, Result};
-use exn::{OptionExt, ResultExt};
+use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_extract::models::Version;
 use rawr_storage::ValidPath;
@@ -205,24 +205,24 @@ impl PathGenerator {
 mod addons {
     use rslug::slugify;
     use std::fmt::Write;
-    use upon::{Engine, Value, fmt as upon_fmt};
+    use upon::fmt::{Formatter as UponFormatter, Result as UponResult, default};
+    use upon::{Engine, Value};
 
     /// Custom formatter that converts strings to URL-safe slugs.
     ///
     /// Strips quotation marks before slugifying to avoid awkward slug output
     /// like `"hello"` becoming `-hello-`.
-    fn slug_formatter(f: &mut upon_fmt::Formatter<'_>, value: &Value) -> upon_fmt::Result {
-        match value {
-            Value::String(s) => {
-                // Various quotation marks: '"''""„"`«»
-                let marks = [
-                    '\u{0027}', '\u{0022}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{201E}', '\u{201B}',
-                    '\u{0060}', '\u{00AB}', '\u{00BB}', '\u{2039}', '\u{203A}',
-                ];
-                let stripped: String = s.chars().filter(|c| !marks.contains(c)).collect();
-                write!(f, "{}", slugify!(&stripped))?
-            },
-            v => upon_fmt::default(f, v)?,
+    fn slug_formatter(f: &mut UponFormatter<'_>, value: &Value) -> UponResult {
+        if let Value::String(s) = value {
+            // Various quotation marks: '"''""„"`«»
+            let marks = [
+                '\u{0027}', '\u{0022}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{201E}', '\u{201B}',
+                '\u{0060}', '\u{00AB}', '\u{00BB}', '\u{2039}', '\u{203A}',
+            ];
+            let stripped: String = s.chars().filter(|c| !marks.contains(c)).collect();
+            write!(f, "{}", slugify!(&stripped))?;
+        } else {
+            default(f, value)?;
         };
         Ok(())
     }

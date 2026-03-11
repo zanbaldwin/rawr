@@ -2,11 +2,13 @@ mod cli;
 mod command;
 mod context;
 mod error;
+mod output;
 
 use crate::cli::{Cli, Commands};
 use crate::command::Command;
 use crate::context::AppContext;
 use crate::error::Result;
+use crate::output::{Line, Loudness, Palette, Pipe, TerminalOutput};
 use clap::{CommandFactory, Parser};
 use rawr_config::error::ConstraintViolation;
 use std::io::IsTerminal;
@@ -17,7 +19,8 @@ async fn main() -> Result<ExitCode> {
     init_tracing();
 
     let cli = Cli::parse();
-    let (mut context, warnings) = AppContext::build(&cli).await?;
+    let output = Box::new(TerminalOutput::new(cli.color, cli.verbose, cli.quiet));
+    let (mut context, warnings) = AppContext::build(&cli, output).await?;
     print_context(&context, &warnings);
 
     // Allow the subcommand to be optional, so that we can print the context and
@@ -38,20 +41,22 @@ async fn main() -> Result<ExitCode> {
     Ok(exit)
 }
 
-// This is a TEMPORARY solution, until we have a more solid TUI process in place.
-fn print_context(context: &AppContext, warnings: &[ConstraintViolation]) {
-    if context.use_colour {
-        eprintln!("\x1b[90m{}\x1b[0m", context);
-        for warning in warnings {
-            eprintln!("\x1b[38;5;172m· \x1b[37m{}:\x1b[38;5;172m {}\x1b[0m", warning.path, warning.message);
-        }
-    } else {
-        eprintln!("{context}");
-        for warning in warnings {
-            eprintln!("· {}: {}", warning.path, warning.message);
-        }
+fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
+    let palette = Palette::default();
+    // TODO: Should Loudness be part of the line definition, or part of the print call?
+    ctx.output.print(Pipe::Err, &Line::new(Loudness::Quiet).push((format!("{ctx}"), &palette.muted).into()));
+    for warning in warnings {
+        ctx.output.print(
+            Pipe::Err,
+            &Line::from_pieces(
+                Loudness::Loud,
+                [
+                    ("warning: ", &palette.warning).into(),
+                    (format!("{}: {}", warning.path, warning.message),).into(),
+                ],
+            ),
+        );
     }
-    eprintln!("");
 }
 
 const DEFAULT_LOGGING: &str = "rawr=info";

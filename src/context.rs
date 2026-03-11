@@ -1,9 +1,9 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io::IsTerminal;
 use std::sync::Arc;
 
 use crate::cli::Cli;
 use crate::error::Result;
+use crate::output::Output;
 use rawr_cache::{Database, Repository};
 use rawr_config::error::ConstraintViolation;
 use rawr_config::models::TargetConfig;
@@ -17,8 +17,7 @@ pub(crate) struct AppContext {
     database: Database,
     pub cache: Repository,
     pub dry_run: bool,
-    pub use_colour: bool,
-    pub width: usize,
+    pub output: Box<dyn Output>,
 }
 
 pub(crate) enum BackendPurpose {
@@ -28,7 +27,7 @@ pub(crate) enum BackendPurpose {
 }
 
 impl AppContext {
-    pub async fn build(cli: &Cli) -> Result<(Self, Vec<ConstraintViolation>)> {
+    pub async fn build(cli: &Cli, output: Box<dyn Output>) -> Result<(Self, Vec<ConstraintViolation>)> {
         if let Some(ref cwd) = cli.cwd {
             std::env::set_current_dir(cwd)?;
         }
@@ -40,8 +39,7 @@ impl AppContext {
             database,
             cache,
             dry_run: cli.dry_run,
-            use_colour: std::io::stdout().is_terminal(),
-            width: usize::from(console::Term::stdout().size().1),
+            output,
         };
         Ok((ctx, warnings))
     }
@@ -106,6 +104,7 @@ impl Display for AppContext {
         // As config is often discovered, rather than explicitly specified, it's
         // always useful to know where configuration changes need to be persisted to.
         let cache = self.config.library.cache.relative();
+        writeln!(f, "Using config file: {}", "<not-implemented>")?;
         writeln!(f, "Using cache database: {}", cache.canonicalize().unwrap_or(cache).display())
     }
 }

@@ -82,6 +82,9 @@ async fn import_file_inner<R: AsyncRead + Send + Unpin>(
     let target_compression = ctx.compression.unwrap_or(source_compression);
     // 1. Build a peekable decompressor that lets us inspect the HTML header
     //    without consuming the full stream.
+    // TODO: Peekable takes ownership of data, meaning that we have to follow
+    //       through with the decompression even if source and target are the
+    //       same compression format. Is `data: R` cloneable?
     let mut peekable = source_compression.async_peekable_reader(data).or_raise(|| ErrorKind::Compression)?;
     // 2. Peek at enough bytes to extract AO3 metadata from the HTML <head>.
     let head = peekable.peek(ESTIMATED_HEADER_SIZE_BYTES).await.or_raise(|| ErrorKind::Compression)?;

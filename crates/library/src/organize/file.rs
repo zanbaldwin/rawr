@@ -5,12 +5,11 @@ use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeR
 use crate::scan::error::ErrorKind as ScanErrorKind;
 use crate::scan::{Scan, file::scan_file_inner};
 use exn::ResultExt;
+use futures::{AsyncWriteExt, io::copy as async_copy};
 use rawr_cache::Repository;
-use rawr_compress::Compression;
 use rawr_storage::error::ErrorKind as StorageErrorKind;
 use rawr_storage::file::{FileInfo, HashState};
 use rawr_storage::{BackendHandle, ValidPath};
-use std::io::{self, Cursor};
 use std::ops::Deref;
 
 /// The outcome of (successfully) organizing a single file.
@@ -145,13 +144,13 @@ pub(crate) async fn organize_file_inner<S: HashState>(
         // The file is already compressed using the correct format, a simple rename will do.
         backend.rename(&file.path, &correct_location).await.or_raise(|| OrganizeErrorKind::Storage)?;
     } else {
-        let converted = convert(
-            &backend.read(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?,
-            compression_source,
-            compression_target,
-        )
-        .or_raise(|| OrganizeErrorKind::Compression)?;
-        backend.write(&correct_location, &converted).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        let reader = backend.reader(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        let mut decompressor = compression_source.async_wrap_reader(reader);
+        let writer = backend.writer(&correct_location).await.or_raise(|| OrganizeErrorKind::Storage)?;
+        let mut compressor = compression_target.async_wrap_writer(writer);
+        async_copy(&mut decompressor, &mut compressor).await.or_raise(|| OrganizeErrorKind::Io)?;
+        compressor.close().await.or_raise(|| OrganizeErrorKind::Io)?;
+        // Delete the original.
         backend.delete(&file.path).await.or_raise(|| OrganizeErrorKind::Storage)?;
     }
 
@@ -159,15 +158,4 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     // it can be cleaned up on the next library scan operation.
     _ = cache.update_target_path(&file.target, &file.path, &correct_location, compression_target).await;
     Ok(Action::Renamed(correct_location.to_string()))
-}
-
-/// Convert from one compression format to another
-fn convert(data: &[u8], source: Compression, target: Compression) -> OrganizeResult<Vec<u8>> {
-    let reader = Cursor::new(data);
-    let mut decompressor = source.wrap_reader(reader).or_raise(|| OrganizeErrorKind::Compression)?;
-    let mut writer = Cursor::new(Vec::new());
-    let mut compressor = target.wrap_writer(&mut writer).or_raise(|| OrganizeErrorKind::Compression)?;
-    io::copy(&mut decompressor, &mut compressor).or_raise(|| OrganizeErrorKind::Compression)?;
-    drop(compressor);
-    Ok(writer.into_inner())
 }

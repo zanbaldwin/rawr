@@ -25,6 +25,7 @@ pub enum ErrorKind {
     Compression,
     /// Metadata extraction via [`rawr_extract`] failed.
     Extract,
+    Io,
 }
 
 impl ErrorKind {

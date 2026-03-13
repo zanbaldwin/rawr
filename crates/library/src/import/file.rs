@@ -61,7 +61,7 @@ pub enum Import {
     Outdated(FileInfo<Processed>, Version),
 }
 
-pub async fn import_file<R: AsyncRead + Unpin>(
+pub async fn import_file<R: AsyncRead + Send + Unpin>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,
@@ -71,7 +71,7 @@ pub async fn import_file<R: AsyncRead + Unpin>(
     import_file_inner(backend, cache, ctx, source_compression, data).await.or_raise(|| LibraryErrorKind::Import)
 }
 
-async fn import_file_inner<R: AsyncRead + Unpin>(
+async fn import_file_inner<R: AsyncRead + Send + Unpin>(
     backend: &BackendHandle,
     cache: &Repository,
     ctx: &Context,

@@ -34,6 +34,7 @@ async fn main() -> Result<ExitCode> {
 
     let exit = match command {
         Commands::Scan(command) => command.execute(&mut context).await?,
+        Commands::Organize(command) => command.execute(&mut context).await?,
     };
 
     context.shutdown().await;

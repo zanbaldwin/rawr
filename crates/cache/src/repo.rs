@@ -8,6 +8,7 @@ use crate::error::{ErrorKind, Result};
 use crate::models::{FileRow, FullJoinRow, LeftJoinRow, VersionRow};
 use crate::{Database, File, Version};
 use exn::ResultExt;
+use rawr_compress::Compression;
 use rawr_storage::TryValidatePath;
 use sqlx::SqlitePool;
 use std::cmp::Ordering;
@@ -384,6 +385,7 @@ impl Repository {
         target: impl AsRef<str>,
         old_path: impl TryValidatePath,
         new_path: impl TryValidatePath,
+        new_compression: Compression,
     ) -> Result<bool> {
         let old_path = old_path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
         let new_path = new_path.try_validate().or_raise(|| ErrorKind::InvalidData("path"))?;
@@ -392,6 +394,7 @@ impl Repository {
         }
         let result = sqlx::query(include_str!("../queries/update_target_path.sql"))
             .bind(new_path.as_str())
+            .bind(new_compression.as_str())
             .bind(target.as_ref())
             .bind(old_path.as_str())
             .execute(&self.pool)
@@ -822,7 +825,10 @@ mod tests {
         let version = make_test_version(12345, "content_abc");
         let file = make_test_file("old/path.html.bz2", "content_abc");
         repo.upsert(&file, &version).await.unwrap();
-        let updated = repo.update_target_path(DEFAULT_TARGET, "old/path.html.bz2", "new/path.html.bz2").await.unwrap();
+        let updated = repo
+            .update_target_path(DEFAULT_TARGET, "old/path.html.bz2", "new/path.html.bz2", Compression::Bzip2)
+            .await
+            .unwrap();
         assert!(updated);
         assert!(repo.get_by_target_path(DEFAULT_TARGET, "old/path.html.bz2").await.unwrap().is_none());
         assert!(repo.get_by_target_path(DEFAULT_TARGET, "new/path.html.bz2").await.unwrap().is_some());

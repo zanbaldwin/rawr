@@ -5,12 +5,13 @@ use crate::scan::error::{ErrorKind as ScanErrorKind, Result as ScanResult};
 use crate::scan::file::scan_file_inner;
 use async_stream::stream;
 use exn::ResultExt;
-use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt};
 use rawr_cache::Repository;
 use rawr_storage::{BackendHandle, TryValidatePath, ValidPath};
-use std::collections::VecDeque;
 use std::pin::pin;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 /// Progress events emitted during a streaming [`scan`].
 ///
@@ -64,6 +65,12 @@ fn scan_inner<'a>(
     cache: &'a Repository,
     prefix: Option<ValidPath>,
 ) -> impl Stream<Item = ScanResult<ScanEvent>> + 'a {
+    let semaphore = Arc::new(Semaphore::new(MAX_PROCESS_CONCURRENCY));
+    // This was using FuturesUnordered before, but it polled all the futures
+    // on the same thread. Async is great and all that, but what's the
+    // fucking point if it's still single-threaded? This way we can delegate
+    // to Tokio's (BOO TOKIO) work scheduler.
+    let mut processing = JoinSet::new();
     stream!({
         yield Ok(ScanEvent::Started);
 
@@ -127,8 +134,6 @@ fn scan_inner<'a>(
         let mut file_stream = pin!(backend.list_stream(prefix.as_ref()));
         let mut discovery_complete = false;
         let mut discovered = 0u64;
-        let mut not_processing_yet = VecDeque::new();
-        let mut processing = FuturesUnordered::new();
         loop {
             // I really, REALLY, want to replace this with `futures::select_biased!`
             // so I can completely remove Tokio as a dependency entirely, but I
@@ -143,18 +148,13 @@ fn scan_inner<'a>(
                     Some(Ok(file)) => {
                         discovered += 1;
                         let path = file.path.clone();
-                        // TODO is the initial state of the future at the "here are the
-                        // arguments to the function, and the function body is ready to
-                        // execute on next poll" OR "everything up to the first .await call"?
-                        // Because that could potentially change the size of elements
-                        // in `not_processing_yet` if there are sync operations between
-                        // function call and first await?
-                        let future = scan_file_inner(backend, cache, file);
-                        if processing.len() < MAX_PROCESS_CONCURRENCY {
-                            processing.push(future);
-                        } else {
-                            not_processing_yet.push_back(future);
-                        }
+                        let backend = backend.clone();
+                        let cache = cache.clone();
+                        let semaphore = Arc::clone(&semaphore);
+                        processing.spawn(async move {
+                            let _permit = semaphore.acquire().await.expect("semaphore closed");
+                            scan_file_inner(&backend, &cache, file).await
+                        });
                         yield Ok(ScanEvent::FileDiscovered(path.into()));
                     },
                     Some(Err(e)) => yield Err(e).or_raise(|| ScanErrorKind::Storage),
@@ -164,28 +164,12 @@ fn scan_inner<'a>(
                     }
                 },
 
-                Some(result) = processing.next(), if !processing.is_empty() => {
+                Some(result) = processing.join_next(), if !processing.is_empty() => {
+                    let result = result.expect("scan task panicked so we panic");
                     yield result.map(|s| ScanEvent::Scanned(Box::new(s)));
-                    if let Some(future) = not_processing_yet.pop_front() {
-                        processing.push(future);
-                    }
                 },
 
-                else => {
-                    // DONE: Discovery is complete.
-                    // DONE: `processing` queue is empty.
-                    // `not_processing_yet` might not be empty? In what scenario would
-                    // that occur? Personally I don't think this is possible, but that
-                    // doesn't mean I'm confident about it.
-                    if !not_processing_yet.is_empty() {
-                        let yet_to_process = not_processing_yet.len();
-                        let batch = MAX_PROCESS_CONCURRENCY.min(yet_to_process);
-                        processing.extend(not_processing_yet.drain(..batch));
-                    } else {
-                        // All done!
-                        break;
-                    }
-                },
+                else => break,
             }
         }
         yield Ok(ScanEvent::Complete);

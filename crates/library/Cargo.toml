@@ -20,7 +20,7 @@ rawr-extract = { path = "../extract" }
 rawr-storage = { path = "../storage" }
 rslug = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 tracing = { workspace = true }
 upon = { workspace = true }
 

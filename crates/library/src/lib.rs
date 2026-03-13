@@ -9,9 +9,19 @@ pub use crate::template::PathGenerator;
 use rawr_compress::Compression;
 use rawr_storage::BackendHandle;
 
-/// Maximum number of files being concurrently processed. Futures beyond this
-/// limit are queued in memory and promoted as in-flight extractions complete.
-pub(crate) const MAX_PROCESS_CONCURRENCY: usize = 100;
+/// Maximum number of files being concurrently processed.
+///
+/// This number was tested at 30, 100, 250, 500, etc and since this application
+/// is mostly IO-bound, it doesn't have any meaningful affect on how fast
+/// operations complete.
+///
+/// **However,** it does have a noticable effect on the _appearance_ of speed.
+///
+/// At high numbers (eg, 250 and 500) the progress would speed up and slow down
+/// as "waves" of individual operations completed, but when limited to lower
+/// numbers (eg, 30 and 50) the progress speed would be more consistent and
+/// therefore appear to be completing faster.
+pub(crate) const MAX_PROCESS_CONCURRENCY: usize = 50;
 
 /// Shared configuration for a file importing/organizing passes.
 ///

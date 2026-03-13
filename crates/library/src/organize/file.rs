@@ -157,7 +157,7 @@ pub(crate) async fn organize_file_inner<S: HashState>(
 
     // Update the cache with the new location, but silently ignore errors since
     // it can be cleaned up on the next library scan operation.
-    _ = cache.update_target_path(&file.target, &file.path, &correct_location).await;
+    _ = cache.update_target_path(&file.target, &file.path, &correct_location, compression_target).await;
     Ok(Action::Renamed(correct_location.to_string()))
 }
 

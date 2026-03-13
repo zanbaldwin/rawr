@@ -5,6 +5,7 @@ mod error;
 mod output;
 
 use crate::cli::{Cli, Commands};
+use crate::command::Command;
 use crate::context::AppContext;
 use crate::error::Result;
 use crate::output::{IntoLines, Line, Loudness, PALETTE, Piece, Pipe, PrintingOutput};
@@ -19,7 +20,7 @@ async fn main() -> Result<ExitCode> {
 
     let cli = Cli::parse();
     let output = Box::new(PrintingOutput::new(cli.color, cli.verbose, cli.quiet));
-    let (context, warnings) = AppContext::build(&cli, output).await?;
+    let (mut context, warnings) = AppContext::build(&cli, output).await?;
     print_context(&context, &warnings);
 
     // Allow the subcommand to be optional, so that we can print the context and
@@ -31,10 +32,12 @@ async fn main() -> Result<ExitCode> {
         return Ok(ExitCode::from(2));
     };
 
-    let exit = match command {};
+    let exit = match command {
+        Commands::Scan(command) => command.execute(&mut context).await?,
+    };
 
     context.shutdown().await;
-    Ok(ExitCode::SUCCESS)
+    Ok(exit)
 }
 
 fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {

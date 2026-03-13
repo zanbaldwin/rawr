@@ -39,6 +39,7 @@ rust-embed = "^8.11"
 scraper = "^0.25.0"
 serde = "^1.0"
 serde_json = "^1.0"
+similar = "^2.7"
 sqlx = "^0.8.6"
 tempfile = "^3.25"
 tendril = "^0.4.3"
@@ -75,6 +76,7 @@ clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
 dialoguer = { workspace = true }
 exn = { workspace = true }
+futures = { workspace = true }
 indicatif = { workspace = true }
 miette = { workspace = true }
 rawr-cache = { path = "crates/cache" }
@@ -83,6 +85,7 @@ rawr-config = { path = "crates/config" }
 rawr-extract = { path = "crates/extract" }
 rawr-library = { path = "crates/library" }
 rawr-storage = { path = "crates/storage" }
+similar = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

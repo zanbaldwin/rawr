@@ -141,26 +141,24 @@ impl PathGenerator {
         ext: impl AsRef<str>,
         compression: impl Into<Option<Compression>>,
     ) -> Result<ValidPath> {
-        let path = self
+        // Allocation: Renderer<str> -> String -> str -> PathBuf(String).
+        let mut path: PathBuf = self
             .template
             .render(&self.engine, Self::parameters(version.as_ref()))
             .to_string()
-            .or_raise(|| ErrorKind::Template)?;
-        let mut path = PathBuf::from(path);
-        path.add_extension(ext.as_ref().trim().trim_matches('.'));
-        let compression = compression.into().unwrap_or(Compression::None);
-        if !matches!(compression, Compression::None) {
-            path.add_extension(compression.extension().trim_matches('.'));
-        }
-        // Additional allocation PathBuf -> String
-        let path = path
-            .to_str()
-            .ok_or_raise(|| ErrorKind::Template)?
+            .or_raise(|| ErrorKind::Template)?
             .trim()
             .split('/')
             .map(str::trim)
             .collect::<Vec<_>>()
-            .join("/");
+            .join("/")
+            .into();
+        let trim_ext = |c: char| c == '.' || c.is_whitespace();
+        path.add_extension(ext.as_ref().trim_matches(trim_ext));
+        let compression = compression.into().unwrap_or(Compression::None);
+        if !matches!(compression, Compression::None) {
+            path.add_extension(compression.extension().trim_matches(trim_ext));
+        }
         // Additional allocation String -> Components -> ValidPath(NormalizedString).
         ValidPath::new(path).or_raise(|| ErrorKind::Template)
     }
@@ -212,24 +210,25 @@ impl PathGenerator {
 mod addons {
     use rslug::slugify;
     use std::fmt::Write;
-    use upon::{Engine, Value, fmt as upon_fmt};
+    use upon::fmt::{Formatter as UponFormatter, Result as UponResult, default};
+    use upon::{Engine, Value};
+
+    // Various quotation marks: '"''""„"`«»
+    const MARKS: &[char] = &[
+        '\u{0027}', '\u{0022}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{201E}', '\u{201B}', '\u{0060}',
+        '\u{00AB}', '\u{00BB}', '\u{2039}', '\u{203A}',
+    ];
 
     /// Custom formatter that converts strings to URL-safe slugs.
     ///
     /// Strips quotation marks before slugifying to avoid awkward slug output
     /// like `"hello"` becoming `-hello-`.
-    fn slug_formatter(f: &mut upon_fmt::Formatter<'_>, value: &Value) -> upon_fmt::Result {
-        match value {
-            Value::String(s) => {
-                // Various quotation marks: '"''""„"`«»
-                let marks = [
-                    '\u{0027}', '\u{0022}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{201E}', '\u{201B}',
-                    '\u{0060}', '\u{00AB}', '\u{00BB}', '\u{2039}', '\u{203A}',
-                ];
-                let stripped: String = s.chars().filter(|c| !marks.contains(c)).collect();
-                write!(f, "{}", slugify!(&stripped))?
-            },
-            v => upon_fmt::default(f, v)?,
+    fn slug_formatter(f: &mut UponFormatter<'_>, value: &Value) -> UponResult {
+        if let Value::String(s) = value {
+            let stripped: String = s.chars().filter(|c| !MARKS.contains(c)).collect();
+            write!(f, "{}", slugify!(&stripped))?;
+        } else {
+            default(f, value)?;
         };
         Ok(())
     }

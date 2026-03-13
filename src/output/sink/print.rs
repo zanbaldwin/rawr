@@ -68,8 +68,6 @@ impl Output for PrintingOutput {
         }
         let terminal = self.terminal.get(pipe);
         let rendered = line.render(terminal.width, terminal.colors);
-        // TODO: Should we briefly suspend the spinner/bar while we print?
-        //       Sometimes the bar gets injected into the stream of results.
         _ = self.multi.suspend(|| terminal.pipe.write_line(&rendered));
     }
 

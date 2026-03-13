@@ -20,14 +20,15 @@ clap = "^4.5"
 console = "^0.16.2"
 crc32fast = "^1.5"
 derive_more = "^2.1"
+dialoguer = "^0.12.0"
 directories = "^6.0"
 exn = "^0.3"
-serde_json = "^1.0"
 fast_html2md = "^0.0.58"
 figment = "^0.10.19"
 flate2 = "^1.1"
 futures = "^0.3.30"
 html5ever = "^0.36.1"
+indicatif = "^0.18.4"
 memchr = "^2.8"
 miette = "^7.6"
 pin-project-lite = "^0.2.17"
@@ -37,6 +38,7 @@ rstest = "^0.26"
 rust-embed = "^8.11"
 scraper = "^0.25.0"
 serde = "^1.0"
+serde_json = "^1.0"
 sqlx = "^0.8.6"
 tempfile = "^3.25"
 tendril = "^0.4.3"
@@ -61,6 +63,16 @@ version.workspace = true
 name = "rawr"
 path = "src/main.rs"
 
+[features]
+default = ["s3"]
+s3 = ["rawr-storage/s3"]
+
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
+dialoguer = { workspace = true }
+indicatif = { workspace = true }
+rawr-config = { path = "crates/config" }
+rawr-extract = { path = "crates/extract" }
+rawr-storage = { path = "crates/storage" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

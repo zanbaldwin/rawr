@@ -139,7 +139,7 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     // Target location is now free. If there was a cache entry at the target location
     // it isn't there now, delete old entry. Silently ignore errors if it couldn't
     // be deleted, it's a dangling record anyway.
-    _ = cache.delete_by_target_path(&file.target, &file.path).await;
+    _ = cache.delete_by_target_path(&file.target, &correct_location).await;
 
     if compression_source == compression_target {
         // The file is already compressed using the correct format, a simple rename will do.

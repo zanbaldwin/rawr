@@ -168,8 +168,8 @@ async fn import_file_inner<R: AsyncRead + Send + Unpin>(
             // - A duplicate already existed at the target location (the incoming file was discarded)
             return Ok(Import::AlreadyExists(file_info.with_path(path).or_raise(|| ErrorKind::Storage)?, version));
         },
-        Action::Renamed(path) => {
-            file_info = file_info.with_path(path).or_raise(|| ErrorKind::Storage)?;
+        Action::Renamed { to, .. } => {
+            file_info = file_info.with_path(to).or_raise(|| ErrorKind::Storage)?;
         },
         Action::AlreadyCorrect(_) => (),
     };

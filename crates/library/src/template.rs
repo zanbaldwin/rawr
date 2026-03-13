@@ -68,7 +68,7 @@
 //! ```
 
 use crate::error::{Error, ErrorKind, Result};
-use exn::{OptionExt, ResultExt};
+use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_extract::models::Version;
 use rawr_storage::ValidPath;

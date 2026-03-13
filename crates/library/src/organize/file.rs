@@ -20,7 +20,7 @@ use std::ops::Deref;
 /// to log, report progress, or take further action.
 pub enum Action {
     /// File was moved (and optionally re-compressed) to the correct path.
-    Renamed(String),
+    Renamed { from: String, to: String },
     /// File was already at the correct path; no work performed.
     AlreadyCorrect(String),
     /// File no longer exists on disk (or a duplicate already existed in the
@@ -158,7 +158,10 @@ pub(crate) async fn organize_file_inner<S: HashState>(
     // Update the cache with the new location, but silently ignore errors since
     // it can be cleaned up on the next library scan operation.
     _ = cache.update_target_path(&file.target, &file.path, &correct_location, compression_target).await;
-    Ok(Action::Renamed(correct_location.to_string()))
+    Ok(Action::Renamed {
+        from: file.path.to_string(),
+        to: correct_location.into(),
+    })
 }
 
 /// Convert from one compression format to another

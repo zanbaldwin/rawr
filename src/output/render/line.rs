@@ -3,9 +3,10 @@ use super::piece::{Flexibility, Piece};
 use crate::output::Verbosity;
 use std::borrow::Cow;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Loudness {
     Whisper,
+    #[default]
     Normal,
     Shout,
 }
@@ -19,24 +20,32 @@ impl Loudness {
     }
 }
 
+#[derive(Default)]
 pub struct Line<'a> {
     pub(crate) loudness: Loudness,
     pieces: Vec<Piece<'a>>,
+    fallback: Option<Cow<'a, str>>,
 }
 impl<'a> Line<'a> {
-    pub(crate) fn new(loudness: Loudness, pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
+    pub(crate) fn new(pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
         Self {
-            loudness,
+            loudness: Loudness::default(),
             pieces: pieces.into_iter().collect(),
+            fallback: None,
         }
     }
 
-    pub(crate) fn empty(loudness: Loudness) -> Self {
-        Self { loudness, pieces: Vec::new() }
+    pub(crate) fn empty() -> Self {
+        Self::default()
     }
 
     pub(crate) fn with_volume(mut self, loudness: Loudness) -> Self {
         self.loudness = loudness;
+        self
+    }
+
+    pub(crate) fn with_fallback<S: Into<Cow<'a, str>>>(mut self, fallback: impl Into<Option<S>>) -> Self {
+        self.fallback = fallback.into().map(|s| s.into());
         self
     }
 
@@ -51,7 +60,7 @@ impl<'a> Line<'a> {
 
 impl From<Loudness> for Line<'_> {
     fn from(value: Loudness) -> Self {
-        Self::empty(value)
+        Self::empty().with_volume(value)
     }
 }
 impl<'a, I> From<I> for Line<'a>
@@ -59,7 +68,7 @@ where
     I: IntoIterator<Item = Piece<'a>>,
 {
     fn from(value: I) -> Self {
-        Line::new(Loudness::Normal, value)
+        Line::new(value)
     }
 }
 
@@ -122,6 +131,12 @@ fn allocate_flex_budgets(entries: &[FlexEntry], budget: usize) -> Vec<(usize, us
 
 impl<'a> Render<'a> for Line<'a> {
     fn render(&'a self, width: Option<usize>, colour: bool) -> Cow<'a, str> {
+        if !colour && let Some(ref fallback) = self.fallback {
+            return match fallback {
+                Cow::Owned(s) => Cow::Owned(s.clone()),
+                Cow::Borrowed(s) => Cow::Borrowed(*s),
+            };
+        }
         if self.pieces.is_empty() {
             return Cow::Borrowed("");
         }
@@ -162,31 +177,27 @@ mod tests {
     use super::*;
     use console::Style;
 
-    // ── Empty line ──────────────────────────────────────────────────────
-
     #[test]
     fn render_empty_line_returns_empty_string() {
-        let line = Line::empty(Loudness::Normal);
+        let line = Line::empty();
         assert_eq!(line.render(None, false), "");
     }
 
     #[test]
     fn render_empty_line_with_width_returns_empty_string() {
-        let line = Line::empty(Loudness::Normal);
+        let line = Line::empty();
         assert_eq!(line.render(Some(80), false), "");
     }
 
-    // ── Single fixed piece ──────────────────────────────────────────────
-
     #[test]
     fn render_single_fixed_piece_no_width() {
-        let line = Line::new(Loudness::Normal, [Piece::plain("hello")]);
+        let line = Line::new([Piece::plain("hello")]);
         assert_eq!(line.render(None, false), "hello");
     }
 
     #[test]
     fn render_single_fixed_piece_with_width_does_not_truncate() {
-        let line = Line::new(Loudness::Normal, [Piece::plain("hello world")]);
+        let line = Line::new([Piece::plain("hello world")]);
         // Fixed pieces are never truncated, even when exceeding width
         assert_eq!(line.render(Some(5), false), "hello world");
     }
@@ -194,68 +205,59 @@ mod tests {
     #[test]
     fn render_single_fixed_piece_with_colour() {
         let style = Style::new().bold();
-        let line = Line::new(Loudness::Normal, [Piece::fixed("hello", &style)]);
+        let line = Line::new([Piece::fixed("hello", &style)]);
         let rendered = line.render(None, true);
         assert_ne!(rendered.as_ref(), "hello");
         assert!(rendered.contains("hello"));
     }
 
-    // ── Single truncatable piece ────────────────────────────────────────
-
     #[test]
     fn render_single_truncatable_piece_no_width() {
-        let line = Line::new(Loudness::Normal, [Piece::flex("hello world", Style::new(), 3)]);
+        let line = Line::new([Piece::flex("hello world", Style::new(), 3)]);
         assert_eq!(line.render(None, false), "hello world");
     }
 
     #[test]
     fn render_single_truncatable_piece_fits_within_width() {
-        let line = Line::new(Loudness::Normal, [Piece::flex("hello", Style::new(), 3)]);
+        let line = Line::new([Piece::flex("hello", Style::new(), 3)]);
         assert_eq!(line.render(Some(20), false), "hello");
     }
 
     #[test]
     fn render_single_truncatable_piece_exceeds_width() {
-        let line = Line::new(Loudness::Normal, [Piece::flex("hello world", Style::new(), 3)]);
+        let line = Line::new([Piece::flex("hello world", Style::new(), 3)]);
         let rendered = line.render(Some(5), false);
         assert_eq!(console::measure_text_width(&rendered), 5);
     }
 
     #[test]
     fn render_single_truncatable_piece_min_width_exceeds_available() {
-        let line = Line::new(Loudness::Normal, [Piece::flex("hello world", Style::new(), 10)]);
+        let line = Line::new([Piece::flex("hello world", Style::new(), 10)]);
         let rendered = line.render(Some(5), false);
         assert_eq!(rendered, "");
     }
 
-    // ── Multiple fixed pieces only ──────────────────────────────────────
-
     #[test]
     fn render_multiple_fixed_pieces_no_width() {
-        let line = Line::new(Loudness::Normal, [Piece::plain("hello"), Piece::space(), Piece::plain("world")]);
+        let line = Line::new([Piece::plain("hello"), Piece::space(), Piece::plain("world")]);
         assert_eq!(line.render(None, false), "hello world");
     }
 
     #[test]
     fn render_multiple_fixed_pieces_with_width_does_not_truncate() {
-        let line = Line::new(Loudness::Normal, [Piece::plain("hello"), Piece::space(), Piece::plain("world")]);
+        let line = Line::new([Piece::plain("hello"), Piece::space(), Piece::plain("world")]);
         // No truncatable pieces, so width constraint has no effect
         assert_eq!(line.render(Some(5), false), "hello world");
     }
 
-    // ── One truncatable piece among fixed pieces ────────────────────────
-
     #[test]
     fn render_truncatable_among_fixed_fits() {
         // "[" + truncatable("hello", min=3) + "]" with width=20
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::plain("["),
-                Piece::flex("hello", Style::new(), 3),
-                Piece::plain("]"),
-            ],
-        );
+        let line = Line::new([
+            Piece::plain("["),
+            Piece::flex("hello", Style::new(), 3),
+            Piece::plain("]"),
+        ]);
         // Fixed pieces consume 2 chars, leaving 18 for truncatable; "hello" is 5, fits
         assert_eq!(line.render(Some(20), false), "[hello]");
     }
@@ -263,14 +265,11 @@ mod tests {
     #[test]
     fn render_truncatable_among_fixed_needs_truncation() {
         // "[" + truncatable("hello world", min=3) + "]" with width=8
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::plain("["),
-                Piece::flex("hello world", Style::new(), 3),
-                Piece::plain("]"),
-            ],
-        );
+        let line = Line::new([
+            Piece::plain("["),
+            Piece::flex("hello world", Style::new(), 3),
+            Piece::plain("]"),
+        ]);
         // Fixed pieces consume 2 chars, leaving 6 for truncatable
         let rendered = line.render(Some(8), false);
         // Truncatable should be truncated to 6 chars
@@ -282,33 +281,25 @@ mod tests {
     #[test]
     fn render_truncatable_among_fixed_dropped_due_to_min_width() {
         // "prefix:" + truncatable("hello world", min=10) + " suffix" with width=12
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::plain("prefix:"),
-                Piece::flex("hello world", Style::new(), 10),
-                Piece::plain(" suffix"),
-            ],
-        );
+        let line = Line::new([
+            Piece::plain("prefix:"),
+            Piece::flex("hello world", Style::new(), 10),
+            Piece::plain(" suffix"),
+        ]);
         // Fixed pieces consume 7 + 7 = 14 chars, leaving 0 for truncatable (12 - 14 saturates to 0)
         // min_width=10 > 0, so truncatable is dropped (rendered as "")
         let rendered = line.render(Some(12), false);
         assert_eq!(rendered, "prefix: suffix");
     }
 
-    // ── Two or more truncatable pieces ──────────────────────────────────
-
     #[test]
     fn render_two_truncatable_pieces_both_fit() {
         // Two short truncatable pieces that both fit within the width
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::flex("ab", Style::new(), 1),
-                Piece::plain("|"),
-                Piece::flex("cd", Style::new(), 1),
-            ],
-        );
+        let line = Line::new([
+            Piece::flex("ab", Style::new(), 1),
+            Piece::plain("|"),
+            Piece::flex("cd", Style::new(), 1),
+        ]);
         // Total content: 2 + 1 + 2 = 5; width=20 => everything fits
         assert_eq!(line.render(Some(20), false), "ab|cd");
     }
@@ -317,14 +308,11 @@ mod tests {
     fn render_two_truncatable_pieces_total_exceeds_width() {
         // Two truncatable pieces whose combined length exceeds width.
         // The total rendered width must not exceed the constraint.
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::flex("hello world", Style::new(), 3),
-                Piece::plain("|"),
-                Piece::flex("foo bar baz", Style::new(), 3),
-            ],
-        );
+        let line = Line::new([
+            Piece::flex("hello world", Style::new(), 3),
+            Piece::plain("|"),
+            Piece::flex("foo bar baz", Style::new(), 3),
+        ]);
         // Total unconstrained: 11 + 1 + 11 = 23; width=15
         // Fixed: 1 char ("|"), remaining: 14 for two truncatable pieces
         let rendered = line.render(Some(15), false);
@@ -340,14 +328,11 @@ mod tests {
     fn render_two_truncatable_pieces_first_is_not_ignored() {
         // Verify that the first truncatable piece is also subject to
         // width constraints, not just the last one.
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::flex("aaaaaaaaaa", Style::new(), 2), // 10 chars, min 2
-                Piece::plain("|"),                          // 1 char fixed
-                Piece::flex("bb", Style::new(), 2),         // 2 chars, min 2
-            ],
-        );
+        let line = Line::new([
+            Piece::flex("aaaaaaaaaa", Style::new(), 2), // 10 chars, min 2
+            Piece::plain("|"),                          // 1 char fixed
+            Piece::flex("bb", Style::new(), 2),         // 2 chars, min 2
+        ]);
         // width=7: fixed=1, remaining=6 for two truncatables
         // If only the last truncatable gets a budget, the first renders
         // at full 10 chars and total becomes 10+1+2 = 13, exceeding 7.
@@ -363,16 +348,13 @@ mod tests {
 
     #[test]
     fn render_three_truncatable_pieces_respects_total_width() {
-        let line = Line::new(
-            Loudness::Normal,
-            [
-                Piece::flex("alpha", Style::new(), 2),
-                Piece::plain("-"),
-                Piece::flex("bravo", Style::new(), 2),
-                Piece::plain("-"),
-                Piece::flex("charlie", Style::new(), 2),
-            ],
-        );
+        let line = Line::new([
+            Piece::flex("alpha", Style::new(), 2),
+            Piece::plain("-"),
+            Piece::flex("bravo", Style::new(), 2),
+            Piece::plain("-"),
+            Piece::flex("charlie", Style::new(), 2),
+        ]);
         // Unconstrained: 5+1+5+1+7 = 19; width=11
         // Fixed: 2 ("-" x2), remaining: 9 for three truncatables
         let rendered = line.render(Some(11), false);
@@ -438,8 +420,6 @@ mod tests {
         );
     }
 
-    // ── Builder / From patterns ─────────────────────────────────────────
-
     #[test]
     fn from_iterator_creates_normal_loudness_line() {
         let line: Line = vec![Piece::plain("a"), Piece::plain("b")].into();
@@ -449,14 +429,12 @@ mod tests {
 
     #[test]
     fn push_appends_piece_to_line() {
-        let mut line = Line::empty(Loudness::Normal);
+        let mut line = Line::empty();
         line.push(Piece::plain("hello"));
         line.push(Piece::space());
         line.push(Piece::plain("world"));
         assert_eq!(line.render(None, false), "hello world");
     }
-
-    // ── Loudness / Verbosity ────────────────────────────────────────────
 
     #[test]
     fn loud_visible_at_all_verbosity_levels() {

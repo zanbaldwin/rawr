@@ -1,6 +1,6 @@
 use crate::cli::Cli;
 use crate::error::Result;
-use crate::output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
+use crate::output::{IntoLines, Line, Output, PALETTE, Piece};
 use rawr_cache::{Database, Repository};
 use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
@@ -8,7 +8,9 @@ use rawr_config::models::TargetConfig;
 use rawr_config::{Config, Loader};
 use rawr_library::Context as LibraryContext;
 use rawr_storage::BackendHandle;
-use rawr_storage::backend::{LocalBackend, ReadOnlyBackend, S3Backend};
+#[cfg(feature = "s3")]
+use rawr_storage::backend::S3Backend;
+use rawr_storage::backend::{LocalBackend, ReadOnlyBackend};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -73,6 +75,15 @@ impl AppContext {
                 let path = directory.relative();
                 Arc::new(LocalBackend::new(name.as_ref(), path.to_string_lossy(), *auto_create)?)
             },
+            #[cfg(not(feature = "s3"))]
+            TargetConfig::S3 { .. } => {
+                return Err(miette::miette!(
+                    help = "Recompile with the `s3` feature enabled to use S3 backends.",
+                    "Target `{}` is configured as S3, but S3 support is not available.",
+                    name.as_ref(),
+                ))?;
+            },
+            #[cfg(feature = "s3")]
             TargetConfig::S3 {
                 bucket,
                 region,
@@ -114,20 +125,14 @@ impl IntoLines for AppContext {
     fn to_lines(&self) -> Vec<Line<'_>> {
         let cache = self.config.library.cache.relative();
         vec![
-            Line::new(
-                Loudness::Normal,
-                [Piece::fixed(
-                    format!("Using config file: <not-implemented>"),
-                    &PALETTE.muted,
-                )],
-            ),
-            Line::new(
-                Loudness::Normal,
-                [Piece::fixed(
-                    format!("Using cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
-                    &PALETTE.muted,
-                )],
-            ),
+            Line::new([Piece::fixed(
+                format!("Using config file: <not-implemented>"),
+                &PALETTE.muted,
+            )]),
+            Line::new([Piece::fixed(
+                format!("Using cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
+                &PALETTE.muted,
+            )]),
         ]
     }
 }

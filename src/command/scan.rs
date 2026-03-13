@@ -61,14 +61,12 @@ impl Command for ScanCommand {
         if error_count > 0 {
             ctx.output.print(
                 Pipe::Err,
-                &Line::new(
-                    Loudness::Shout,
-                    [
-                        ("warning:", &PALETTE.warning).into(),
-                        Piece::space(),
-                        (format!("{error_count} file(s) failed during scan"),).into(),
-                    ],
-                ),
+                &Line::new([
+                    ("warning:", &PALETTE.warning).into(),
+                    Piece::space(),
+                    (format!("{error_count} file(s) failed during scan"),).into(),
+                ])
+                .with_volume(Loudness::Shout),
             );
         }
         Ok(ExitCode::SUCCESS)

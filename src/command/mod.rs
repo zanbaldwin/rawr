@@ -1,3 +1,6 @@
+mod scan;
+
+pub(crate) use self::scan::ScanCommand;
 use crate::context::AppContext;
 use crate::error::Result;
 use std::process::ExitCode;

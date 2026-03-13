@@ -2,9 +2,11 @@ use crate::cli::Cli;
 use crate::error::Result;
 use crate::output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
 use rawr_cache::{Database, Repository};
+use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
 use rawr_config::models::TargetConfig;
 use rawr_config::{Config, Loader};
+use rawr_library::Context as LibraryContext;
 use rawr_storage::BackendHandle;
 use rawr_storage::backend::{LocalBackend, ReadOnlyBackend, S3Backend};
 use std::path::PathBuf;
@@ -94,6 +96,17 @@ impl AppContext {
             backend = Arc::new(ReadOnlyBackend::new(backend));
         }
         Ok(backend)
+    }
+
+    pub async fn get_library_context(
+        &self,
+        compression: impl Into<Option<Compression>>,
+    ) -> Result<Arc<LibraryContext>> {
+        Ok(Arc::new(LibraryContext::new(
+            self.config.library.path_templates.import.parse()?,
+            compression.into(),
+            self.get_backend_by_purpose(BackendPurpose::Trash).await?,
+        )))
     }
 }
 

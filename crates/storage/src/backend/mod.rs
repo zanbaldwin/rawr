@@ -53,7 +53,7 @@ fn metadata_to_file_info(backend_name: &str, path: impl TryValidatePath, meta: &
     let size = meta.content_length();
     let modified = meta
         .last_modified()
-        .and_then(|ts| UtcDateTime::from_unix_timestamp(ts.timestamp()).ok())
+        .and_then(|ts| UtcDateTime::from_unix_timestamp(ts.into_inner().as_second()).ok())
         .unwrap_or(UtcDateTime::UNIX_EPOCH);
     let compression = Compression::from_path(path.as_path());
     FileInfo::new(backend_name, path, size, modified, compression)

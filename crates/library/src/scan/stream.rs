@@ -49,9 +49,9 @@ pub fn scan<'a>(
     backend: &'a BackendHandle,
     cache: &'a Repository,
     prefix: Option<impl TryValidatePath>,
-) -> ScanResult<impl Stream<Item = LibraryResult<ScanEvent>> + 'a> {
+) -> LibraryResult<impl Stream<Item = LibraryResult<ScanEvent>> + 'a> {
     // I've been using AsRef too much, and need to start using Into more.
-    let prefix = prefix.map(|p| p.try_validate()).transpose().or_raise(|| ScanErrorKind::Storage)?;
+    let prefix = prefix.map(|p| p.try_validate()).transpose().or_raise(|| LibraryErrorKind::Scan)?;
     Ok(stream! {
         for await event in scan_inner(backend, cache, prefix) {
             yield event.or_raise(|| LibraryErrorKind::Scan);

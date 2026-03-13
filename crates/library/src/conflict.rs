@@ -97,7 +97,7 @@ pub(crate) async fn handle_conflict<S: HashState>(
             Some(Ordering::Greater) => Ok(Some(ConflictResolution::TrashExisting)),
             Some(_) => Ok(Some(ConflictResolution::TrashIncoming)),
         },
-        Ok(Action::Renamed(_)) | Ok(Action::CleanedUp(_)) => Ok(Some(ConflictResolution::TargetNowFree)),
+        Ok(Action::Renamed { .. }) | Ok(Action::CleanedUp(_)) => Ok(Some(ConflictResolution::TargetNowFree)),
         Err(e) => Err(e).or_raise(|| LibraryErrorKind::Conflict),
     }
 }

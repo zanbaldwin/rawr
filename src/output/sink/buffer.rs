@@ -3,7 +3,10 @@
 //! In-memory output backend for tests. Captures rendered lines per pipe
 //! so assertions can verify what the CLI would have printed.
 
-use crate::output::{Line, Output, PerPipe, Pipe, Render, Verbosity};
+use super::{Output, PerPipe};
+use crate::error::Result;
+use crate::output::{Line, Render};
+use crate::output::{Pipe, Verbosity};
 use indicatif::ProgressBar;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -82,7 +85,7 @@ impl Output for BufferingOutput {
         ProgressBar::hidden()
     }
 
-    fn confirm(&self, prompt: &str) -> Result<bool, ()> {
+    fn confirm(&self, prompt: &str) -> Result<bool> {
         self.confirm_prompts.borrow_mut().push(prompt.to_string());
         Ok(self.confirm_responses.borrow_mut().pop_front().unwrap_or(false))
     }

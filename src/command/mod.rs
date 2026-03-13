@@ -1,0 +1,7 @@
+use crate::context::AppContext;
+use crate::error::Result;
+use std::process::ExitCode;
+
+pub(crate) trait Command {
+    async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode>;
+}

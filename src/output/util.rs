@@ -1,5 +1,4 @@
-use crate::output::style::PALETTE;
-use crate::output::{line::Line, piece::Piece};
+use crate::output::{Line, PALETTE, Piece};
 use rawr_config::models::FandomConfig;
 use rawr_extract::models::Version;
 use rawr_storage::file::{FileInfo, HashState};

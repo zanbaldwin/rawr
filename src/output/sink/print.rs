@@ -1,4 +1,6 @@
-use crate::output::{Line, Output, PerPipe, Pipe, Render, Verbosity};
+use super::{Output, PerPipe};
+use crate::error::Result;
+use crate::output::{Line, Pipe, Render, Verbosity};
 use console::Term;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
@@ -50,7 +52,7 @@ impl PrintingOutput {
         }
     }
 
-    fn term_has_colour(term: &Term, choice: &clap::ColorChoice) -> bool {
+    pub(crate) fn term_has_colour(term: &Term, choice: &clap::ColorChoice) -> bool {
         match choice {
             clap::ColorChoice::Always => true,
             clap::ColorChoice::Never => false,
@@ -66,6 +68,8 @@ impl Output for PrintingOutput {
         }
         let terminal = self.terminal.get(pipe);
         let rendered = line.render(terminal.width, terminal.colors);
+        // TODO: Should we briefly suspend the spinner/bar while we print?
+        //       Sometimes the bar gets injected into the stream of results.
         _ = terminal.pipe.write_line(&rendered);
     }
 
@@ -99,11 +103,15 @@ impl Output for PrintingOutput {
         bar
     }
 
-    fn confirm(&self, prompt: &str) -> Result<bool, ()> {
+    fn confirm(&self, prompt: &str) -> Result<bool> {
         let stderr = &self.terminal.get(Pipe::Err).pipe;
         if !stderr.is_term() {
             return Ok(false);
         }
-        dialoguer::Confirm::new().with_prompt(prompt).default(false).interact_on(stderr).map_err(|_| ())
+        Ok(dialoguer::Confirm::new()
+            .with_prompt(prompt)
+            .default(false)
+            .interact_on(stderr)
+            .map_err(|e| miette::miette!("{e}"))?)
     }
 }

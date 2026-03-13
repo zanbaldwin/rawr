@@ -29,26 +29,25 @@ type ProviderData = Map<Profile, Dict>;
 /// Wraps an existing [`Figment`] and intercepts [`Provider::data`] to mutate
 /// the raw provider data before it is extracted into a [`Config`](crate::models::Config).
 pub(crate) struct Configurator {
-    figment: Figment,
+    data: ProviderData,
 }
 impl Provider for Configurator {
     fn metadata(&self) -> Metadata {
-        Metadata::named("Config with auto-configured defaults")
+        Metadata::named("Auto-configured defaults")
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
-        // Get the raw data from the underlying figment
-        let mut data = self.figment.data()?;
-        Self::autoconfigure_library_target_import(&mut data);
-        Self::autoconfigure_library_target_export(&mut data);
-        Self::autoconfigure_cache_database(&mut data);
-        Ok(data)
+        Ok(self.data.clone())
     }
 }
 impl Configurator {
     /// Wrap a [`Figment`] so its data will be auto-configured on extraction.
-    pub(crate) fn from(figment: Figment) -> Self {
-        Self { figment }
+    pub(crate) fn from(figment: &Figment) -> Self {
+        let mut data = figment.data().unwrap_or_default();
+        Self::autoconfigure_library_target_import(&mut data);
+        Self::autoconfigure_library_target_export(&mut data);
+        Self::autoconfigure_cache_database(&mut data);
+        Self { data }
     }
 
     /// Sets `library.targets.import` to the sole target name when exactly one

@@ -107,7 +107,11 @@ impl Loader for Config {
         .merge(providers::Env::prefixed(ENV_PREFIX).split("__"));
 
         // Autoconfigure values that are required for hydration, but can be inferred from other values.
-        let autoconfigured = Figment::from(Autoconfigurator::from(figment));
+        // We use `join` (lower priority) instead of `Figment::from` so the original
+        // file-backed metadata/tags are preserved; figment's magic types like
+        // `RelativePathBuf` depend on the tag -> metadata chain to resolve relative paths.
+        let defaults = Autoconfigurator::from(&figment);
+        let autoconfigured = figment.join(defaults);
         let hydrated: Config = autoconfigured.extract().map_err(|e| exn::Exn::from(ErrorKind::Figment(Box::new(e))))?;
 
         let (errors, warnings) = hydrated.validate().into_iter().partition::<Vec<_>, _>(|v| v.is_fatal());

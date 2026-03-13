@@ -3,22 +3,22 @@ use crate::output::{Render, Verbosity};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Loudness {
-    Quiet,
+pub enum Loudness {
+    Whisper,
     Normal,
-    Loud,
+    Shout,
 }
 impl Loudness {
     pub(crate) fn is_visible(&self, verbosity: Verbosity) -> bool {
         match self {
-            Self::Quiet => matches!(verbosity, Verbosity::Verbose),
+            Self::Whisper => matches!(verbosity, Verbosity::Verbose),
             Self::Normal => !matches!(verbosity, Verbosity::Quiet),
-            Self::Loud => true,
+            Self::Shout => true,
         }
     }
 }
 
-pub(crate) struct Line<'a> {
+pub struct Line<'a> {
     pub(crate) loudness: Loudness,
     pieces: Vec<Piece<'a>>,
 }
@@ -53,7 +53,6 @@ impl From<Loudness> for Line<'_> {
         Self::empty(value)
     }
 }
-
 impl<'a, I> From<I> for Line<'a>
 where
     I: IntoIterator<Item = Piece<'a>>,
@@ -71,7 +70,7 @@ struct FlexEntry {
 }
 impl FlexEntry {
     fn elasticity(&self) -> usize {
-        self.natural_width - self.min_width
+        self.natural_width.saturating_sub(self.min_width)
     }
 }
 
@@ -89,7 +88,11 @@ fn allocate_flex_budgets(entries: &[FlexEntry], budget: usize) -> Vec<(usize, us
     loop {
         let total_min: usize = active.iter().map(|e| e.min_width).sum();
         if total_min > budget {
-            let drop_idx = active.iter().min_by_key(|e| e.elasticity()).unwrap().index;
+            let drop_idx = if let Some(entry) = active.iter().min_by_key(|e| e.elasticity()) {
+                entry.index
+            } else {
+                return result;
+            };
             result.push((drop_idx, 0));
             active.retain(|e| e.index != drop_idx);
             continue;
@@ -131,7 +134,7 @@ impl<'a> Render<'a> for Line<'a> {
             let mut fixed_width: usize = 0;
             let mut flex_entries: Vec<FlexEntry> = Vec::new();
             for (index, piece) in self.pieces.iter().enumerate() {
-                let natural_width = piece.len();
+                let natural_width = piece.width();
                 match piece.flex {
                     Flexibility::Fixed => fixed_width += natural_width,
                     Flexibility::Truncatable(min) if natural_width <= min => fixed_width += natural_width,
@@ -456,9 +459,9 @@ mod tests {
 
     #[test]
     fn loud_visible_at_all_verbosity_levels() {
-        assert!(Loudness::Loud.is_visible(Verbosity::Quiet));
-        assert!(Loudness::Loud.is_visible(Verbosity::Normal));
-        assert!(Loudness::Loud.is_visible(Verbosity::Verbose));
+        assert!(Loudness::Shout.is_visible(Verbosity::Quiet));
+        assert!(Loudness::Shout.is_visible(Verbosity::Normal));
+        assert!(Loudness::Shout.is_visible(Verbosity::Verbose));
     }
 
     #[test]
@@ -470,8 +473,8 @@ mod tests {
 
     #[test]
     fn quiet_only_visible_when_verbose() {
-        assert!(!Loudness::Quiet.is_visible(Verbosity::Quiet));
-        assert!(!Loudness::Quiet.is_visible(Verbosity::Normal));
-        assert!(Loudness::Quiet.is_visible(Verbosity::Verbose));
+        assert!(!Loudness::Whisper.is_visible(Verbosity::Quiet));
+        assert!(!Loudness::Whisper.is_visible(Verbosity::Normal));
+        assert!(Loudness::Whisper.is_visible(Verbosity::Verbose));
     }
 }

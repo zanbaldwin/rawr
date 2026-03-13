@@ -2,18 +2,18 @@ use crate::output::Render;
 use console::Style;
 use std::borrow::{Borrow, Cow};
 
-pub(crate) enum Flexibility {
+pub enum Flexibility {
     Fixed,
     Truncatable(usize),
 }
 
-pub(crate) struct Piece<'a> {
+pub struct Piece<'a> {
     pub(crate) text: Cow<'a, str>,
     pub(crate) style: Style,
     pub(crate) flex: Flexibility,
 }
 impl<'a> Piece<'a> {
-    pub(crate) fn fixed(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>) -> Self {
+    pub fn fixed(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>) -> Self {
         Self {
             text: text.into(),
             style: style.borrow().clone(),
@@ -21,7 +21,7 @@ impl<'a> Piece<'a> {
         }
     }
 
-    pub(crate) fn flex(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>, min_width: usize) -> Self {
+    pub fn flex(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>, min_width: usize) -> Self {
         Self {
             text: text.into(),
             style: style.borrow().clone(),
@@ -29,11 +29,11 @@ impl<'a> Piece<'a> {
         }
     }
 
-    pub(crate) fn space() -> Self {
+    pub fn space() -> Self {
         Self::plain(" ")
     }
 
-    pub(crate) fn plain(text: impl Into<Cow<'a, str>>) -> Self {
+    pub fn plain(text: impl Into<Cow<'a, str>>) -> Self {
         Self {
             text: text.into(),
             style: Style::new(),
@@ -41,7 +41,7 @@ impl<'a> Piece<'a> {
         }
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) fn width(&self) -> usize {
         console::measure_text_width(&self.text)
     }
 }
@@ -81,14 +81,14 @@ where
 impl<'a> Render<'a> for Piece<'a> {
     fn render(&'a self, width: Option<usize>, colour: bool) -> Cow<'a, str> {
         let text = match (width, &self.flex) {
-            (Some(max), Flexibility::Truncatable(min)) if self.len() > max && *min > max => return Cow::Borrowed(""),
-            (Some(max), Flexibility::Truncatable(min)) if self.len() > max => {
+            (Some(max), Flexibility::Truncatable(min)) if self.width() > max => {
+                if *min > max {
+                    return Cow::Borrowed("");
+                }
                 console::truncate_str(&self.text, max, "…")
             },
             _ => Cow::Borrowed(self.text.as_ref()),
         };
-        // The `console` crate does its own TTY-detection, but we may want to
-        // output colours in a non-TTY context (eg, in tests).
         if colour { Cow::Owned(self.style.apply_to(text.as_ref()).force_styling(true).to_string()) } else { text }
     }
 }

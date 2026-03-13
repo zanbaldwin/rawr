@@ -1,5 +1,6 @@
-use crate::output::piece::{Flexibility, Piece};
-use crate::output::{Render, Verbosity};
+use super::Render;
+use super::piece::{Flexibility, Piece};
+use crate::output::Verbosity;
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

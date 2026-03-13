@@ -65,14 +65,24 @@ path = "src/main.rs"
 
 [features]
 default = ["s3"]
+brotli = ["rawr-compress/brotli"]
+xz = ["rawr-compress/xz"]
+zstd = ["rawr-compress/zstd"]
 s3 = ["rawr-storage/s3"]
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
 dialoguer = { workspace = true }
+exn = { workspace = true }
 indicatif = { workspace = true }
+miette = { workspace = true }
+rawr-cache = { path = "crates/cache" }
+rawr-compress = { path = "crates/compress", features = ["cli"] }
 rawr-config = { path = "crates/config" }
 rawr-extract = { path = "crates/extract" }
+rawr-library = { path = "crates/library" }
 rawr-storage = { path = "crates/storage" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

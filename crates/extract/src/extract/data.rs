@@ -118,11 +118,9 @@ impl<'a> Datalist<'a> {
     }
 
     pub fn rating(&self) -> Result<Option<Rating>> {
-        Ok(if let Some(s) = self.extract_text(&["Rating"]) {
-            Some(s.parse::<Rating>().or_raise(|| ErrorKind::ParseError { field: "rating", value: s })?)
-        } else {
-            None
-        })
+        self.extract_text(&["Rating"])
+            .map(|s| s.parse::<Rating>().or_raise(|| ErrorKind::ParseError { field: "rating", value: s }))
+            .transpose()
     }
 
     pub fn warnings(&self) -> Vec<Warning> {
@@ -139,20 +137,14 @@ impl<'a> Datalist<'a> {
     }
 
     pub fn tags(&self) -> Vec<Tag> {
-        let mut tags = Vec::new();
-        // Relationships
-        for name in self.extract_link_texts(&["Relationship", "Relationships"]) {
-            tags.push(Tag { name, kind: TagKind::Relationship });
-        }
-        // Characters
-        for name in self.extract_link_texts(&["Character", "Characters"]) {
-            tags.push(Tag { name, kind: TagKind::Character });
-        }
-        // Freeform/Additional tags
-        for name in self.extract_link_texts(&["Additional Tag", "Additional Tags"]) {
-            tags.push(Tag { name, kind: TagKind::Freeform });
-        }
-        tags
+        [
+            (&["Relationship", "Relationships"] as &[&str], TagKind::Relationship),
+            (&["Character", "Characters"], TagKind::Character),
+            (&["Additional Tag", "Additional Tags"], TagKind::Freeform),
+        ]
+        .into_iter()
+        .flat_map(|(labels, kind)| self.extract_link_texts(labels).into_iter().map(move |name| Tag { name, kind }))
+        .collect()
     }
 
     pub fn language(&self) -> Language {

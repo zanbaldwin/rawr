@@ -10,6 +10,7 @@ version.workspace = true
 default = ["markdown"]
 markdown = ["dep:fast_html2md"]
 serde = ["dep:serde"]
+chapters = []
 
 [dependencies]
 blake3 = { workspace = true }

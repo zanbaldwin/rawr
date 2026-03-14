@@ -253,13 +253,12 @@ mod tests {
     }
 
     #[test]
-    fn series_fallback_position_when_no_match() {
-        // Anchor without "Part N of" preceding it
+    fn series_anchor_without_position_is_dropped() {
+        // Anchor without "Part N of" preceding it — zip produces no pairs
         let dd = series_link(99, "Orphaned Series");
         let doc = make_series_html(&dd);
         let result = Datalist::new(&doc).series();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].position, 1);
+        assert!(result.is_empty());
     }
 
     #[test]

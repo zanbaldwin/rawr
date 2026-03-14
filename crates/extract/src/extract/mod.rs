@@ -1,5 +1,7 @@
 //! Main extraction logic for AO3 HTML downloads.
 
+#[cfg(feature = "chapters")]
+mod chapters;
 mod data;
 mod stats;
 

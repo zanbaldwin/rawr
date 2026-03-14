@@ -147,3 +147,142 @@ impl<'a> Datalist<'a> {
         Language::from(self.extract_text(&["Language"]).unwrap_or_else(|| "Unknown".to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_series_html(dd_inner: &str) -> Html {
+        let html = format!(r#"<div id="preface"><dl class="tags"><dt>Series:</dt><dd>{dd_inner}</dd></dl></div>"#);
+        Html::parse_document(&html)
+    }
+
+    fn series_link(id: u64, name: &str) -> String {
+        format!(r#"<a href="http://archiveofourown.org/series/{id}">{name}</a>"#)
+    }
+
+    #[test]
+    fn series_two_distinct_positions() {
+        let dd = format!("Part 1 of {}, Part 2 of {}", series_link(100, "Alpha"), series_link(200, "Beta"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0],
+            SeriesPosition {
+                id: 100,
+                name: "Alpha".into(),
+                position: 1
+            }
+        );
+        assert_eq!(
+            result[1],
+            SeriesPosition {
+                id: 200,
+                name: "Beta".into(),
+                position: 2
+            }
+        );
+    }
+
+    #[test]
+    fn series_identical_positions() {
+        let dd = format!("Part 1 of {}, Part 1 of {}", series_link(100, "Alpha"), series_link(200, "Beta"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].position, 1);
+        assert_eq!(result[1].position, 1);
+    }
+
+    #[test]
+    fn series_prefix_name_does_not_steal_position() {
+        // "Alpha" is a prefix of "Alpha Extended" — must not match the wrong position.
+        let dd = format!("Part 1 of {}, Part 3 of {}", series_link(100, "Alpha Extended"), series_link(200, "Alpha"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0],
+            SeriesPosition {
+                id: 100,
+                name: "Alpha Extended".into(),
+                position: 1
+            }
+        );
+        assert_eq!(
+            result[1],
+            SeriesPosition {
+                id: 200,
+                name: "Alpha".into(),
+                position: 3
+            }
+        );
+    }
+
+    #[test]
+    fn series_single() {
+        let dd = format!("Part 5 of {}", series_link(42, "My Series"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0],
+            SeriesPosition {
+                id: 42,
+                name: "My Series".into(),
+                position: 5
+            }
+        );
+    }
+
+    #[test]
+    fn series_no_label_returns_empty() {
+        let html = Html::parse_document(r#"<div id="preface"><dl class="tags"></dl></div>"#);
+        let result = Datalist::new(&html).series();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn series_deduplicates_by_id() {
+        let dd =
+            format!("Part 1 of {}, Part 1 of {}", series_link(100, "Same Series"), series_link(100, "Same Series"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn series_fallback_position_when_no_match() {
+        // Anchor without "Part N of" preceding it
+        let dd = series_link(99, "Orphaned Series");
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].position, 1);
+    }
+
+    #[test]
+    fn series_name_containing_comma() {
+        let dd = format!("Part 3 of {}, Part 7 of {}", series_link(100, "Hello, World"), series_link(200, "Beta"));
+        let doc = make_series_html(&dd);
+        let result = Datalist::new(&doc).series();
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0],
+            SeriesPosition {
+                id: 100,
+                name: "Hello, World".into(),
+                position: 3
+            }
+        );
+        assert_eq!(
+            result[1],
+            SeriesPosition {
+                id: 200,
+                name: "Beta".into(),
+                position: 7
+            }
+        );
+    }
+}

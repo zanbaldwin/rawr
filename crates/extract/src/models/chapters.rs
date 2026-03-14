@@ -13,6 +13,7 @@ impl Chapters {
         Self { written, total }
     }
     /// Returns true if the work is complete (planned chapters have been written).
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         self.total.is_some_and(|t| self.written >= t)
     }

@@ -26,6 +26,9 @@ impl<'a> Datalist<'a> {
         };
         let dts: Vec<_> = element.select(&consts::DT_SELECTOR).collect();
         let dds: Vec<_> = element.select(&consts::DD_SELECTOR).collect();
+        if dts.len() != dds.len() {
+            tracing::debug!(dts = dts.len(), dds = dds.len(), "dt/dd count mismatch in datalist");
+        }
         dts.into_iter()
             .zip(dds)
             .map(|(dt, dd)| (dt.text().collect::<String>().trim().trim_end_matches(':').to_string(), dd))
@@ -119,7 +122,13 @@ impl<'a> Datalist<'a> {
     pub fn warnings(&self) -> Vec<Warning> {
         self.extract_link_texts(&["Warning", "Warnings", "Archive Warning", "Archive Warnings"])
             .into_iter()
-            .filter_map(|text| text.as_str().parse().ok())
+            .filter_map(|text| match text.as_str().parse() {
+                Ok(w) => Some(w),
+                Err(_) => {
+                    tracing::warn!(warning = %text, "unknown archive warning");
+                    None
+                },
+            })
             .collect()
     }
 

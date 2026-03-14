@@ -21,6 +21,7 @@ use tracing::instrument;
 /// Accepts raw bytes, instead of requiring HTML to be valid UTF-8. Invalid byte
 /// sequences are replaced with U+FFFD during parsing. See [`Extractor`] for
 /// more details.
+#[must_use]
 #[instrument(skip(html), fields(html_size = html.as_ref().len()))]
 pub fn extract(html: impl AsRef<[u8]>) -> Result<Version> {
     let html = html.as_ref();

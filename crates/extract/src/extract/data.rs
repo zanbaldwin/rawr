@@ -2,7 +2,6 @@ use super::Stats;
 use crate::consts;
 use crate::error::{ErrorKind, Result};
 use crate::models::{Fandom, Language, Rating, SeriesPosition, Tag, TagKind, Warning};
-use ::regex::{Regex, escape as regex_escape};
 use exn::{OptionExt, ResultExt};
 use scraper::{ElementRef, Html};
 use std::collections::{HashMap, HashSet};
@@ -80,41 +79,38 @@ impl<'a> Datalist<'a> {
             return Vec::new();
         };
         let dd_text = dd.text().collect::<String>();
-        let mut series = Vec::new();
-        let mut seen_ids = HashSet::new();
-        for anchor in dd.select(&consts::ANCHOR_SELECTOR) {
-            let Some(href) = anchor.value().attr("href") else {
-                continue;
-            };
-            let Some(captures) = consts::SERIES_URL_REGEX.captures(href) else {
-                continue;
-            };
-            let series_id: u64 = match captures.get(1).unwrap().as_str().parse() {
-                Ok(id) => id,
-                Err(_) => continue,
-            };
-            // Deduplicate
-            if seen_ids.contains(&series_id) {
-                continue;
-            }
-            seen_ids.insert(series_id);
-            let series_name = anchor.text().collect::<String>().trim().to_string();
-            // Extract position: look for "Part N of {series_name}"
-            // TODO: Can this be done via a lazy Regex?
-            let position_pattern = format!(r"Part\s+(\d{{1,3}}(?:,?\d{{3}})*)\s+of\s+{}", regex_escape(&series_name));
-            let position = Regex::new(&position_pattern)
-                .ok()
-                .and_then(|re| re.captures(&dd_text))
-                .and_then(|cap| cap.get(1))
-                .and_then(|m| m.as_str().replace(',', "").parse().ok())
-                .unwrap_or(1);
-            series.push(SeriesPosition {
-                id: series_id,
-                name: series_name,
-                position,
-            });
+        let positions: Vec<_> = consts::SERIES_POSITION_REGEX.captures_iter(&dd_text).collect();
+        let anchors: Vec<_> = dd
+            .select(&consts::ANCHOR_SELECTOR)
+            .filter_map(|anchor| {
+                let caps = consts::SERIES_URL_REGEX.captures(anchor.value().attr("href")?)?;
+                let id: u64 = caps.get(1)?.as_str().parse().ok()?;
+                let name = anchor.text().collect::<String>().trim().to_string();
+                Some((id, name))
+            })
+            .collect();
+        if positions.len() != anchors.len() {
+            tracing::warn!(
+                positions = positions.len(),
+                anchors = anchors.len(),
+                "series position/anchor count mismatch"
+            );
         }
-        series
+        let mut seen_ids = HashSet::new();
+        anchors
+            .into_iter()
+            .zip(positions)
+            .filter_map(|((id, name), capture)| {
+                if !seen_ids.insert(id) {
+                    return None;
+                }
+                let position = Some(capture)
+                    .and_then(|cap| cap.get(1))
+                    .and_then(|m| m.as_str().replace(',', "").parse().ok())
+                    .unwrap_or(1);
+                Some(SeriesPosition { id, name, position })
+            })
+            .collect()
     }
 
     pub fn rating(&self) -> Result<Option<Rating>> {

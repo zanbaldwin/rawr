@@ -68,7 +68,7 @@ impl Display for Warning {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serde"))]
 mod tests {
     use super::*;
     use rstest::rstest;

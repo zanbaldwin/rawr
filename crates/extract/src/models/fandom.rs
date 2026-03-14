@@ -36,7 +36,7 @@ impl Display for Fandom {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serde"))]
 mod tests {
     use super::*;
     use rstest::rstest;

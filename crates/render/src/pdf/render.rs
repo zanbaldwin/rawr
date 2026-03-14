@@ -1,11 +1,13 @@
+use super::PdfRenderer;
+use crate::TempFile;
 use crate::error::{ErrorKind, Result};
-use crate::{Renderer, TempFile, style::CssVariables};
+use crate::style::CssVariables;
 use exn::ResultExt;
 use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 use tracing::instrument;
 
-impl Renderer {
+impl PdfRenderer {
     /// Renders HTML to a PDF stored in a temporary file.
     ///
     /// Configured styles and optional `CssVariables` are injected before the
@@ -101,7 +103,7 @@ impl Renderer {
         if let Some(vars) = &variables {
             write!(w, "{}", vars).or_raise(|| ErrorKind::Io)?;
         }
-        let blocks = self.styles.write_all_to(w).or_raise(|| ErrorKind::Io)?;
+        let blocks = self.styles.write_style_to(w).or_raise(|| ErrorKind::Io)?;
         let blocks = if variables.is_some() { blocks.saturating_add(1) } else { blocks };
         Ok(blocks)
     }

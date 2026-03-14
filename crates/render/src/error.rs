@@ -19,11 +19,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// These describe what the caller should *do*, not what went wrong internally.
 #[derive(Debug, Display, Error)]
 pub enum ErrorKind {
+    #[cfg(feature = "pdf")]
     #[display("chrome/chromium not detected on your system")]
     ChromeNotFound,
     /// The Chrome process exceeded the allowed execution time.
+    #[cfg(feature = "pdf")]
     ChromeTimeout,
     /// Chrome exited with a non-zero exit code.
+    #[cfg(feature = "pdf")]
     #[display("Chrome exited with code: {_0}")]
     ChromeFailed(#[error(not(source))] i32),
     /// Asset was not loadable (either file or builtin).
@@ -36,7 +39,9 @@ impl ErrorKind {
     /// Returns `true` if retrying might succeed.
     pub fn is_retryable(&self) -> bool {
         match self {
-            Self::ChromeTimeout | Self::Io => true,
+            #[cfg(feature = "pdf")]
+            Self::ChromeTimeout => true,
+            Self::Io => true,
             _ => false,
         }
     }

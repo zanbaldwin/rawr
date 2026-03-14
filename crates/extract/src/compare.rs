@@ -13,12 +13,10 @@ impl Version {
     /// Returns true if `other` has significantly more content, suggesting `self`
     /// might be a deletion notice.
     fn appears_to_be_deletion_notice(&self, other: &Self) -> bool {
-        // Check if we have drastically fewer chapters (>50% reduction)
-        let chapter_threshold = other.metadata.chapters.written as f64 * 0.5;
-        let chapters_reduced = (self.metadata.chapters.written as f64) < chapter_threshold;
-        // Check if we're much smaller (>80% size reduction)
-        let size_threshold = other.length as f64 * 0.2;
-        let size_reduced = (self.length as f64) < size_threshold;
+        // Check if we have drastically fewer chapters (>50% reduction: ½ or 2x smaller)
+        let chapters_reduced = self.metadata.chapters.written * 2 < other.metadata.chapters.written;
+        // Check if we're much smaller (>80% size reduction: ⅕ or 5× smaller)
+        let size_reduced = self.length * 5 < other.length;
         chapters_reduced && size_reduced
     }
 }

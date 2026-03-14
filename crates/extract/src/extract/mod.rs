@@ -50,6 +50,7 @@ impl Extractor {
     /// Extraction of the metadata automatically performs a validity check,
     /// so [`is_valid`](Self::is_valid) is only useful if you don't plan on
     /// extracting metadata.
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         self.work_id().is_ok()
     }
@@ -65,6 +66,7 @@ impl Extractor {
     /// Returns an error if:
     /// - The HTML is not a valid AO3 download
     /// - Required fields cannot be found or parsed
+    #[must_use]
     #[instrument()]
     pub fn metadata(self) -> Result<Metadata> {
         // Always attempt extraction of the Work ID first, it's
@@ -204,6 +206,7 @@ impl TryFrom<Extractor> for Metadata {
 ///
 /// assert!(is_valid(valid_html.as_bytes()));
 /// ```
+#[must_use]
 #[instrument(skip(html), fields(html_size = html.as_ref().len()))]
 pub fn is_valid(html: impl AsRef<[u8]>) -> bool {
     Extractor::from_long_html(html).is_valid()

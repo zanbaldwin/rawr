@@ -32,6 +32,7 @@ pub const ESTIMATED_HEADER_SIZE_BYTES: usize = 12 * 1024;
 /// assert_eq!(safe_html_truncate(html, 10).len(), 10);
 /// assert_eq!(safe_html_truncate(html, 18).len(), 16)
 /// ```
+#[must_use]
 pub fn safe_html_truncate(html: &[u8], max_bytes: usize) -> &[u8] {
     if html.len() <= max_bytes {
         return html;

@@ -11,8 +11,8 @@ impl PdfRenderer {
     /// Renders HTML to a PDF stored in a temporary file.
     ///
     /// Configured styles and optional `CssVariables` are injected before the
-    /// closing `</head>` tag. The returned [`Output::Temporary`] is deleted when
-    /// dropped — hold the value for as long as you need the PDF.
+    /// closing `</head>` tag. The returned [temporary file](crate::TempFile) is
+    /// deleted when dropped — hold the value for as long as you need the PDF.
     #[must_use = "temporary file will be deleted upon drop"]
     pub fn render<R: Read>(&self, html: R, variables: impl Into<Option<CssVariables>>) -> Result<TempFile> {
         let output = TempFile::new().or_raise(|| ErrorKind::Io)?;
@@ -23,7 +23,8 @@ impl PdfRenderer {
     /// Renders HTML to a PDF at the specified path.
     ///
     /// Like [`render()`](Self::render), but writes the PDF to `save_to` instead of
-    /// a temporary file. Returns [`Output::Persisted`] on success.
+    /// a temporary file. Returns a [`PathBuf`] to the output (persisted on disk)
+    /// on success.
     #[instrument(skip_all)]
     pub fn render_to<R: Read>(
         &self,

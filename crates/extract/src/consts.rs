@@ -36,3 +36,4 @@ regex!(CHAPTERS_REGEX, r"Chapters:\s*(\d{1,3}(?:,?\d{3})*)/(\d{1,3}(?:,?\d{3})*|
 regex!(WORDS_REGEX, r"Words:\s*(\d{1,3}(?:,?\d{3})*)");
 regex!(DATE_REGEX, r"(Updated|Completed|Published):\s*(\d{4})-(\d{1,2})-(\d{1,2})");
 selector!(ANCHOR_SELECTOR, "a");
+regex!(SERIES_POSITION_REGEX, r"Part\s+(\d{1,3}(?:,?\d{3})*)\s+of\s+");

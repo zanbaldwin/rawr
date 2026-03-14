@@ -70,7 +70,7 @@ impl Output for PrintingOutput {
         let rendered = line.render(terminal.width, terminal.colors);
         // TODO: Should we briefly suspend the spinner/bar while we print?
         //       Sometimes the bar gets injected into the stream of results.
-        _ = terminal.pipe.write_line(&rendered);
+        _ = self.multi.suspend(|| terminal.pipe.write_line(&rendered));
     }
 
     fn spinner(&self, message: &str) -> ProgressBar {

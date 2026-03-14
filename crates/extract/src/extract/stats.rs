@@ -87,8 +87,3 @@ impl Stats {
         Ok((published, last_modified))
     }
 }
-impl From<String> for Stats {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}

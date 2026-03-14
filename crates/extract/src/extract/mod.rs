@@ -162,12 +162,12 @@ impl Extractor {
 impl FromStr for Extractor {
     type Err = Infallible;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Ok(Self::from_long_html(s))
+        Ok(Self::from_html(s))
     }
 }
 impl From<String> for Extractor {
     fn from(value: String) -> Self {
-        Self::from_long_html(&value)
+        Self::from_html(&value)
     }
 }
 impl From<Html> for Extractor {

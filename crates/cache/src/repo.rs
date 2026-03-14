@@ -731,7 +731,7 @@ mod tests {
                 summary: Some("A test work".to_string()),
                 language: Language {
                     name: "English".to_string(),
-                    iso_code: Some("en".to_string()),
+                    iso_code: Some("en"),
                 },
                 chapters: Chapters { written: 1, total: Some(1) },
                 words: 1000,

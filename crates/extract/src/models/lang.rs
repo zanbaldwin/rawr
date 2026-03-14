@@ -15,12 +15,12 @@ pub struct Language {
     /// Language name as displayed on AO3 (e.g., "English")
     pub name: String,
     /// ISO 639 code (2 or 3 letters) if determinable (e.g., "en")
-    pub iso_code: Option<String>,
+    pub iso_code: Option<&'static str>,
 }
 impl Language {
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
-        let iso_code = Self::name_to_iso(&name).map(|s| s.to_string());
+        let iso_code = Self::name_to_iso(&name);
         Self { name, iso_code }
     }
     /// Returns the ISO-639 code for a given AO3 language display name.

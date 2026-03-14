@@ -1,14 +1,15 @@
 [package]
 name = "rawr-render"
-description = "Chrome/Chromium PDF rendering"
+description = "Document rendering for AO3 HTML works"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 version.workspace = true
 
 [features]
-default = []
+default = ["pdf"]
 metadata = ["dep:rawr-extract"]
+pdf = ["dep:which"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
@@ -18,7 +19,7 @@ rslug = { workspace = true }
 rust-embed = { workspace = true }
 tracing = { workspace = true }
 tempfile = { workspace = true }
-which = { workspace = true }
+which = { workspace = true, optional = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

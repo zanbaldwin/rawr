@@ -5,7 +5,7 @@
 //! user-provided files or raw CSS content. All styles are read eagerly at
 //! construction time so that missing files fail fast rather than at render time.
 
-mod assets;
+pub(crate) mod assets;
 pub(crate) mod variables;
 
 pub(crate) use self::variables::CssVariables;
@@ -13,8 +13,8 @@ use crate::error::{ErrorKind, Result};
 use crate::style::assets::Builtins;
 use exn::ResultExt;
 use std::borrow::Cow;
+use std::io::{Read, Result as IoResult, Write};
 use std::{fs::File, path::Path};
-use std::{io::Read, io::Write};
 
 enum Style {
     Builtin(String),
@@ -24,15 +24,14 @@ enum Style {
     UserContent(String),
 }
 impl Style {
-    fn write_all_to(&self, w: &mut impl Write) -> std::io::Result<()> {
+    fn write_all_to(&self, w: &mut impl Write) -> IoResult<usize> {
         let content = match self {
             // Infallible: business logic dictates that the builtin exists.
-            Self::Builtin(name) => Builtins::load(name).expect("builting validated at construction"),
+            Self::Builtin(name) => Builtins::load(name).expect("builtin validated at construction"),
             Self::UserContent(content) => Cow::Borrowed(content.as_bytes()),
         };
-        w.write_all(b"<style>")?;
         w.write_all(&content)?;
-        w.write_all(b"</style>\n")
+        Ok(content.len())
     }
 }
 
@@ -107,10 +106,51 @@ impl StyleConfig {
         self
     }
 
-    pub(crate) fn write_all_to(&self, w: &mut impl Write) -> std::io::Result<usize> {
+    /// Write all style content to a writer, surrounding each block with delimiters.
+    ///
+    /// ```ignore
+    /// # use std::io::Cursor;
+    /// # let styles = StyleConfig::new();
+    /// # let mut writer = Cursor::new(Vec::new());
+    ///
+    /// // No delimiters — raw CSS output:
+    /// styles.write_all_to(&mut writer, None::<(&[u8], &[u8])>);
+    ///
+    /// // Both delimiters:
+    /// styles.write_all_to(&mut writer, (b"<style>", b"</style>\n"));
+    ///
+    /// // Start delimiter only:
+    /// styles.write_all_to(&mut writer, (b"<style>", None::<&[u8]>));
+    ///
+    /// // End delimiter only:
+    /// styles.write_all_to(&mut writer, (None::<&[u8]>, Some(b"</style>\n")));
+    /// ```
+    pub fn write_all_to<S, E, B1, B2>(
+        &self,
+        w: &mut impl Write,
+        delimiters: impl Into<Option<(S, E)>>,
+    ) -> IoResult<usize>
+    where
+        B1: AsRef<[u8]>,
+        B2: AsRef<[u8]>,
+        S: Into<Option<B1>>,
+        E: Into<Option<B2>>,
+    {
+        let delimiters = delimiters.into().map(|(start, end)| (start.into(), end.into()));
         for style in &self.styles {
+            if let Some((Some(ref start), _)) = delimiters {
+                w.write_all(start.as_ref())?;
+            }
             style.write_all_to(w)?;
+            if let Some((_, Some(ref end))) = delimiters {
+                w.write_all(end.as_ref())?;
+            }
         }
         Ok(self.styles.len())
+    }
+
+    #[cfg(feature = "pdf")]
+    pub(crate) fn write_style_to(&self, w: &mut impl Write) -> IoResult<usize> {
+        self.write_all_to(w, (b"<style>", b"</style>\n"))
     }
 }

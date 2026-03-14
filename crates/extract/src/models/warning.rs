@@ -10,7 +10,7 @@ pub enum Warning {
     /// No Archive Warnings Apply
     NoWarningsApply,
     /// Creator Chose Not To Use Archive Warnings
-    CreatorChoseNotToUse,
+    CreatorChoseNotToWarn,
     /// Graphic Depictions Of Violence
     GraphicViolence,
     /// Major Character Death
@@ -25,10 +25,10 @@ impl Warning {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::NoWarningsApply => "No Archive Warnings Apply",
-            Self::CreatorChoseNotToUse => "Creator Chose Not To Use Archive Warnings",
+            Self::CreatorChoseNotToWarn => "Creator Chose Not To Use Archive Warnings",
             Self::GraphicViolence => "Graphic Depictions Of Violence",
             Self::MajorCharacterDeath => "Major Character Death",
-            Self::Underage => "Underage",
+            Self::Underage => "Underage Sex",
             Self::NonCon => "Rape/Non-Con",
         }
     }
@@ -44,10 +44,10 @@ impl FromStr for Warning {
             | "creatorchosenottouse"
             | "chosenottousearchivewarnings"
             | "chosenottousewarnings"
-            | "chosenottouse" => Self::CreatorChoseNotToUse,
+            | "chosenottouse" => Self::CreatorChoseNotToWarn,
             "graphicdepictionsofviolence" | "graphicviolence" | "depictionsofviolence" => Self::GraphicViolence,
             "majorcharacterdeath" => Self::MajorCharacterDeath,
-            "underage" => Self::Underage,
+            "underage" | "underagesex" => Self::Underage,
             "rapenoncon" | "noncon" => Self::NonCon,
             _ => exn::bail!(ErrorKind::ParseError {
                 field: "warnings",
@@ -76,7 +76,7 @@ mod tests {
 
     #[rstest]
     #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
-    #[case(Warning::CreatorChoseNotToUse, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToUse""#)]
     #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
     #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
     #[case(Warning::Underage, r#""Underage""#)]
@@ -88,7 +88,7 @@ mod tests {
 
     #[rstest]
     #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
-    #[case(Warning::CreatorChoseNotToUse, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToUse""#)]
     #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
     #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
     #[case(Warning::Underage, r#""Underage""#)]

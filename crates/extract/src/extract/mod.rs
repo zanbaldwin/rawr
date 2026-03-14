@@ -69,7 +69,7 @@ impl Extractor {
     /// - The HTML is not a valid AO3 download
     /// - Required fields cannot be found or parsed
     #[must_use]
-    #[instrument()]
+    #[instrument(skip(self))]
     pub fn metadata(&self) -> Result<Metadata> {
         // Always attempt extraction of the Work ID first, it's
         // equivalent to quickly checking the HTML document validity.

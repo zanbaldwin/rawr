@@ -68,7 +68,7 @@ impl Extractor {
     /// - Required fields cannot be found or parsed
     #[must_use]
     #[instrument()]
-    pub fn metadata(self) -> Result<Metadata> {
+    pub fn metadata(&self) -> Result<Metadata> {
         // Always attempt extraction of the Work ID first, it's
         // equivalent to quickly checking the HTML document validity.
         let work_id = self.work_id().or_raise(|| ErrorKind::InvalidDocument)?;

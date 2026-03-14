@@ -12,7 +12,10 @@ pub struct Datalist<'a> {
     list: HashMap<String, ElementRef<'a>>,
 }
 
-/// Datalist Internals
+/* ================== *\
+|  Datalist Internals  |
+\* ================== */
+
 impl<'a> Datalist<'a> {
     pub(crate) fn new(document: &'a Html) -> Self {
         Self {
@@ -59,7 +62,10 @@ impl<'a> Datalist<'a> {
     }
 }
 
-/// Datalist Public
+/* =============== *\
+|  Datalist Public  |
+\* =============== */
+
 impl<'a> Datalist<'a> {
     pub fn stats(&self) -> Result<Stats> {
         Ok(Stats::new(self.extract_text(&["Stats"]).ok_or_raise(|| ErrorKind::MissingField("Stats"))?))

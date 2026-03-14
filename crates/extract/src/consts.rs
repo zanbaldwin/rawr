@@ -37,3 +37,18 @@ regex!(WORDS_REGEX, r"Words:\s*(\d{1,3}(?:,?\d{3})*)");
 regex!(DATE_REGEX, r"(Updated|Completed|Published):\s*(\d{4})-(\d{1,2})-(\d{1,2})");
 selector!(ANCHOR_SELECTOR, "a");
 regex!(SERIES_POSITION_REGEX, r"Part\s+(\d{1,3}(?:,?\d{3})*)\s+of\s+");
+
+#[cfg(feature = "chapters")]
+selector!(CHAPTER_META_GROUP_SELECTOR, "div#chapters > div.meta.group");
+#[cfg(feature = "chapters")]
+selector!(CHAPTER_HEADING_SELECTOR, "h2.heading");
+#[cfg(feature = "chapters")]
+selector!(SINGLE_CHAPTER_SELECTOR, "div#chapters > div.userstuff");
+#[cfg(feature = "chapters")]
+selector!(CHAPTER_ENDNOTES_SELECTOR, r#"div#chapters > div[id^="endnotes"]"#);
+#[cfg(feature = "chapters")]
+selector!(CHAPTER_NOTES_BLOCKQUOTE_SELECTOR, "blockquote.userstuff");
+#[cfg(feature = "chapters")]
+selector!(PREFACE_META_SELECTOR, "#preface .meta");
+#[cfg(feature = "chapters")]
+selector!(AFTERWORD_ENDNOTES_SELECTOR, "div#afterword div#endnotes");

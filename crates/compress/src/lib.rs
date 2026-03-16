@@ -19,6 +19,8 @@
 //! All compression uses the highest available level for each format,
 //! prioritizing storage space over speed.
 
+#[cfg(feature = "bzip3")]
+mod bzip3;
 #[cfg(feature = "cli")]
 pub mod cli;
 mod construct;

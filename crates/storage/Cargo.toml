@@ -10,7 +10,7 @@ version.workspace = true
 default = ["mock", "s3"]
 # Feature intended for use in other crates' dev dependencies.
 mock = ["opendal/services-memory"]
-s3 = ["opendal/services-s3"]
+s3 = ["opendal/services-s3", "dep:reqwest"]
 
 [dependencies]
 async-stream = { workspace = true }
@@ -18,9 +18,12 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
-futures = { workspace = true }
-opendal = { workspace = true, features = ["services-fs"] }
-rawr-compress = { path = "../compress" }
+futures = { workspace = true, features = ["std"] }
+opendal = { workspace = true, features = ["services-fs", "executors-tokio"] }
+reqwest = { version = "^0.12", default-features = false, features = [
+    "rustls-tls",
+], optional = true }
+rawr-compress = { workspace = true }
 time = { workspace = true, features = ["formatting", "parsing"] }
 tracing = { workspace = true }
 

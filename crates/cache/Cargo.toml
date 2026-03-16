@@ -10,13 +10,13 @@ version.workspace = true
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 serde_json = { workspace = true }
-rawr-compress = { path = "../compress" }
-rawr-extract = { path = "../extract", features = ["serde"] }
-rawr-storage = { path = "../storage" }
+rawr-compress = { workspace = true }
+rawr-extract = { workspace = true, features = ["serde"] }
+rawr-storage = { workspace = true }
 sqlx = { workspace = true, features = [
     "macros",
     "migrate",
-    "runtime-tokio-rustls",
+    "runtime-tokio",
     "sqlite",
 ] }
 time = { workspace = true, features = ["formatting", "parsing"] }

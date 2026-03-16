@@ -10,11 +10,12 @@ version.workspace = true
 default = ["pdf"]
 metadata = ["dep:rawr-extract"]
 pdf = ["dep:which"]
+epub = ["dep:rawr-extract", "rawr-extract?/chapters"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
-rawr-extract = { path = "../extract", optional = true }
+rawr-extract = { workspace = true, optional = true }
 rslug = { workspace = true }
 rust-embed = { workspace = true }
 tracing = { workspace = true }

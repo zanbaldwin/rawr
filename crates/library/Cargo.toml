@@ -12,17 +12,17 @@ blake3 = { workspace = true }
 crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
-futures = { workspace = true }
-rawr-asyncutils = { path = "../asyncutils" }
-rawr-cache = { path = "../cache" }
-rawr-compress = { path = "../compress", features = ["async"] }
-rawr-extract = { path = "../extract" }
-rawr-storage = { path = "../storage" }
+futures = { workspace = true, features = ["std"] }
+rawr-asyncutils = { workspace = true }
+rawr-cache = { workspace = true }
+rawr-compress = { workspace = true, features = ["async"] }
+rawr-extract = { workspace = true }
+rawr-storage = { workspace = true }
 rslug = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 tracing = { workspace = true }
-upon = { workspace = true }
+upon = { workspace = true, features = ["functions", "serde"] }
 
 [dev-dependencies]
 rawr-storage = { path = "../storage", features = ["mock"] }

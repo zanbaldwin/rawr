@@ -20,8 +20,8 @@ exn = { workspace = true }
 fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 html5ever = { workspace = true }
 memchr = { workspace = true }
-rawr-xhtml = { path = "../xhtml", optional = true }
-regex = { workspace = true }
+rawr-xhtml = { workspace = true, optional = true }
+regex = { workspace = true, features = ["std", "perf"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 scraper = { workspace = true }
 tendril = { workspace = true }

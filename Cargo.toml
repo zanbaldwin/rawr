@@ -13,7 +13,6 @@ version = "0.1.0-beta"
 async-compression = "^0.4.41"
 async-stream = "^0.3.6"
 async-trait = "^0.1"
-opendal = "^0.55.0"
 blake3 = "^1.8"
 brotli = "^8.0"
 bzip2 = "^0.6.0"
@@ -21,36 +20,46 @@ clap = "^4.5"
 console = "^0.16.2"
 crc32fast = "^1.5"
 derive_more = "^2.1"
-dialoguer = "^0.12.0"
+dialoguer = { version = "^0.12.0", default-features = false }
 directories = "^6.0"
 exn = "^0.3"
 fast_html2md = "^0.0.58"
 figment = "^0.10.19"
 flate2 = "^1.1"
-futures = "^0.3.30"
+futures = { version = "^0.3.30", default-features = false }
 html5ever = "^0.39.0"
-indicatif = "^0.18.4"
+indicatif = { version = "^0.18.4", default-features = false }
 libbzip3-sys = { version = "^0.5", features = ["bundled"] }
 liblzma = "^0.4.6"
 memchr = "^2.8"
 miette = "^7.6"
+opendal = { version = "^0.55.0", default-features = false }
 pin-project-lite = "^0.2.17"
-regex = "^1.12"
+rawr-asyncutils = { path = "crates/asyncutils", default-features = false }
+rawr-cache = { path = "crates/cache", default-features = false }
+rawr-compress = { path = "crates/compress", default-features = false }
+rawr-config = { path = "crates/config", default-features = false }
+rawr-extract = { path = "crates/extract", default-features = false }
+rawr-library = { path = "crates/library", default-features = false }
+rawr-render = { path = "crates/render", default-features = false }
+rawr-storage = { path = "crates/storage", default-features = false }
+rawr-xhtml = { path = "crates/xhtml", default-features = false }
+regex = { version = "^1.12", default-features = false }
 rslug = "^0.3"
 rstest = "^0.26"
 rust-embed = "^8.11"
-scraper = { git = "https://github.com/rust-scraper/scraper", rev = "bca18390fa23e367ba3980e930454f87c6b13131" }
+scraper = { git = "https://github.com/rust-scraper/scraper", rev = "bca18390fa23e367ba3980e930454f87c6b13131", default-features = false }
 serde = "^1.0"
 serde_json = "^1.0"
 similar = "^2.7"
-sqlx = "^0.8.6"
+sqlx = { version = "^0.8.6", default-features = false }
 tempfile = "^3.25"
 tendril = "^0.5.0"
 time = "^0.3.47"
 tokio = { version = "^1.49", default-features = false }
 tracing = "^0.1.0"
-tracing-subscriber = "^0.3.22"
-upon = "^0.10.0"
+tracing-subscriber = { version = "^0.3.22", default-features = false }
+upon = { version = "^0.10.0", default-features = false }
 which = "^8.0"
 zstd = "^0.13"
 
@@ -72,25 +81,33 @@ brotli = ["rawr-compress/brotli"]
 bzip3 = ["rawr-compress/bzip3"]
 xz = ["rawr-compress/xz"]
 zstd = ["rawr-compress/zstd"]
-s3 = ["rawr-storage/s3"]
-pdf = []
-epub = []
+_sync = []
+s3 = ["_sync", "rawr-storage/s3"]
+_render = ["dep:rawr-render"]
+pdf = ["_render"]
+epub = ["_render"]
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
 dialoguer = { workspace = true }
 exn = { workspace = true }
-futures = { workspace = true }
-indicatif = { workspace = true }
+futures = { workspace = true, features = ["std"] }
+indicatif = { workspace = true, features = ["unicode-width"] }
 miette = { workspace = true }
-rawr-cache = { path = "crates/cache" }
-rawr-compress = { path = "crates/compress", features = ["cli"] }
-rawr-config = { path = "crates/config" }
-rawr-extract = { path = "crates/extract" }
-rawr-library = { path = "crates/library" }
-rawr-storage = { path = "crates/storage" }
+rawr-cache = { workspace = true }
+rawr-compress = { workspace = true, features = ["cli"] }
+rawr-config = { workspace = true }
+rawr-extract = { workspace = true }
+rawr-library = { workspace = true }
+rawr-render = { workspace = true, optional = true }
+rawr-storage = { workspace = true }
 similar = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = [
+    "std",
+    "fmt",
+    "ansi",
+    "env-filter",
+] }

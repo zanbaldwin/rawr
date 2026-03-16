@@ -12,7 +12,7 @@ directories = { workspace = true }
 exn = { workspace = true }
 figment = { workspace = true, features = ["yaml", "toml", "json", "env"] }
 serde = { workspace = true, features = ["derive"] }
-rawr-compress = { path = "../compress" }
+rawr-compress = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

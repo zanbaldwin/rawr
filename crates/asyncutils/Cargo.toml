@@ -7,7 +7,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
-futures = { workspace = true }
+futures = { workspace = true, features = ["std"] }
 pin-project-lite = { workspace = true }
 
 [dev-dependencies]

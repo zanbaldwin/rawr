@@ -30,14 +30,17 @@ bzip2 = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 flate2 = { workspace = true }
-futures = { workspace = true, optional = true }
+futures = { workspace = true, optional = true, features = [
+    "std",
+    "async-await",
+] }
 libbzip3-sys = { workspace = true, optional = true }
 liblzma = { workspace = true, optional = true }
-rawr-asyncutils = { path = "../asyncutils", optional = true }
+rawr-asyncutils = { workspace = true, optional = true }
 tracing = { workspace = true }
 zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
-futures = { workspace = true }
+futures = { workspace = true, features = ["std"] }
 rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

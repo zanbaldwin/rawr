@@ -1,0 +1,11 @@
+[package]
+name = "rawr-xhtml"
+description = "Serialize a DOM-tree into valid XHTML"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+html5ever = { workspace = true }
+scraper = { workspace = true }

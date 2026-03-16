@@ -10,7 +10,7 @@ version.workspace = true
 default = ["markdown"]
 markdown = ["dep:fast_html2md"]
 serde = ["dep:serde"]
-chapters = []
+chapters = ["dep:rawr-xhtml"]
 
 [dependencies]
 blake3 = { workspace = true }
@@ -20,6 +20,7 @@ exn = { workspace = true }
 fast_html2md = { workspace = true, features = ["rewriter"], optional = true }
 html5ever = { workspace = true }
 memchr = { workspace = true }
+rawr-xhtml = { path = "../xhtml", optional = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 scraper = { workspace = true }

@@ -7,7 +7,7 @@ license.workspace = true
 version.workspace = true
 
 [features]
-default = ["markdown"]
+default = []
 markdown = ["dep:fast_html2md"]
 serde = ["dep:serde"]
 chapters = ["dep:rawr-xhtml"]

@@ -1,18 +1,18 @@
 //! Compression Operations
 
 use crate::Compression;
+#[cfg(feature = "bzip3")]
+use crate::bzip3::{Bz3Decoder, Bz3Encoder, DEFAULT_BLOCK_SIZE as BZIP3_BLOCK_SIZE};
 use crate::error::{ErrorKind, Result};
 #[cfg(feature = "brotli")]
 use brotli::{CompressorWriter as BrotliEncoder, Decompressor as BrotliDecoder};
-#[cfg(feature = "bzip3")]
-use crate::bzip3::{Bz3Decoder, Bz3Encoder, DEFAULT_BLOCK_SIZE as BZIP3_BLOCK_SIZE};
 use bzip2::{Compression as BzCompression, read::BzDecoder, write::BzEncoder};
 use exn::ResultExt;
 use flate2::{Compression as GzCompression, read::GzDecoder, write::GzEncoder};
+#[cfg(feature = "xz")]
+use liblzma::{read::XzDecoder, write::XzEncoder};
 use std::io::{Read, Write};
 use tracing::instrument;
-#[cfg(feature = "xz")]
-use xz2::{read::XzDecoder, write::XzEncoder};
 #[cfg(feature = "zstd")]
 use zstd::stream::{read::Decoder as ZstdDecoder, write::Encoder as ZstdEncoder};
 
@@ -107,8 +107,7 @@ impl Compression {
             },
             #[cfg(feature = "bzip3")]
             Compression::Bzip3 => {
-                let mut encoder =
-                    Bz3Encoder::new(&mut *output, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?;
+                let mut encoder = Bz3Encoder::new(&mut *output, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?;
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 drop(encoder);
@@ -250,9 +249,7 @@ impl Compression {
             },
             Compression::Bzip2 => Box::new(BzEncoder::new(writer, BZIP2_LEVEL)),
             #[cfg(feature = "bzip3")]
-            Compression::Bzip3 => {
-                Box::new(Bz3Encoder::new(writer, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?)
-            },
+            Compression::Bzip3 => Box::new(Bz3Encoder::new(writer, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?),
             Compression::Gzip => Box::new(GzEncoder::new(writer, GZIP_LEVEL)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzEncoder::new(writer, XZ_LEVEL)),

@@ -28,7 +28,6 @@
 //! # }
 //! ```
 
-mod chrome;
 pub mod error;
 #[cfg(feature = "pdf")]
 pub mod pdf;

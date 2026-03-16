@@ -76,7 +76,7 @@ mod tests {
 
     #[rstest]
     #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
-    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToWarn""#)]
     #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
     #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
     #[case(Warning::Underage, r#""Underage""#)]
@@ -88,7 +88,7 @@ mod tests {
 
     #[rstest]
     #[case(Warning::NoWarningsApply, r#""NoWarningsApply""#)]
-    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToUse""#)]
+    #[case(Warning::CreatorChoseNotToWarn, r#""CreatorChoseNotToWarn""#)]
     #[case(Warning::GraphicViolence, r#""GraphicViolence""#)]
     #[case(Warning::MajorCharacterDeath, r#""MajorCharacterDeath""#)]
     #[case(Warning::Underage, r#""Underage""#)]

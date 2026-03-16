@@ -67,6 +67,8 @@ mod tests {
     #[case(Some(Some("bzip2".to_string())), Preference::Explicit(Compression::Bzip2))]
     #[cfg_attr(feature = "brotli", case(Some(Some("br".to_string())), Preference::Explicit(Compression::Brotli)))]
     #[cfg_attr(feature = "brotli", case(Some(Some("brotli".to_string())), Preference::Explicit(Compression::Brotli)))]
+    #[cfg_attr(feature = "bzip3", case(Some(Some("bz3".to_string())), Preference::Explicit(Compression::Bzip3)))]
+    #[cfg_attr(feature = "bzip3", case(Some(Some("bzip3".to_string())), Preference::Explicit(Compression::Bzip3)))]
     #[cfg_attr(feature = "xz", case(Some(Some("xz".to_string())), Preference::Explicit(Compression::Xz)))]
     #[cfg_attr(feature = "xz", case(Some(Some("lzma".to_string())), Preference::Explicit(Compression::Xz)))]
     #[cfg_attr(feature = "zstd", case(Some(Some("zst".to_string())), Preference::Explicit(Compression::Zstd)))]

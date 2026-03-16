@@ -48,6 +48,9 @@ pub enum Compression {
     Brotli,
     /// Bzip2 compression (.bz2)
     Bzip2,
+    /// Bzip3 compression (.bz3)
+    #[cfg(feature = "bzip3")]
+    Bzip3,
     /// Gzip compression (.gz)
     Gzip,
     /// XZ/LZMA compression (.xz)

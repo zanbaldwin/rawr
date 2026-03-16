@@ -3,6 +3,8 @@ use crate::error::{Error, ErrorKind};
 use std::{path::Path, str::FromStr};
 
 const BZIP2_MAGIC: [u8; 3] = [0x42, 0x5A, 0x68];
+#[cfg(feature = "bzip3")]
+const BZIP3_MAGIC: [u8; 5] = crate::bzip3::MAGIC;
 const GZIP_MAGIC: [u8; 2] = [0x1F, 0x8B];
 #[cfg(feature = "xz")]
 const XZ_MAGIC: [u8; 6] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
@@ -24,6 +26,10 @@ impl FromStr for Compression {
             #[cfg(not(feature = "brotli"))]
             "br" | "brotli" => exn::bail!(ErrorKind::DisabledFormat(s.to_string())),
             "bz2" | "bzip2" => Ok(Compression::Bzip2),
+            #[cfg(feature = "bzip3")]
+            "bz3" | "bzip3" => Ok(Compression::Bzip3),
+            #[cfg(not(feature = "bzip3"))]
+            "bz3" | "bzip3" => exn::bail!(ErrorKind::DisabledFormat(s.to_string())),
             "gz" | "gzip" => Ok(Compression::Gzip),
             #[cfg(feature = "xz")]
             "xz" | "lzma" => Ok(Compression::Xz),
@@ -47,6 +53,8 @@ impl Compression {
             .map(|ext| match ext.to_lowercase().as_str() {
                 #[cfg(feature = "brotli")]
                 "br" => Compression::Brotli,
+                #[cfg(feature = "bzip3")]
+                "bz3" => Compression::Bzip3,
                 "bz2" => Compression::Bzip2,
                 "gz" => Compression::Gzip,
                 #[cfg(feature = "xz")]
@@ -69,6 +77,10 @@ impl Compression {
     #[must_use]
     pub fn from_magic_bytes(bytes: &[u8]) -> Option<Self> {
         // Brotli does not have standardized magic bytes (uses container formats).
+        #[cfg(feature = "bzip3")]
+        if bytes.starts_with(&BZIP3_MAGIC) {
+            return Some(Compression::Bzip3);
+        }
         if bytes.starts_with(&BZIP2_MAGIC) {
             return Some(Compression::Bzip2);
         }
@@ -101,6 +113,8 @@ mod tests {
     #[case("gzip", Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case("br", Compression::Brotli))]
     #[cfg_attr(feature = "brotli", case("br", Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case("bz3", Compression::Bzip3))]
+    #[cfg_attr(feature = "bzip3", case("bzip3", Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case("xz", Compression::Xz))]
     #[cfg_attr(feature = "xz", case("lzma", Compression::Xz))]
     #[cfg_attr(feature = "zstd", case("zst", Compression::Zstd))]
@@ -127,6 +141,7 @@ mod tests {
     #[case("file.html.gz", Compression::Gzip)]
     #[case("file.gz", Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case("file.html.br", Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case("file.html.bz3", Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case("file.html.xz", Compression::Xz))]
     #[cfg_attr(feature = "zstd", case("file.html.zst", Compression::Zstd))]
     fn test_from_path_default(#[case] test: &str, #[case] expected: Compression) {
@@ -139,6 +154,7 @@ mod tests {
     #[case(&[], None)]
     #[case(&[0x42, 0x5A, 0x68, 0x39], Some(Compression::Bzip2))]
     #[case(&[0x1F, 0x8B, 0x08, 0x00], Some(Compression::Gzip))]
+    #[cfg_attr(feature = "bzip3", case(&[0x42, 0x5A, 0x33, 0x76, 0x31, 0x00], Some(Compression::Bzip3)))]
     #[cfg_attr(feature = "xz", case(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00, 0x00], Some(Compression::Xz)))]
     #[cfg_attr(feature = "zstd", case(&[0x28, 0xB5, 0x2F, 0xFD], Some(Compression::Zstd)))]
     fn test_from_magic_bytes_default(#[case] bytes: &[u8], #[case] expected: Option<Compression>) {

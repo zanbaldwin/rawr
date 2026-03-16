@@ -23,6 +23,8 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => ".br",
             Compression::Bzip2 => ".bz2",
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => ".bz3",
             Compression::Gzip => ".gz",
             #[cfg(feature = "xz")]
             Compression::Xz => ".xz",
@@ -40,6 +42,8 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => "brotli",
             Compression::Bzip2 => "bzip2",
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => "bzip3",
             Compression::Gzip => "gzip",
             #[cfg(feature = "xz")]
             Compression::Xz => "xz",
@@ -78,6 +82,7 @@ mod tests {
     #[case(Compression::Bzip2, ".bz2")]
     #[case(Compression::Gzip, ".gz")]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli, ".br"))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3, ".bz3"))]
     #[cfg_attr(feature = "xz", case(Compression::Xz, ".xz"))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd, ".zst"))]
     fn test_extension_default(#[case] format: Compression, #[case] expected: &str) {

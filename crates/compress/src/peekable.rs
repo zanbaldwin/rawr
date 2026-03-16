@@ -137,6 +137,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_peek(#[case] format: Compression) {
@@ -152,6 +153,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_peek_then_into_bytes(#[case] format: Compression) {
@@ -169,6 +171,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_peek_then_into_reader(#[case] format: Compression) {
@@ -187,6 +190,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_multiple_peek_calls(#[case] format: Compression) {
@@ -207,6 +211,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_peek_larger_than_data(#[case] format: Compression) {
@@ -222,6 +227,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_empty_input(#[case] format: Compression) {

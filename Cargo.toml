@@ -51,6 +51,7 @@ upon = "^0.10.0"
 which = "^8.0"
 xz2 = "^0.1.0"
 async-compression = "^0.4"
+libbzip3-sys = { version = "^0.5", features = ["bundled"] }
 zstd = "^0.13"
 
 [package]
@@ -67,6 +68,7 @@ path = "src/main.rs"
 [features]
 default = ["s3"]
 brotli = ["rawr-compress/brotli"]
+bzip3 = ["rawr-compress/bzip3"]
 xz = ["rawr-compress/xz"]
 zstd = ["rawr-compress/zstd"]
 s3 = ["rawr-storage/s3"]

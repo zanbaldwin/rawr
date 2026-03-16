@@ -46,13 +46,13 @@ impl Command for OrganizeCommand {
                     bar.set_length(total);
                 },
                 Ok(OrganizeEvent::Organized(action)) => {
-                    let pieces = format_action(&action);
+                    let line: Line = format_action(&action).into();
                     let loudness = match &action {
                         Action::Renamed { .. } => Loudness::Normal,
                         Action::AlreadyCorrect(_) => Loudness::Whisper,
                         Action::CleanedUp(_) => Loudness::Shout,
                     };
-                    ctx.output.print(Pipe::Out, &Line::new(loudness, pieces));
+                    ctx.output.print(Pipe::Out, &line.with_volume(loudness));
                     bar.inc(1);
                 },
                 Ok(OrganizeEvent::Complete) => {

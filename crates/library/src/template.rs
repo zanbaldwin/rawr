@@ -251,7 +251,7 @@ mod addons {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rawr_extract::models::{Chapters, Fandom, Language, Metadata, Rating, Version};
+    use rawr_extract::models::{ChapterCount, Fandom, Language, Metadata, Rating, Version};
     use time::{Date, Month, UtcDateTime};
 
     fn make_test_version(work_id: u64, title: &str, fandom: &str) -> Version {
@@ -269,7 +269,7 @@ mod tests {
                 tags: vec![],
                 summary: None,
                 language: Language::from_str("English").unwrap(),
-                chapters: Chapters { written: 5, total: Some(10) },
+                chapters: ChapterCount { written: 5, total: Some(10) },
                 words: 25000,
                 published: Date::from_calendar_date(2024, Month::January, 1).unwrap(),
                 last_modified: Date::from_calendar_date(2024, Month::June, 15).unwrap(),

@@ -1,6 +1,4 @@
 mod author;
-#[cfg(feature = "chapters")]
-mod chapter;
 mod chapters;
 mod fandom;
 mod lang;
@@ -13,8 +11,8 @@ mod warning;
 
 pub use self::author::Author;
 #[cfg(feature = "chapters")]
-pub use self::chapter::ChapterContent;
-pub use self::chapters::Chapters;
+pub use self::chapters::ChapterContent;
+pub use self::chapters::ChapterCount;
 pub use self::fandom::Fandom;
 pub use self::lang::Language;
 pub use self::metadata::Metadata;

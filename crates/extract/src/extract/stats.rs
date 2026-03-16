@@ -1,6 +1,6 @@
 use crate::consts;
 use crate::error::{ErrorKind, Result};
-use crate::models::Chapters;
+use crate::models::ChapterCount;
 use exn::{OptionExt, ResultExt};
 use time::{Date, Month};
 use tracing::instrument;
@@ -16,7 +16,7 @@ impl Stats {
 
     /// Extracts chapter information from stats.
     #[instrument(level = "trace")]
-    pub fn chapters(&self) -> Result<Chapters> {
+    pub fn chapters(&self) -> Result<ChapterCount> {
         let captures =
             consts::CHAPTERS_REGEX.captures(&self.text).ok_or_raise(|| ErrorKind::MissingField("chapters"))?;
         let current_str = captures.get(1).unwrap().as_str().replace(',', "");
@@ -34,7 +34,7 @@ impl Stats {
                 value: "invalid total chapters".to_string(),
             })?)
         };
-        Ok(Chapters { written: current, total })
+        Ok(ChapterCount { written: current, total })
     }
 
     /// Extracts word count from stats.

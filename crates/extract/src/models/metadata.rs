@@ -1,4 +1,4 @@
-use super::{Author, Chapters, Fandom, Language, Rating, SeriesPosition, Tag, Warning};
+use super::{Author, ChapterCount, Fandom, Language, Rating, SeriesPosition, Tag, Warning};
 use time::Date;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,7 +14,7 @@ pub struct Metadata {
     /// Series memberships
     pub series: Vec<SeriesPosition>,
     /// Chapter information
-    pub chapters: Chapters,
+    pub chapters: ChapterCount,
     /// Total word count
     pub words: u64,
     /// Content rating

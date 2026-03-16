@@ -67,7 +67,7 @@ impl TryFrom<VersionRow> for Version {
                 authors: from_json(&row.authors).or_raise(|| ErrorKind::InvalidData("authors"))?,
                 fandoms: from_json(&row.fandoms).or_raise(|| ErrorKind::InvalidData("fandoms"))?,
                 series: from_json(&row.series).or_raise(|| ErrorKind::InvalidData("series"))?,
-                chapters: extract::Chapters::new(
+                chapters: extract::ChapterCount::new(
                     u32::try_from(row.chapters_written).or_raise(|| ErrorKind::InvalidData("chapters written"))?,
                     row.chapters_total
                         .map(|c| u32::try_from(c).or_raise(|| ErrorKind::InvalidData("chapters total")))
@@ -153,7 +153,7 @@ mod tests {
                     name: "Winnie-the-Pooh - A. A. Milne".to_string(),
                 }],
                 series: vec![],
-                chapters: extract::Chapters { written: 6, total: Some(6) },
+                chapters: extract::ChapterCount { written: 6, total: Some(6) },
                 words: 19375,
                 summary: None,
                 rating: Some(extract::Rating::GeneralAudiences),

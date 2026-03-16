@@ -4,6 +4,8 @@ use crate::Compression;
 use crate::error::{ErrorKind, Result};
 #[cfg(feature = "brotli")]
 use brotli::{CompressorWriter as BrotliEncoder, Decompressor as BrotliDecoder};
+#[cfg(feature = "bzip3")]
+use crate::bzip3::{Bz3Decoder, Bz3Encoder, DEFAULT_BLOCK_SIZE as BZIP3_BLOCK_SIZE};
 use bzip2::{Compression as BzCompression, read::BzDecoder, write::BzEncoder};
 use exn::ResultExt;
 use flate2::{Compression as GzCompression, read::GzDecoder, write::GzEncoder};
@@ -103,6 +105,15 @@ impl Compression {
                 encoder.finish().or_raise(|| ErrorKind::Io)?;
                 output.len()
             },
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => {
+                let mut encoder =
+                    Bz3Encoder::new(&mut *output, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?;
+                encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
+                encoder.finish().or_raise(|| ErrorKind::Io)?;
+                drop(encoder);
+                output.len()
+            },
             Compression::Gzip => {
                 let mut encoder = GzEncoder::new(&mut *output, GZIP_LEVEL);
                 encoder.write_all(input).or_raise(|| ErrorKind::Io)?;
@@ -157,6 +168,11 @@ impl Compression {
                 let mut decoder = BzDecoder::new(input);
                 decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
             },
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => {
+                let mut decoder = Bz3Decoder::new(input).or_raise(|| ErrorKind::InvalidData)?;
+                decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
+            },
             Compression::Gzip => {
                 let mut decoder = GzDecoder::new(input);
                 decoder.read_to_end(output).or_raise(|| ErrorKind::InvalidData)?
@@ -200,6 +216,8 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliDecoder::new(reader, BROTLI_BUFFER_SIZE)),
             Compression::Bzip2 => Box::new(BzDecoder::new(reader)),
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => Box::new(Bz3Decoder::new(reader).or_raise(|| ErrorKind::InvalidData)?),
             Compression::Gzip => Box::new(GzDecoder::new(reader)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzDecoder::new(reader)),
@@ -231,6 +249,10 @@ impl Compression {
                 Box::new(BrotliEncoder::new(writer, BROTLI_BUFFER_SIZE, BROTLI_LEVEL, BROTLI_LG_WINDOW_SIZE))
             },
             Compression::Bzip2 => Box::new(BzEncoder::new(writer, BZIP2_LEVEL)),
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => {
+                Box::new(Bz3Encoder::new(writer, BZIP3_BLOCK_SIZE).or_raise(|| ErrorKind::Encoder)?)
+            },
             Compression::Gzip => Box::new(GzEncoder::new(writer, GZIP_LEVEL)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzEncoder::new(writer, XZ_LEVEL)),
@@ -301,6 +323,7 @@ mod tests {
     #[rstest]
     #[case(Compression::None)]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -314,6 +337,7 @@ mod tests {
 
     #[rstest]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -327,6 +351,7 @@ mod tests {
     #[rstest]
     #[case(Compression::None)]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -346,6 +371,7 @@ mod tests {
     #[rstest]
     #[case(Compression::None)]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -366,6 +392,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     fn test_stream_roundtrip(#[case] format: Compression) {

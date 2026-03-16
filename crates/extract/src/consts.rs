@@ -20,9 +20,9 @@ macro_rules! regex {
 
 // Selector for the work URL in the preface. This is used to determine if the document is valid.
 selector!(WORK_URL_SELECTOR, "div#preface p.message a[href]");
-regex!(WORK_URL_REGEX, format!(r"{}/works/(\d+){}", SCHEME_HOST, SAFE_END).as_str());
+regex!(WORK_URL_REGEX, format!(r"{}/works/([0-9]+){}", SCHEME_HOST, SAFE_END).as_str());
 selector!(TITLE_SELECTOR, "#preface .meta h1");
-regex!(SERIES_URL_REGEX, format!(r"{}/series/(\d+){}", SCHEME_HOST, SAFE_END).as_str());
+regex!(SERIES_URL_REGEX, format!(r"{}/series/([0-9]+){}", SCHEME_HOST, SAFE_END).as_str());
 selector!(BYLINE_SELECTOR, "#preface .byline a[rel='author']");
 regex!(
     AUTHOR_REGEX,
@@ -32,11 +32,19 @@ selector!(TAGS_DL_SELECTOR, "#preface dl.tags");
 selector!(DT_SELECTOR, "dt");
 selector!(DD_SELECTOR, "dd");
 selector!(SUMMARY_SELECTOR, "#preface .meta blockquote.userstuff");
-regex!(CHAPTERS_REGEX, r"Chapters:\s*(\d{1,3}(?:,?\d{3})*)/(\d{1,3}(?:,?\d{3})*|\?)");
-regex!(WORDS_REGEX, r"Words:\s*(\d{1,3}(?:,?\d{3})*)");
-regex!(DATE_REGEX, r"(Updated|Completed|Published):\s*(\d{4})-(\d{1,2})-(\d{1,2})");
+regex!(
+    CHAPTERS_REGEX,
+    r"Chapters:[ \t\n\r\x{A0}]*([0-9]{1,3}(?:,?[0-9]{3})*)/([0-9]{1,3}(?:,?[0-9]{3})*|\?)"
+);
+regex!(WORDS_REGEX, r"Words:[ \t\n\r\x{A0}]*([0-9]{1,3}(?:,?[0-9]{3})*)");
+regex!(DATE_REGEX, r"(Updated|Completed|Published):[ \t\n\r\x{A0}]*([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})");
 selector!(ANCHOR_SELECTOR, "a");
-regex!(SERIES_POSITION_REGEX, r"Part\s+(\d{1,3}(?:,?\d{3})*)\s+of\s+");
+// Need to account for non-breaking spaces in the regex (eg, "\s" but without
+// the Unicode Perl feature: "[ \t\n\r\x{A0}]")
+regex!(
+    SERIES_POSITION_REGEX,
+    r"Part[ \t\n\r\x{A0}]+([0-9]{1,3}(?:,?[0-9]{3})*)[ \t\n\r\x{A0}]+of[ \t\n\r\x{A0}]+"
+);
 
 #[cfg(feature = "chapters")]
 selector!(CHAPTER_META_GROUP_SELECTOR, "div#chapters > div.meta.group");

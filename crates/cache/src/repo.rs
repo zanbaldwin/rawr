@@ -709,7 +709,7 @@ mod tests {
     use super::*;
     use crate::{Database, File, Version};
     use rawr_compress::Compression;
-    use rawr_extract::models::{Chapters, Language, Metadata, Rating};
+    use rawr_extract::models::{ChapterCount, Language, Metadata, Rating};
     use rawr_storage::file::FileMeta;
     use time::{Date, UtcDateTime};
 
@@ -733,7 +733,7 @@ mod tests {
                     name: "English".to_string(),
                     iso_code: Some("en"),
                 },
-                chapters: Chapters { written: 1, total: Some(1) },
+                chapters: ChapterCount { written: 1, total: Some(1) },
                 words: 1000,
                 published: Date::from_calendar_date(2024, time::Month::January, 1).unwrap(),
                 last_modified: Date::from_calendar_date(2024, time::Month::January, 1).unwrap(),

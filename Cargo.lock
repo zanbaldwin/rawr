@@ -2427,6 +2427,7 @@ dependencies = [
  "fast_html2md",
  "html5ever",
  "memchr",
+ "rawr-xhtml",
  "regex",
  "rstest",
  "scraper",
@@ -2490,6 +2491,14 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "rawr-xhtml"
+version = "0.1.0-beta"
+dependencies = [
+ "html5ever",
+ "scraper",
 ]
 
 [[package]]

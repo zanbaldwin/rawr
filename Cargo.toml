@@ -94,7 +94,7 @@ dialoguer = { workspace = true }
 exn = { workspace = true }
 futures = { workspace = true, features = ["std"] }
 indicatif = { workspace = true, features = ["unicode-width"] }
-miette = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
 rawr-cache = { workspace = true }
 rawr-compress = { workspace = true, features = ["cli"] }
 rawr-config = { workspace = true }

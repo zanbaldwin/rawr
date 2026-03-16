@@ -7,9 +7,13 @@
 
 mod decoder;
 mod encoder;
+#[cfg(feature = "async")]
+mod futures;
 
 pub(crate) use self::decoder::Bz3Decoder;
 pub(crate) use self::encoder::Bz3Encoder;
+#[cfg(feature = "async")]
+pub(crate) use self::futures::{AsyncBz3Decoder, AsyncBz3Encoder};
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::io::{Error as IoError, ErrorKind, Result as IoResult};

@@ -7,6 +7,8 @@
 //! Requires the `async` feature.
 
 use crate::Compression;
+#[cfg(feature = "bzip3")]
+use crate::bzip3::{AsyncBz3Decoder, AsyncBz3Encoder};
 use crate::error::{ErrorKind, Result};
 use async_compression::Level;
 #[cfg(feature = "brotli")]
@@ -48,6 +50,8 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliDecoder::new(reader)),
             Compression::Bzip2 => Box::new(BzDecoder::new(reader)),
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => Box::new(AsyncBz3Decoder::new(reader)),
             Compression::Gzip => Box::new(GzipDecoder::new(reader)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzDecoder::new(reader)),
@@ -94,6 +98,8 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliEncoder::with_quality(writer, Level::Best)),
             Compression::Bzip2 => Box::new(BzEncoder::with_quality(writer, Level::Best)),
+            #[cfg(feature = "bzip3")]
+            Compression::Bzip3 => Box::new(AsyncBz3Encoder::new(writer)),
             Compression::Gzip => Box::new(GzipEncoder::with_quality(writer, Level::Best)),
             #[cfg(feature = "xz")]
             Compression::Xz => Box::new(XzEncoder::with_quality(writer, Level::Best)),
@@ -154,6 +160,7 @@ mod tests {
     #[tokio::test]
     #[rstest]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -174,6 +181,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -190,6 +198,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -208,6 +217,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -229,6 +239,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -245,6 +256,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -263,6 +275,7 @@ mod tests {
     #[case(Compression::Gzip)]
     #[case(Compression::Bzip2)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
     #[cfg_attr(feature = "zstd", case(Compression::Zstd))]
     #[tokio::test]
@@ -291,6 +304,7 @@ mod tests {
     #[rstest]
     #[case(Compression::None)]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]
@@ -309,6 +323,7 @@ mod tests {
     #[rstest]
     #[case(Compression::None)]
     #[case(Compression::Bzip2)]
+    #[cfg_attr(feature = "bzip3", case(Compression::Bzip3))]
     #[case(Compression::Gzip)]
     #[cfg_attr(feature = "brotli", case(Compression::Brotli))]
     #[cfg_attr(feature = "xz", case(Compression::Xz))]

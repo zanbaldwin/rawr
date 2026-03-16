@@ -103,7 +103,7 @@ rawr-library = { workspace = true }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
 similar = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "std",

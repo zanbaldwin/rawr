@@ -1,5 +1,4 @@
-use crate::command::OrganizeCommand;
-use crate::command::ScanCommand;
+use crate::command::{ImportCommand, OrganizeCommand, ScanCommand};
 use clap::{ColorChoice, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -35,4 +34,5 @@ pub(crate) struct Cli {
 pub enum Commands {
     Scan(ScanCommand),
     Organize(OrganizeCommand),
+    Import(ImportCommand),
 }

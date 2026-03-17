@@ -29,13 +29,14 @@ async fn main() -> Result<ExitCode> {
     let Some(command) = cli.command else {
         Cli::command().print_help()?;
         context.shutdown().await;
-        return Ok(ExitCode::from(2));
+        return Ok(ExitCode::SUCCESS);
     };
 
     let exit = match command {
         Commands::Scan(command) => command.execute(&mut context).await?,
         Commands::Import(command) => command.execute(&mut context).await?,
         Commands::Organize(command) => command.execute(&mut context).await?,
+        Commands::Stats(command) => command.execute(&mut context).await?,
     };
 
     context.shutdown().await;
@@ -55,14 +56,15 @@ fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
     for line in ctx.to_lines().into_iter().chain(warning_lines) {
         ctx.output.print(Pipe::Err, &line);
     }
+    ctx.output.print(Pipe::Err, &Line::empty());
 }
 
-const DEFAULT_LOGGING: &str = "rawr=info";
 fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(DEFAULT_LOGGING.parse().unwrap())
+        .with_default_directive("error".parse().unwrap())
         .from_env_lossy()
-        .add_directive("html5ever=warn".parse().unwrap());
+        .add_directive("html5ever=warn".parse().unwrap())
+        .add_directive("rawr=warn".parse().unwrap());
     let with_ansi = PrintingOutput::term_has_colour(&Term::stderr(), &clap::ColorChoice::Auto);
     tracing_subscriber::fmt()
         .without_time()

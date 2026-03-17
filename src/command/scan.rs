@@ -12,7 +12,17 @@ use std::pin::pin;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+/// Discover HTML files in the import target and extract AO3 metadata.
+///
+/// Walks the configured import backend, identifies HTML files, extracts
+/// work metadata (title, authors, fandoms, chapters, word count), and
+/// caches the results in the local database. Previously scanned files
+/// are skipped unless their content has changed.
 #[derive(Debug, Args)]
+#[command(after_long_help = "\
+Examples:
+  rawr scan
+  rawr scan --dry-run")]
 pub(crate) struct ScanCommand {}
 impl Command for ScanCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {

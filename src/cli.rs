@@ -1,6 +1,7 @@
 use crate::command::ImportCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
+use crate::command::StatsCommand;
 use clap::{ColorChoice, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -8,6 +9,12 @@ use std::path::PathBuf;
 #[command(name = "rawr")]
 #[command(version)]
 #[command(about = "AO3 fan-fiction library manager")]
+#[command(long_about = r#"AO3 fan-fiction library manager.
+
+Manage a local library of downloaded AO3 HTML files. Typical workflow:
+  1. rawr scan                    Run an initial scan on your library
+  2. rawr import ~/Downloads -r   Import downloaded files
+  3. rawr organize                Move files around in the library to the right locations"#)]
 #[command(arg_required_else_help = false)]
 pub(crate) struct Cli {
     /// Path to configuration file
@@ -34,7 +41,12 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Scan your import library for HTML files and extract metadata into the cache
     Scan(ScanCommand),
+    /// Import HTML files from the local filesystem (eg, your downloads folder) into your library
     Import(ImportCommand),
+    /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
+    /// Show library statistics
+    Stats(StatsCommand),
 }

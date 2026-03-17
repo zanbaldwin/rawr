@@ -7,7 +7,7 @@ use std::collections::HashMap;
 /// "Spider-Man - All Media Types", "Spider-Man (Marvel) - Fandom"). This
 /// config groups them under a single display name and lets users set
 /// preferred fandom names for works tagged with multiple fandoms.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct FandomConfig {
     /// Maps a canonical display name to the AO3 fandom names it replaces.
     /// During import, any work tagged with an alias is filed under the

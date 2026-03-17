@@ -77,7 +77,7 @@ name = "rawr"
 path = "src/main.rs"
 
 [features]
-default = ["s3", "pdf", "epub"]
+default = []
 brotli = ["rawr-compress/brotli"]
 bzip3 = ["rawr-compress/bzip3"]
 xz = ["rawr-compress/xz"]
@@ -105,6 +105,7 @@ rawr-library = { workspace = true }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
 similar = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }

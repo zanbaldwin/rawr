@@ -6,6 +6,39 @@ use rawr_storage::file::{FileInfo, HashState};
 
 use std::borrow::Cow;
 
+pub fn format_number(n: u64) -> String {
+    if n < 1_000 {
+        return n.to_string();
+    }
+    let s = n.to_string();
+    let mut result = String::with_capacity(s.len() + s.len() / 3);
+    for (i, ch) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(ch);
+    }
+    result
+}
+
+pub fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut size = bytes as f64;
+    for &unit in UNITS {
+        if size < 1024.0 || unit == "TiB" {
+            return if size < 10.0 && unit != "B" {
+                format!("{size:.2} {unit}")
+            } else if size < 100.0 && unit != "B" {
+                format!("{size:.1} {unit}")
+            } else {
+                format!("{:.0} {unit}", size)
+            };
+        }
+        size /= 1024.0;
+    }
+    unreachable!()
+}
+
 /// The reason a line is being printed — determines prefix, color, and loudness.
 ///
 /// Works across scan, organize, and import commands, providing a unified

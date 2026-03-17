@@ -21,7 +21,18 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 const MAX_PROCESS_CONCURRENCY: usize = 50;
 
+/// Import HTML files from the local filesystem into the library.
+///
+/// Copies files into the configured import target, extracts metadata,
+/// and caches the results. Source files are deleted after import by
+/// default (use --keep to preserve them).
 #[derive(Debug, Args)]
+#[command(after_long_help = "\
+Examples:
+  rawr import downloaded.html
+  rawr import ~/Downloads/ao3/ --recursive
+  rawr import ~/Downloads/ao3/ -r --compress=zstd
+  rawr import story.html --keep --dry-run")]
 pub(crate) struct ImportCommand {
     /// File or folder to import.
     #[arg(value_name = "PATH")]
@@ -29,8 +40,11 @@ pub(crate) struct ImportCommand {
     /// Recurse into subdirectories when importing a folder.
     #[arg(short, long)]
     recursive: bool,
-    /// Compress files during import. Optionally specify format (eg, --compress=bz2).
+    /// Compress files during import. Optionally specify format (eg, --compress=zstd).
     /// Without a value, uses the configured default. Omit to preserve source compression.
+    ///
+    /// Formats: none, gz (gzip), bz2 (bzip2), br (brotli), bz3 (bzip3), xz (lzma), zst (zstd).
+    /// Some formats require the corresponding feature flag at compile time.
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     compress: Option<String>,
     /// Delete source files after successful import (default).

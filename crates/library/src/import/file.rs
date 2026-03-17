@@ -12,6 +12,7 @@ use rawr_extract::models::Version;
 use rawr_extract::{ESTIMATED_HEADER_SIZE_BYTES, Extractor};
 use rawr_storage::file::{FileInfo, Processed};
 use rawr_storage::{BackendHandle, ValidPath};
+use std::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 use time::UtcDateTime;
 
@@ -56,8 +57,9 @@ use time::UtcDateTime;
 // and the whole "temp_path is a string" will get resolved and this module is ready!
 
 pub enum Import {
-    Imported(FileInfo<Processed>, Version),
     AlreadyExists(FileInfo<Processed>, Version),
+    NewImport(FileInfo<Processed>, Version),
+    Upgrade(FileInfo<Processed>, Version),
     Outdated(FileInfo<Processed>, Version),
 }
 
@@ -162,21 +164,37 @@ async fn import_file_inner<R: AsyncRead + Send + Unpin>(
     // TODO: We know that it already exists in cache, and exists in the backend.
     //       Would be nice to find a way to skip those checks in `organize`.
     //       Not a bug per-se, just inefficient.
-    match organize_file_inner(backend, cache, ctx, file_info.clone(), vec![]).await.or_raise(|| ErrorKind::Organize)? {
-        Action::CleanedUp(path) => {
-            cache.delete_by_target_path(&file_info.target, &file_info.path).await.or_raise(|| ErrorKind::Cache)?;
-            backend.delete(&file_info.path).await.or_raise(|| ErrorKind::Storage)?;
-            // CleanedUp can mean two things in organize:
-            // - File didn't exist on disk (shouldn't happen — we just wrote it)
-            // - A duplicate already existed at the target location (the incoming file was discarded)
-            return Ok(Import::AlreadyExists(file_info.with_path(path).or_raise(|| ErrorKind::Storage)?, version));
-        },
-        Action::Renamed { to, .. } => {
-            file_info = file_info.with_path(to).or_raise(|| ErrorKind::Storage)?;
-        },
-        Action::AlreadyCorrect(_) => (),
-    };
-    // 12. Classify the result.
-    let is_outdated = pre_import_best.as_ref().is_some_and(|(best_version, _)| version < *best_version);
-    if is_outdated { Ok(Import::Outdated(file_info, version)) } else { Ok(Import::Imported(file_info, version)) }
+    if ctx.dry_run {
+        // In dry-run mode the file was never written (ReadOnlyBackend sinks
+        // writes), so organize_file_inner would see it as missing and
+        // incorrectly return CleanedUp. Compute the path directly instead.
+        file_info = file_info
+            .with_path(ctx.template.generate(&version, "html", target_compression).or_raise(|| ErrorKind::Template)?)
+            .or_raise(|| ErrorKind::Storage)?;
+    } else {
+        match organize_file_inner(backend, cache, ctx, file_info.clone(), vec![])
+            .await
+            .or_raise(|| ErrorKind::Organize)?
+        {
+            Action::CleanedUp(path) => {
+                cache.delete_by_target_path(&file_info.target, &file_info.path).await.or_raise(|| ErrorKind::Cache)?;
+                backend.delete(&file_info.path).await.or_raise(|| ErrorKind::Storage)?;
+                // CleanedUp can mean two things in organize:
+                // - File didn't exist on disk (shouldn't happen — we just wrote it)
+                // - A duplicate already existed at the target location (the incoming file was discarded)
+                return Ok(Import::AlreadyExists(file_info.with_path(path).or_raise(|| ErrorKind::Storage)?, version));
+            },
+            Action::Renamed { to, .. } => {
+                file_info = file_info.with_path(to).or_raise(|| ErrorKind::Storage)?;
+            },
+            Action::AlreadyCorrect(_) => (),
+        };
+    }
+
+    Ok(match pre_import_best.and_then(|(best, _)| version.partial_cmp(&best)) {
+        Some(Ordering::Equal) => Import::AlreadyExists(file_info, version),
+        Some(Ordering::Greater) => Import::Upgrade(file_info, version),
+        Some(Ordering::Less) => Import::Outdated(file_info, version),
+        None => Import::NewImport(file_info, version),
+    })
 }

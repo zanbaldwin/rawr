@@ -1,6 +1,6 @@
 use crate::cli::Cli;
 use crate::error::Result;
-use crate::output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
+use crate::output::{IntoLines, Line, Output, PALETTE, Piece};
 use rawr_cache::{Database, Repository};
 use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
@@ -114,20 +114,14 @@ impl IntoLines for AppContext {
     fn to_lines(&self) -> Vec<Line<'_>> {
         let cache = self.config.library.cache.relative();
         vec![
-            Line::new(
-                Loudness::Normal,
-                [Piece::fixed(
-                    format!("Using config file: <not-implemented>"),
-                    &PALETTE.muted,
-                )],
-            ),
-            Line::new(
-                Loudness::Normal,
-                [Piece::fixed(
-                    format!("Using cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
-                    &PALETTE.muted,
-                )],
-            ),
+            Line::new([Piece::fixed(
+                format!("Using config file: <not-implemented>"),
+                &PALETTE.muted,
+            )]),
+            Line::new([Piece::fixed(
+                format!("Using cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
+                &PALETTE.muted,
+            )]),
         ]
     }
 }

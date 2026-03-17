@@ -15,7 +15,7 @@ mod ro;
 mod s3;
 
 pub use self::ext::StorageBackendExt;
-pub use self::html::HtmlOnlyBackend;
+pub use self::html::{HtmlOnlyBackend, is_html_path};
 pub use self::local::LocalBackend;
 #[cfg(feature = "mock")]
 pub use self::mock::MockBackend;

@@ -1,3 +1,4 @@
+use crate::command::ImportCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
 use clap::{ColorChoice, Parser, Subcommand};
@@ -34,5 +35,6 @@ pub(crate) struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     Scan(ScanCommand),
+    Import(ImportCommand),
     Organize(OrganizeCommand),
 }

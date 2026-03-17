@@ -42,7 +42,7 @@ async fn main() -> Result<ExitCode> {
 }
 
 fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
-    let warning_lines = warnings.into_iter().map(|warning| {
+    let warning_lines = warnings.iter().map(|warning| {
         Line::new([
             Piece::fixed("WARN: ", &PALETTE.warning),
             Piece::fixed(&warning.path, &PALETTE.highlight),

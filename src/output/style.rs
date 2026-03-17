@@ -1,7 +1,7 @@
 use console::Style;
 use std::sync::LazyLock;
 
-pub static PALETTE: LazyLock<Palette> = LazyLock::new(|| Palette::default());
+pub static PALETTE: LazyLock<Palette> = LazyLock::new(Palette::default);
 
 pub struct Palette {
     pub heading: Style,

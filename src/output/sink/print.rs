@@ -63,7 +63,7 @@ impl PrintingOutput {
 
 impl Output for PrintingOutput {
     fn print(&self, pipe: Pipe, line: &Line<'_>) {
-        if !line.loudness.is_visible(self.verbosity) {
+        if !line.is_visible(self.verbosity) {
             return;
         }
         let terminal = self.terminal.get(pipe);

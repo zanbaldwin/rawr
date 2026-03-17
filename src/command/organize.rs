@@ -68,13 +68,11 @@ impl Command for OrganizeCommand {
         if error_count > 0 {
             ctx.output.print(
                 Pipe::Err,
-                &Line::new(
-                    Loudness::Shout,
-                    [
-                        ("WARN: ", &PALETTE.warning).into(),
-                        (format!("{error_count} file(s) failed during organize"),).into(),
-                    ],
-                ),
+                &Line::new([
+                    ("WARN: ", &PALETTE.warning).into(),
+                    (format!("{error_count} file(s) failed during organize"),).into(),
+                ])
+                .with_volume(Loudness::Shout),
             );
         }
         Ok(ExitCode::SUCCESS)

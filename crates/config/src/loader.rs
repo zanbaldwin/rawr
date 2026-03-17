@@ -67,10 +67,10 @@ pub trait Loader {
     /// Returns the validated [`Config`] alongside any non-fatal
     /// [`ConstraintViolation`] warnings. Fatal violations cause an
     /// [`ErrorKind::Validation`] error instead.
-    fn load<P: AsRef<Path>>(explicit: impl Into<Option<P>>) -> Result<(Config, Vec<ConstraintViolation>)>;
+    fn load<P: AsRef<Path>>(explicit: impl Into<Option<P>>) -> Result<(PathBuf, Config, Vec<ConstraintViolation>)>;
 }
 impl Loader for Config {
-    fn load<P: AsRef<Path>>(explicit: impl Into<Option<P>>) -> Result<(Config, Vec<ConstraintViolation>)> {
+    fn load<P: AsRef<Path>>(explicit: impl Into<Option<P>>) -> Result<(PathBuf, Config, Vec<ConstraintViolation>)> {
         // Go through discovery sources in order: Explicit, EnvVar, CurrentDir, UserConfig.
         let result = explicit
             .into()
@@ -99,9 +99,9 @@ impl Loader for Config {
         let figment = Figment::new();
         // Safety: the extension will be a valid str because we checked above.
         let figment = match path.extension().unwrap().to_str().unwrap() {
-            "toml" => figment.merge(providers::Toml::file(path)),
-            "yaml" | "yml" => figment.merge(providers::Yaml::file(path)),
-            "json" => figment.merge(providers::Json::file(path)),
+            "toml" => figment.merge(providers::Toml::file(&path)),
+            "yaml" | "yml" => figment.merge(providers::Yaml::file(&path)),
+            "json" => figment.merge(providers::Json::file(&path)),
             _ => figment,
         }
         .merge(providers::Env::prefixed(ENV_PREFIX).split("__"));
@@ -118,7 +118,7 @@ impl Loader for Config {
         if !errors.is_empty() {
             exn::bail!(ErrorKind::Validation { errors });
         }
-        Ok((hydrated, warnings))
+        Ok((path, hydrated, warnings))
     }
 }
 

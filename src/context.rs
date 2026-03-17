@@ -117,6 +117,7 @@ impl AppContext {
             self.config.library.path_templates.import.parse()?,
             compression.into(),
             self.get_backend_by_purpose(BackendPurpose::Trash).await?,
+            self.dry_run,
         )))
     }
 }

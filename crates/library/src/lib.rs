@@ -32,6 +32,7 @@ pub struct Context {
     template: PathGenerator,
     compression: Option<Compression>,
     trash: Option<BackendHandle>,
+    pub(crate) dry_run: bool,
 }
 impl Context {
     /// Creates a new organization context.
@@ -47,11 +48,13 @@ impl Context {
         template: PathGenerator,
         compression: impl Into<Option<Compression>>,
         trash: impl Into<Option<BackendHandle>>,
+        dry_run: bool,
     ) -> Self {
         Self {
             template,
             compression: compression.into(),
             trash: trash.into(),
+            dry_run,
         }
     }
 }

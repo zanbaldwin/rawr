@@ -15,7 +15,7 @@ mod ro;
 mod s3;
 
 pub use self::ext::StorageBackendExt;
-pub use self::html::HtmlOnlyBackend;
+pub use self::html::{HtmlOnlyBackend, is_html_path};
 pub use self::local::LocalBackend;
 #[cfg(feature = "mock")]
 pub use self::mock::MockBackend;
@@ -54,7 +54,7 @@ fn metadata_to_file_info(backend_name: &str, path: impl TryValidatePath, meta: &
     let modified = meta
         .last_modified()
         .and_then(|ts| UtcDateTime::from_unix_timestamp(ts.into_inner().as_second()).ok())
-        .unwrap_or(UtcDateTime::UNIX_EPOCH);
+        .unwrap_or_else(UtcDateTime::now);
     let compression = Compression::from_path(path.as_path());
     FileInfo::new(backend_name, path, size, modified, compression)
 }
@@ -174,7 +174,15 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
                             Err(e) => { yield Err(e); continue; }
                         };
                         if let Some(pfx) = &prefix && !relative.as_str().starts_with(pfx.as_str()) { continue; }
-                        yield metadata_to_file_info(self.name(), relative, entry.metadata());
+                        let meta = entry.metadata();
+                        if meta.content_length() > 0 {
+                            yield metadata_to_file_info(self.name(), relative, meta);
+                        } else {
+                            match self.operator().stat(relative.as_str()).await {
+                                Ok(stat_meta) => yield metadata_to_file_info(self.name(), relative, &stat_meta),
+                                Err(_) => yield metadata_to_file_info(self.name(), relative, meta),
+                            }
+                        }
                     },
                     Err(e) if !matches!(e.kind(), opendal::ErrorKind::NotFound) => {
                         // TODO What path should we return for this? It's stating that the

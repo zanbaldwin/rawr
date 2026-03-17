@@ -13,16 +13,13 @@ use opendal::Operator;
 use rawr_compress::Compression;
 use std::path::Path;
 
-/// The required base extension (after stripping compression).
-const HTML_EXTENSION: &str = "html";
-
 /// Check if a path has `.html` as its base extension.
 ///
 /// Strips known compression suffixes first:
 /// - `file.html` -> html -> true
 /// - `file.html.bz2` -> strip .bz2 -> html -> true
 /// - `file.txt` -> txt -> false
-fn is_html_path(path: impl AsRef<Path>) -> bool {
+pub fn is_html_path(path: impl AsRef<Path>) -> bool {
     let path = path.as_ref();
     let compression = Compression::from_path(path);
     let check_path = if compression != Compression::None {
@@ -34,7 +31,7 @@ fn is_html_path(path: impl AsRef<Path>) -> bool {
     check_path
         .extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case(HTML_EXTENSION))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm"))
 }
 
 /// HTML-filtered storage backend.

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 pub(crate) struct AppContext {
     pub config: Config,
+    loaded_from: PathBuf,
     database: Database,
     pub cache: Repository,
     pub dry_run: bool,
@@ -33,11 +34,12 @@ impl AppContext {
         if let Some(ref cwd) = cli.cwd {
             std::env::set_current_dir(cwd)?;
         }
-        let (config, warnings) = Config::load::<PathBuf>(cli.config.clone())?;
+        let (loaded_from, config, warnings) = Config::load::<PathBuf>(cli.config.clone())?;
         let database = Database::connect(config.library.cache.relative()).await?;
         let cache = Repository::new(database.pool().clone(), cli.dry_run);
         let ctx = Self {
             config,
+            loaded_from,
             database,
             cache,
             dry_run: cli.dry_run,
@@ -127,7 +129,10 @@ impl IntoLines for AppContext {
         let cache = self.config.library.cache.relative();
         vec![
             Line::new([Piece::fixed(
-                format!("Using config file: <not-implemented>"),
+                format!(
+                    "Using config file: {}",
+                    self.loaded_from.canonicalize().unwrap_or_else(|_| self.loaded_from.clone()).display()
+                ),
                 &PALETTE.muted,
             )]),
             Line::new([Piece::fixed(

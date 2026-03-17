@@ -103,6 +103,11 @@ pub(crate) async fn scan_file_inner<S: HashState>(
     });
     async_copy(&mut content_reader, &mut async_devnull()).await.or_raise(|| ErrorKind::Io)?;
 
+    // Apply computed file size (the lister may not provide content_length).
+    let mut meta = file.into_meta();
+    meta.size = *file_size.lock().unwrap();
+    let file: FileInfo = meta.into();
+
     let file = file.with_file_hash(file_hasher.lock().unwrap().finalize().to_string());
     let existing = cache.exists(backend.name(), &file.path, &file.file_hash).await.or_raise(|| ErrorKind::Cache)?;
     // Unfortunately now the "effort" is a little misleading because we calculate
@@ -130,7 +135,6 @@ pub(crate) async fn scan_file_inner<S: HashState>(
         },
         ExistenceResult::NotFound => ScanEffort::Processed,
     };
-    // TODO: table rows are missing file size and discovered_at (both default to zero).
     let version = Version {
         hash: content_hasher.finalize().to_string(),
         crc32: crc_hasher.finalize(),

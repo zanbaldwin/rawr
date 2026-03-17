@@ -57,6 +57,7 @@ tempfile = "^3.25"
 tendril = "^0.5.0"
 time = "^0.3.47"
 tokio = { version = "^1.49", default-features = false }
+tokio-util = { version = "^0.7", default-features = false }
 tracing = "^0.1.0"
 tracing-subscriber = { version = "^0.3.22", default-features = false }
 upon = { version = "^0.10.0", default-features = false }
@@ -88,6 +89,7 @@ pdf = ["_render"]
 epub = ["_render"]
 
 [dependencies]
+async-stream = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
 dialoguer = { workspace = true }
@@ -103,7 +105,8 @@ rawr-library = { workspace = true }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
 similar = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
+tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "std",

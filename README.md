@@ -101,6 +101,8 @@ Options:
   -V, --version            Print version
 ```
 
+![Screenshot: Library Statistics](stats.png)
+
 ### Good first contributions
 - `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs) gated behind a feature flag
 - `rawr-extract`: extracting additional [AO3 metadata fields](crates/extract/src/extract/mod.rs)

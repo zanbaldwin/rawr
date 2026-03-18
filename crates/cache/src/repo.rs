@@ -13,6 +13,8 @@ use rawr_storage::TryValidatePath;
 use sqlx::SqlitePool;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+#[cfg(feature = "stats")]
+use time::UtcDateTime;
 use tracing::instrument;
 
 type FileResult = (File, Version);
@@ -30,8 +32,8 @@ pub struct LibraryStats {
     pub total_file_size: u64,
     pub complete_works: u64,
     pub incomplete_works: u64,
-    pub oldest_published: Option<i64>,
-    pub newest_published: Option<i64>,
+    pub oldest_published: Option<UtcDateTime>,
+    pub newest_published: Option<UtcDateTime>,
     pub ratings: Vec<(Option<String>, u64)>,
     pub languages: Vec<(String, u64)>,
     pub fandom_count: u64,
@@ -536,102 +538,126 @@ impl Repository {
     \* ===== */
 
     /// Compute comprehensive library statistics for a specific target.
+    ///
+    /// Runs 7 queries in parallel via `tokio::try_join!` for maximum throughput
+    /// on WAL-mode SQLite with a multi-connection pool.
     #[cfg(feature = "stats")]
-    pub async fn stats(&self, target: &str, top_n: i64) -> Result<LibraryStats> {
-        let summary: (i64, i64, i64, i64, i64) = sqlx::query_as(include_str!("../queries/stats_summary.sql"))
-            .bind(target)
-            .fetch_one(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let unique_words: (i64,) = sqlx::query_as(include_str!("../queries/stats_unique_words.sql"))
-            .bind(target)
-            .fetch_one(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let storage: (i64,) = sqlx::query_as(include_str!("../queries/stats_storage.sql"))
-            .bind(target)
-            .fetch_one(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let completion: (i64, i64) = sqlx::query_as(include_str!("../queries/stats_completion.sql"))
-            .bind(target)
-            .fetch_one(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let date_range: (Option<i64>, Option<i64>) = sqlx::query_as(include_str!("../queries/stats_date_range.sql"))
-            .bind(target)
-            .fetch_one(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let ratings: Vec<(Option<String>, i64)> = sqlx::query_as(include_str!("../queries/stats_ratings.sql"))
-            .bind(target)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let languages: Vec<(String, i64)> = sqlx::query_as(include_str!("../queries/stats_languages.sql"))
-            .bind(target)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let top_fandoms: Vec<(String, i64)> = sqlx::query_as(include_str!("../queries/stats_top_fandoms.sql"))
-            .bind(target)
-            .bind(top_n)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let top_characters: Vec<(String, i64)> = sqlx::query_as(include_str!("../queries/stats_top_tags.sql"))
-            .bind(target)
-            .bind("Character")
-            .bind(top_n)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let top_relationships: Vec<(String, i64)> = sqlx::query_as(include_str!("../queries/stats_top_tags.sql"))
-            .bind(target)
-            .bind("Relationship")
-            .bind(top_n)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let top_freeform: Vec<(String, i64)> = sqlx::query_as(include_str!("../queries/stats_top_tags.sql"))
-            .bind(target)
-            .bind("Freeform")
-            .bind(top_n)
-            .fetch_all(&self.pool)
-            .await
-            .or_raise(|| ErrorKind::Database)?;
-        let aggregates: (i64, i64, i64, i64, i64) =
-            sqlx::query_as(include_str!("../queries/stats_aggregate_counts.sql"))
-                .bind(target)
-                .fetch_one(&self.pool)
-                .await
-                .or_raise(|| ErrorKind::Database)?;
+    pub async fn stats(&self, target: &str, top_n: u8) -> Result<LibraryStats> {
+        let (core, ratings, languages, all_fandoms, top_tags, tag_counts, series) = tokio::try_join!(
+            self.stats_core(target),
+            self.stats_ratings(target),
+            self.stats_languages(target),
+            self.all_fandoms(target),
+            self.stats_top_tags(target, top_n),
+            self.stats_tag_counts(target),
+            self.stats_series(target),
+        )?;
+
+        let mut top_characters = Vec::new();
+        let mut top_relationships = Vec::new();
+        let mut top_freeform = Vec::new();
+        for (kind, name, count) in top_tags {
+            let entry = (name, count.max(0) as u64);
+            match kind.as_str() {
+                "Character" => top_characters.push(entry),
+                "Relationship" => top_relationships.push(entry),
+                "Freeform" => top_freeform.push(entry),
+                _ => {},
+            }
+        }
+
         let to_u64 = |v: i64| v.max(0) as u64;
-        let to_u64_vec = |v: Vec<(String, i64)>| v.into_iter().map(|(s, c)| (s, to_u64(c))).collect();
         Ok(LibraryStats {
-            works: to_u64(summary.0),
-            versions: to_u64(summary.1),
-            files: to_u64(summary.2),
-            total_words_all_versions: to_u64(summary.3),
-            total_words_best_versions: to_u64(unique_words.0),
-            total_content_size: to_u64(summary.4),
-            total_file_size: to_u64(storage.0),
-            complete_works: to_u64(completion.0),
-            incomplete_works: to_u64(completion.1),
-            oldest_published: date_range.0,
-            newest_published: date_range.1,
+            works: to_u64(core.0),
+            versions: to_u64(core.1),
+            files: to_u64(core.2),
+            total_words_all_versions: to_u64(core.3),
+            total_content_size: to_u64(core.4),
+            total_file_size: to_u64(core.5),
+            oldest_published: core
+                .6
+                .map(UtcDateTime::from_unix_timestamp)
+                .transpose()
+                .or_raise(|| ErrorKind::InvalidData("oldest published date"))?,
+            newest_published: core
+                .7
+                .map(UtcDateTime::from_unix_timestamp)
+                .transpose()
+                .or_raise(|| ErrorKind::InvalidData("newest published date"))?,
+            total_words_best_versions: to_u64(core.8),
+            complete_works: to_u64(core.9),
+            incomplete_works: to_u64(core.10),
             ratings: ratings.into_iter().map(|(r, c)| (r, to_u64(c))).collect(),
-            languages: to_u64_vec(languages),
-            fandom_count: to_u64(aggregates.0),
-            tag_count: to_u64(aggregates.1),
-            unique_tag_count: to_u64(aggregates.2),
-            series_count: to_u64(aggregates.3),
-            works_in_series: to_u64(aggregates.4),
-            top_fandoms: to_u64_vec(top_fandoms),
-            top_characters: to_u64_vec(top_characters),
-            top_relationships: to_u64_vec(top_relationships),
-            top_freeform_tags: to_u64_vec(top_freeform),
+            languages: languages.into_iter().map(|(s, c)| (s, to_u64(c))).collect(),
+            fandom_count: all_fandoms.len() as u64,
+            tag_count: to_u64(tag_counts.0),
+            unique_tag_count: to_u64(tag_counts.1),
+            series_count: to_u64(series.0),
+            works_in_series: to_u64(series.1),
+            top_fandoms: all_fandoms.into_iter().take(top_n as usize).collect(),
+            top_characters,
+            top_relationships,
+            top_freeform_tags: top_freeform,
         })
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_core(
+        &self,
+        target: &str,
+    ) -> Result<(i64, i64, i64, i64, i64, i64, Option<i64>, Option<i64>, i64, i64, i64)> {
+        sqlx::query_as(include_str!("../queries/stats_core.sql"))
+            .bind(target)
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_ratings(&self, target: &str) -> Result<Vec<(Option<String>, i64)>> {
+        sqlx::query_as(include_str!("../queries/stats_ratings.sql"))
+            .bind(target)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_languages(&self, target: &str) -> Result<Vec<(String, i64)>> {
+        sqlx::query_as(include_str!("../queries/stats_languages.sql"))
+            .bind(target)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_top_tags(&self, target: &str, top_n: u8) -> Result<Vec<(String, String, i64)>> {
+        let top_n = top_n as i64;
+        sqlx::query_as(include_str!("../queries/stats_top_tags.sql"))
+            .bind(target)
+            .bind(top_n)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_tag_counts(&self, target: &str) -> Result<(i64, i64)> {
+        sqlx::query_as(include_str!("../queries/stats_tag_counts.sql"))
+            .bind(target)
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
+    }
+
+    #[cfg(feature = "stats")]
+    async fn stats_series(&self, target: &str) -> Result<(i64, i64)> {
+        sqlx::query_as(include_str!("../queries/stats_series.sql"))
+            .bind(target)
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)
     }
 
     /// Return all fandom names with their work counts for a target, without limit.

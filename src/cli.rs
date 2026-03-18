@@ -1,6 +1,7 @@
 use crate::command::ImportCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
+use crate::command::StatsCommand;
 use clap::{ColorChoice, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -40,4 +41,5 @@ pub enum Commands {
     Import(ImportCommand),
     /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
+    Stats(StatsCommand),
 }

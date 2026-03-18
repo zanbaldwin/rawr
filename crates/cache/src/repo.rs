@@ -36,12 +36,11 @@ pub struct LibraryStats {
     pub newest_published: Option<UtcDateTime>,
     pub ratings: Vec<(Option<String>, u64)>,
     pub languages: Vec<(String, u64)>,
-    pub fandom_count: u64,
+    pub fandoms: Vec<(String, u64)>,
     pub tag_count: u64,
     pub unique_tag_count: u64,
     pub series_count: u64,
     pub works_in_series: u64,
-    pub top_fandoms: Vec<(String, u64)>,
     pub top_characters: Vec<(String, u64)>,
     pub top_relationships: Vec<(String, u64)>,
     pub top_freeform_tags: Vec<(String, u64)>,
@@ -543,7 +542,7 @@ impl Repository {
     /// on WAL-mode SQLite with a multi-connection pool.
     #[cfg(feature = "stats")]
     pub async fn stats(&self, target: &str, top_n: u8) -> Result<LibraryStats> {
-        let (core, ratings, languages, all_fandoms, top_tags, tag_counts, series) = tokio::try_join!(
+        let (core, ratings, languages, fandoms, top_tags, tag_counts, series) = tokio::try_join!(
             self.stats_core(target),
             self.stats_ratings(target),
             self.stats_languages(target),
@@ -589,12 +588,11 @@ impl Repository {
             incomplete_works: to_u64(core.10),
             ratings: ratings.into_iter().map(|(r, c)| (r, to_u64(c))).collect(),
             languages: languages.into_iter().map(|(s, c)| (s, to_u64(c))).collect(),
-            fandom_count: all_fandoms.len() as u64,
+            fandoms,
             tag_count: to_u64(tag_counts.0),
             unique_tag_count: to_u64(tag_counts.1),
             series_count: to_u64(series.0),
             works_in_series: to_u64(series.1),
-            top_fandoms: all_fandoms.into_iter().take(top_n as usize).collect(),
             top_characters,
             top_relationships,
             top_freeform_tags: top_freeform,

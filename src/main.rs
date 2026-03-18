@@ -55,6 +55,7 @@ fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
     for line in ctx.to_lines().into_iter().chain(warning_lines) {
         ctx.output.print(Pipe::Err, &line);
     }
+    ctx.output.print(Pipe::Err, &Line::empty());
 }
 
 const DEFAULT_LOGGING: &str = "rawr=info";

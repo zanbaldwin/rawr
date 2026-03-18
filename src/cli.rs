@@ -34,7 +34,10 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Scan your import library for existing HTML files & extract metadata into the cache
     Scan(ScanCommand),
+    /// Import HTML files from the local filesystem (eg, your downloads folder) into your library
     Import(ImportCommand),
+    /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
 }

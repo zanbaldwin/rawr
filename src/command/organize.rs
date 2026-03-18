@@ -10,10 +10,18 @@ use similar::{ChangeTag, TextDiff};
 use std::pin::pin;
 use std::process::ExitCode;
 
+/// Reorganize files in the import target to match the configured path template.
+///
+/// Scans all files in the import backend, computes each file's expected
+/// path from its metadata and the configured template, and renames any
+/// mismatched files. Files already at their correct path are skipped.
 #[derive(Debug, Args)]
 pub(crate) struct OrganizeCommand {
     /// Compress files during organize. Optionally specify format (eg, --compress=bz2).
     /// Without a value, uses the configured default. Omit to preserve existing compression.
+    ///
+    /// Formats: none, gz (gzip), bz2 (bzip2), br (brotli), bz3 (bzip3), xz (lzma), zst (zstd).
+    /// Some formats require the corresponding feature flag at compile time.
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     compress: Option<String>,
 }

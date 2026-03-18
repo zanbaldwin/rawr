@@ -21,7 +21,7 @@ use rawr_storage::BackendHandle;
 /// as "waves" of individual operations completed, but when limited to lower
 /// numbers (eg, 30 and 50) the progress speed would be more consistent and
 /// therefore appear to be completing faster.
-pub(crate) const MAX_PROCESS_CONCURRENCY: usize = 50;
+pub const RECOMMENDED_MAX_CONCURRENCY: usize = 50;
 
 /// Shared configuration for a file importing/organizing passes.
 ///

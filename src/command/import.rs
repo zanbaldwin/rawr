@@ -8,6 +8,7 @@ use clap::Args;
 use futures::{Stream, StreamExt};
 use rawr_compress::Compression;
 use rawr_compress::cli::Preference;
+use rawr_library::RECOMMENDED_MAX_CONCURRENCY;
 use rawr_library::import::{Import, import_file};
 use rawr_storage::backend::is_html_path;
 use std::path::PathBuf;
@@ -19,8 +20,11 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-const MAX_PROCESS_CONCURRENCY: usize = 50;
-
+/// Import HTML files from the local filesystem into the library.
+///
+/// Copies files into the configured import target, extracts metadata,
+/// and caches the results. Source files are deleted after import by
+/// default (use --keep to preserve them).
 #[derive(Debug, Args)]
 pub(crate) struct ImportCommand {
     /// File or folder to import.
@@ -31,6 +35,9 @@ pub(crate) struct ImportCommand {
     recursive: bool,
     /// Compress files during import. Optionally specify format (eg, --compress=bz2).
     /// Without a value, uses the configured default. Omit to preserve source compression.
+    ///
+    /// Formats: none, gz (gzip), bz2 (bzip2), br (brotli), bz3 (bzip3), xz (lzma), zst (zstd).
+    /// Some formats require the corresponding feature flag at compile time.
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     compress: Option<String>,
     /// Delete source files after successful import (default).
@@ -66,7 +73,7 @@ impl Command for ImportCommand {
         let bar = ctx.output.progress_bar("Importing");
 
         let should_delete = !self.keep && !ctx.dry_run;
-        let semaphore = Arc::new(Semaphore::new(MAX_PROCESS_CONCURRENCY));
+        let semaphore = Arc::new(Semaphore::new(RECOMMENDED_MAX_CONCURRENCY));
         let mut tasks = JoinSet::new();
         let mut discovery_complete = false;
         let mut discovered = 0u64;

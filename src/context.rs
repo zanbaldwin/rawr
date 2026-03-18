@@ -1,6 +1,6 @@
 use crate::cli::Cli;
 use crate::error::Result;
-use crate::output::{IntoLines, Line, Output, PALETTE, Piece};
+use crate::output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
 use rawr_cache::{Database, Repository};
 use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
@@ -133,18 +133,31 @@ impl AppContext {
 impl IntoLines for AppContext {
     fn to_lines(&self) -> Vec<Line<'_>> {
         let cache = self.config.library.cache.relative();
+        let import_location = self
+            .config
+            .targets
+            .get(&self.config.library.targets.import)
+            // Safety: should already error at config stage if unset.
+            .expect("Config requires import target to be defined");
         vec![
             Line::new([Piece::fixed(
                 format!(
-                    "Using config file: {}",
+                    "Config file: {}",
                     self.loaded_from.canonicalize().unwrap_or_else(|_| self.loaded_from.clone()).display()
                 ),
                 &PALETTE.muted,
-            )]),
+            )])
+            .with_volume(Loudness::Shout),
             Line::new([Piece::fixed(
-                format!("Using cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
+                format!("Main library: {}", import_location),
                 &PALETTE.muted,
-            )]),
+            )])
+            .with_volume(Loudness::Normal),
+            Line::new([Piece::fixed(
+                format!("Cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
+                &PALETTE.muted,
+            )])
+            .with_volume(Loudness::Whisper),
         ]
     }
 }

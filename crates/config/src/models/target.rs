@@ -1,6 +1,7 @@
 use crate::maybe::MaybeFile;
 use figment::value::magic::RelativePathBuf;
 use serde::Deserialize;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 fn default_true() -> bool {
     true
@@ -58,6 +59,17 @@ pub enum TargetConfig {
         /// injection from files.
         key_secret: MaybeFile,
     },
+}
+impl Display for TargetConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Self::Local { directory, .. } => {
+                let relative = directory.relative();
+                write!(f, "{}", relative.canonicalize().unwrap_or(relative).display())
+            },
+            Self::S3 { bucket, .. } => write!(f, "s3://{bucket}"),
+        }
+    }
 }
 
 /// Discriminator for [`TargetValues`].

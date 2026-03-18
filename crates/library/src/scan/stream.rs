@@ -1,4 +1,4 @@
-use crate::MAX_PROCESS_CONCURRENCY;
+use crate::RECOMMENDED_MAX_CONCURRENCY as MAX_CONCURRENCY;
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::scan::Scan;
 use crate::scan::error::{ErrorKind as ScanErrorKind, Result as ScanResult};
@@ -65,7 +65,7 @@ fn scan_inner<'a>(
     cache: &'a Repository,
     prefix: Option<ValidPath>,
 ) -> impl Stream<Item = ScanResult<ScanEvent>> + 'a {
-    let semaphore = Arc::new(Semaphore::new(MAX_PROCESS_CONCURRENCY));
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
     // This was using FuturesUnordered before, but it polled all the futures
     // on the same thread. Async is great and all that, but what's the
     // fucking point if it's still single-threaded? This way we can delegate

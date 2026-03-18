@@ -1,7 +1,7 @@
 use crate::error::{ErrorKind as LibraryErrorKind, Result as LibraryResult};
 use crate::organize::error::{ErrorKind as OrganizeErrorKind, Result as OrganizeResult};
 use crate::organize::file::{Action, organize_file_inner};
-use crate::{Context, MAX_PROCESS_CONCURRENCY};
+use crate::{Context, RECOMMENDED_MAX_CONCURRENCY as MAX_CONCURRENCY};
 use async_stream::stream;
 use exn::ResultExt;
 use futures::Stream;
@@ -65,7 +65,7 @@ fn organize_inner<'a>(
     cache: &'a Repository,
     ctx: Arc<Context>,
 ) -> impl Stream<Item = OrganizeResult<OrganizeEvent>> + 'a {
-    let semaphore = Arc::new(Semaphore::new(MAX_PROCESS_CONCURRENCY));
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
     let mut processing = JoinSet::new();
     // `rustfmt` does not format macros that use braces. Wrap in parentheses!
     stream!({

@@ -8,7 +8,8 @@ version.workspace = true
 
 [features]
 default = []
-stats = []
+# SQLx requires Tokio anyway, so use that instead of futures.
+stats = ["tokio/macros"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
@@ -24,6 +25,7 @@ sqlx = { workspace = true, features = [
     "sqlite",
 ] }
 time = { workspace = true, features = ["formatting", "parsing"] }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

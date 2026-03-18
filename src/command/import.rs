@@ -5,6 +5,7 @@ use crate::output::util::{Reason, format_pair};
 use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
 use async_stream::stream;
 use clap::Args;
+use directories::UserDirs;
 use futures::{Stream, StreamExt};
 use rawr_compress::Compression;
 use rawr_compress::cli::Preference;
@@ -27,9 +28,9 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 /// default (use --keep to preserve them).
 #[derive(Debug, Args)]
 pub(crate) struct ImportCommand {
-    /// File or folder to import.
+    /// File or folder to import. Defaults to the platform downloads directory.
     #[arg(value_name = "PATH")]
-    path: PathBuf,
+    path: Option<PathBuf>,
     /// Recurse into subdirectories when importing a folder.
     #[arg(short, long)]
     recursive: bool,
@@ -63,8 +64,19 @@ impl Command for ImportCommand {
                 "No import target configured. Define one in your config file under `library.targets.import`."
             )
         })?;
+        let source_path = match &self.path {
+            Some(path) => path.clone(),
+            None => UserDirs::new()
+                .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
+                .ok_or_else(|| {
+                    miette::miette!(
+                        help = "Specify a path explicitly: rawr import <PATH>",
+                        "Could not determine your downloads directory"
+                    )
+                })?,
+        };
         let import_path =
-            self.path.canonicalize().map_err(|e| miette::miette!("Cannot access '{}': {e}", self.path.display()))?;
+            source_path.canonicalize().map_err(|e| miette::miette!("Cannot access '{}': {e}", source_path.display()))?;
         // TODO: Make sure that import path does not overlap the import backend.
 
         let mut file_stream = pin!(discover_files(import_path, self.recursive)?);

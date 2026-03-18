@@ -57,11 +57,11 @@ fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
     }
 }
 
-const DEFAULT_LOGGING: &str = "rawr=info";
 fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(DEFAULT_LOGGING.parse().unwrap())
+        .with_default_directive("error".parse().unwrap())
         .from_env_lossy()
+        .add_directive("rawr=warn".parse().unwrap())
         .add_directive("html5ever=warn".parse().unwrap());
     let with_ansi = PrintingOutput::term_has_colour(&Term::stderr(), &clap::ColorChoice::Auto);
     tracing_subscriber::fmt()

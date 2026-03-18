@@ -26,14 +26,15 @@ type ProviderData = Map<Profile, Dict>;
 /// A [`Provider`] decorator that fills in missing configuration values
 /// with defaults derived from the values that *are* present.
 ///
-/// Wraps an existing [`Figment`] and intercepts [`Provider::data`] to mutate
-/// the raw provider data before it is extracted into a [`Config`](crate::models::Config).
+/// Only emits the values it actually auto-configured, so that Figment
+/// attributes missing-field errors to the original file provider rather
+/// than to this decorator.
 pub(crate) struct Configurator {
     data: ProviderData,
 }
 impl Provider for Configurator {
     fn metadata(&self) -> Metadata {
-        Metadata::named("Auto-configured defaults")
+        Metadata::named("auto-configured defaults")
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
@@ -41,96 +42,107 @@ impl Provider for Configurator {
     }
 }
 impl Configurator {
-    /// Wrap a [`Figment`] so its data will be auto-configured on extraction.
+    /// Inspect the existing [`Figment`] and produce a provider containing
+    /// only the values that can be auto-configured from what is present.
     pub(crate) fn from(figment: &Figment) -> Self {
-        let mut data = figment.data().unwrap_or_default();
-        Self::autoconfigure_library_target_import(&mut data);
-        Self::autoconfigure_library_target_export(&mut data);
-        Self::autoconfigure_cache_database(&mut data);
-        Self { data }
+        let source = figment.data().unwrap_or_default();
+        let mut defaults: ProviderData = Map::new();
+        let auto_import = Self::autoconfigure_library_target_import(&source, &mut defaults);
+        Self::autoconfigure_library_target_export(&source, auto_import.as_deref(), &mut defaults);
+        Self::autoconfigure_cache_database(&source, &mut defaults);
+        Self { data: defaults }
     }
 
     /// Sets `library.targets.import` to the sole target name when exactly one
     /// [`TargetConfig`](crate::models::TargetConfig) is defined and the import
     /// target is not already specified. Does nothing when multiple targets exist
     /// because the intended target would be ambiguous.
-    fn autoconfigure_library_target_import(data: &mut ProviderData) {
+    ///
+    /// Returns the auto-configured import target name (if any) so that
+    /// [`autoconfigure_library_target_export`](Self::autoconfigure_library_target_export)
+    /// can use it without re-reading from `defaults`.
+    fn autoconfigure_library_target_import(source: &ProviderData, defaults: &mut ProviderData) -> Option<String> {
         let mut target_names = BTreeSet::new();
-        for dict in data.values_mut() {
-            if let Some(Value::Dict(_, targets)) = dict.get("targets") {
+        for dict in source.values() {
+            if let Some((_, targets)) = get_dict(dict, "targets") {
                 target_names.extend(targets.keys().cloned());
             };
         }
         if target_names.len() != 1 {
             // If there isn't exactly one target specified then the
             // correct target to use is ambiguous.
-            return;
+            return None;
         }
-        let is_import_target_specified = data.values_mut().any(|dict| {
-            get_or_insert_dict(dict, "library")
-                .and_then(|(_, library)| get_or_insert_dict(library, "targets"))
+        let is_import_target_specified = source.values().any(|dict| {
+            get_dict(dict, "library")
+                .and_then(|(_, library)| get_dict(library, "targets"))
                 .map(|(_, targets)| is_value_set(targets, "import"))
                 .unwrap_or(false)
         });
         if is_import_target_specified {
-            return;
+            return None;
         }
         // Safety: target_names is guaranteed to contain a value.
         let singular_target_name = target_names.pop_last().unwrap();
-        let default_profile = data.entry(Profile::Default).or_default();
+        let default_profile = defaults.entry(Profile::Default).or_default();
         if let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
             tracing::debug!(setting = "library.targets.import", value = &singular_target_name, "Auto-configuring");
-            targets.insert("import".into(), Value::String(targets_tag, singular_target_name));
+            targets.insert("import".into(), Value::String(targets_tag, singular_target_name.clone()));
         }
+        Some(singular_target_name)
     }
 
     /// Sets `library.targets.export` to match the resolved import target when
-    /// the export target is not already specified.
-    fn autoconfigure_library_target_export(data: &mut ProviderData) {
-        let is_export_target_specified = data.values_mut().any(|dict| {
-            get_or_insert_dict(dict, "library")
-                .and_then(|(_, library)| get_or_insert_dict(library, "targets"))
+    /// the export target is not already specified. The import target is resolved
+    /// from the source data first, falling back to `auto_import` if the import
+    /// target was itself auto-configured in the previous step.
+    fn autoconfigure_library_target_export(
+        source: &ProviderData,
+        auto_import: Option<&str>,
+        defaults: &mut ProviderData,
+    ) {
+        let is_export_target_specified = source.values().any(|dict| {
+            get_dict(dict, "library")
+                .and_then(|(_, library)| get_dict(library, "targets"))
                 .map(|(_, targets)| is_value_set(targets, "export"))
                 .unwrap_or(false)
         });
         if is_export_target_specified {
             return;
         }
-        let import_value = data
-            .values_mut()
-            .fold(None, |carry, dict| {
-                get_or_insert_dict(dict, "library")
-                    .and_then(|(_, library)| get_or_insert_dict(library, "targets"))
-                    .and_then(|(_, targets)| match targets.get("import") {
-                        Some(Value::String(_, s)) if !s.is_empty() => Some(s),
-                        _ => carry,
-                    })
+        let import_from_source = source.values().fold(None, |carry, dict| {
+            get_dict(dict, "library").and_then(|(_, library)| get_dict(library, "targets")).and_then(|(_, targets)| {
+                match targets.get("import") {
+                    Some(Value::String(_, s)) if !s.is_empty() => Some(s.as_str()),
+                    _ => carry,
+                }
             })
-            .cloned();
-        let default_profile = data.entry(Profile::Default).or_default();
+        });
+        let import_value = import_from_source.or(auto_import);
+        let default_profile = defaults.entry(Profile::Default).or_default();
         if let Some(import_value) = import_value
             && let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
-            tracing::debug!(setting = "library.targets.export", value = &import_value, "Auto-configuring");
-            targets.insert("export".into(), Value::String(targets_tag, import_value));
+            tracing::debug!(setting = "library.targets.export", value = import_value, "Auto-configuring");
+            targets.insert("export".into(), Value::String(targets_tag, import_value.to_owned()));
         }
     }
 
     /// Sets `library.cache` to the platform-specific data directory
     /// (e.g. `~/.local/share/rawr/cache.db` on Linux) when no cache path is
     /// configured. Uses [`directories::ProjectDirs`] for platform resolution.
-    fn autoconfigure_cache_database(data: &mut ProviderData) {
+    fn autoconfigure_cache_database(source: &ProviderData, defaults: &mut ProviderData) {
         // Do any of the profiles contain a cache database path?
-        let is_database_specified = data.values_mut().any(|dict| {
-            get_or_insert_dict(dict, "library").map(|(_, library)| is_value_set(library, "cache")).unwrap_or(false)
-        });
+        let is_database_specified = source
+            .values()
+            .any(|dict| get_dict(dict, "library").map(|(_, library)| is_value_set(library, "cache")).unwrap_or(false));
         if is_database_specified {
             return;
         }
-        let default_profile = data.entry(Profile::Default).or_default();
+        let default_profile = defaults.entry(Profile::Default).or_default();
         if let Some((library_tag, library)) = get_or_insert_dict(default_profile, "library")
             && let Some(dirs) = ProjectDirs::from("", "", APP_NAME)
         {
@@ -146,6 +158,15 @@ impl Configurator {
 fn get_or_insert_dict(dict: &mut Dict, key: impl Into<String>) -> Option<(Tag, &mut Dict)> {
     match dict.entry(key.into()).or_insert_with(|| Value::Dict(Tag::Default, Dict::new())) {
         Value::Dict(tag, child) => Some((*tag, child)),
+        _ => None,
+    }
+}
+
+/// Read-only counterpart to [`get_or_insert_dict`]. Returns the nested dict
+/// at `key` without inserting anything if the key is absent.
+fn get_dict<'a>(dict: &'a Dict, key: &str) -> Option<(Tag, &'a Dict)> {
+    match dict.get(key) {
+        Some(Value::Dict(tag, child)) => Some((*tag, child)),
         _ => None,
     }
 }

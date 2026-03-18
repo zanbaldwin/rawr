@@ -93,6 +93,7 @@ async-stream = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }
 dialoguer = { workspace = true }
+directories = { workspace = true }
 exn = { workspace = true }
 futures = { workspace = true, features = ["std"] }
 indicatif = { workspace = true, features = ["unicode-width"] }

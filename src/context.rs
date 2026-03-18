@@ -6,7 +6,7 @@ use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
 use rawr_config::models::TargetConfig;
 use rawr_config::{Config, Loader};
-use rawr_library::Context as LibraryContext;
+use rawr_library::{Context as LibraryContext, PathGenerator};
 use rawr_storage::BackendHandle;
 #[cfg(feature = "s3")]
 use rawr_storage::backend::S3Backend;
@@ -115,8 +115,14 @@ impl AppContext {
         &self,
         compression: impl Into<Option<Compression>>,
     ) -> Result<Arc<LibraryContext>> {
+        let fandoms = self.config.fandoms.clone();
+        let generator = self.config.library.path_templates.import.parse::<PathGenerator>()?;
+        let generator = generator.with_fandom_selector(move |fandom_list| {
+            let names: Vec<&str> = fandom_list.iter().map(|f| f.name.as_str()).collect();
+            fandoms.preferred_fandom(&names).map(String::from)
+        });
         Ok(Arc::new(LibraryContext::new(
-            self.config.library.path_templates.import.parse()?,
+            generator,
             compression.into(),
             self.get_backend_by_purpose(BackendPurpose::Trash).await?,
             self.dry_run,

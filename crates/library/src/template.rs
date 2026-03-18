@@ -20,7 +20,7 @@
 //! | `words`             | `u64`            | Word count                                  |
 //! | `chapters.written`  | `u64`            | Number of posted chapters                   |
 //! | `chapters.total`    | `Option<u64>`    | Planned total chapters                      |
-//! | `fandom`            | `String`         | Alphabetically-first fandom name            |
+//! | `fandom`            | `String`         | Primary fandom name                         |
 //! | `series`            | `Option<Dict>`   | Collection; the lowest-ID series, if exists |
 //! | `series.id`         | `?u64`           | ID of the lowest-ID series                  |
 //! | `series.name`       | `?String`        | Name of that series                         |
@@ -70,7 +70,7 @@
 use crate::error::{Error, ErrorKind, Result};
 use exn::ResultExt;
 use rawr_compress::Compression;
-use rawr_extract::models::Version;
+use rawr_extract::models::{Fandom, Version};
 use rawr_storage::ValidPath;
 use std::{path::PathBuf, str::FromStr};
 use tracing::instrument;
@@ -88,8 +88,7 @@ use upon::{Engine, Template};
 pub struct PathGenerator {
     engine: Engine<'static>,
     template: Template<'static>,
-    // TODO when `rawr-config` is complete
-    // config: Option<FandomConfig>,
+    fandom_selector: Option<Box<dyn Fn(&[Fandom]) -> Option<String> + Send + Sync>>,
 }
 impl FromStr for PathGenerator {
     type Err = Error;
@@ -104,19 +103,26 @@ impl FromStr for PathGenerator {
         addons::configure(&mut engine);
         // Compile the template early so we can fail-fast in construction.
         let template = engine.compile(s.to_string()).or_raise(|| ErrorKind::Template)?;
-        Ok(Self { engine, template })
+        Ok(Self { engine, template, fandom_selector: None })
     }
 }
 impl PathGenerator {
-    // TODO when `rawr-config` is complete
-    // pub fn with_config(mut self config: impl Into<Option<FandomConfig>>) -> Self {
-    //     self.config = config.into();
-    //     self
-    // }
+    pub fn new<F>(template: impl AsRef<str>, fandom: impl Into<Option<F>>) -> Result<Self>
+    where
+        F: Fn(&[Fandom]) -> Option<String> + Send + Sync + 'static,
+    {
+        let asd: Self = template.as_ref().parse()?;
+        let fandom = fandom.into();
+        Ok(if let Some(f) = fandom { asd.with_fandom_selector(f) } else { asd })
+    }
 
-    // pub fn new(template: impl AsRef<str>, config: impl Into<Option<FandomConfig>>) -> Result<Self> {
-    //     template.as_ref().parse()?.with_config(config)
-    // }
+    pub fn with_fandom_selector(
+        mut self,
+        selector: impl Fn(&[Fandom]) -> Option<String> + Send + Sync + 'static,
+    ) -> Self {
+        self.fandom_selector = Some(Box::new(selector));
+        self
+    }
 
     ///  Renders the template against the given [`Version`]'s metadata, returning
     /// the normalized path with an appended file extension and optional
@@ -144,7 +150,7 @@ impl PathGenerator {
         // Allocation: Renderer<str> -> String -> str -> PathBuf(String).
         let mut path: PathBuf = self
             .template
-            .render(&self.engine, Self::parameters(version.as_ref()))
+            .render(&self.engine, self.parameters(version.as_ref()))
             .to_string()
             .or_raise(|| ErrorKind::Template)?
             .trim()
@@ -166,17 +172,14 @@ impl PathGenerator {
     /// Builds the [`upon::Value`] map exposed to the template engine.
     ///
     /// When a [`Version`] has multiple fandoms or series entries, only one is
-    /// selected — the alphabetically-first fandom and the lowest-ID series —
-    /// so that the generated path is deterministic regardless of ordering.
-    fn parameters(version: &Version) -> upon::Value {
-        // TODO rename and re-order fandoms according to preferences when `rawr-config` is complete
-        let fandom = version
-            .metadata
-            .fandoms
-            .iter()
-            // The path should always be deterministic according to the version metadata.
-            .min_by(|a, b| a.name.cmp(&b.name))
-            .map(|f| f.name.clone());
+    /// selected — the preferred fandom (via callback) or first-in-metadata,
+    /// and the lowest-ID series — so that the generated path is deterministic
+    /// regardless of ordering.
+    fn parameters(&self, version: &Version) -> upon::Value {
+        let fandom = match self.fandom_selector {
+            Some(ref s) => s(&version.metadata.fandoms),
+            _ => version.metadata.fandoms.first().map(|f| f.name.clone()),
+        };
         let series = version
             .metadata
             .series

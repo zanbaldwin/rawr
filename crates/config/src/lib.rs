@@ -18,7 +18,7 @@
 //! ```no_run
 //! use rawr_config::{Loader, Config};
 //!
-//! let (config, warnings) = Config::load::<std::path::PathBuf>(None)?;
+//! let (path, config, warnings) = Config::load::<std::path::PathBuf>(None)?;
 //! for w in &warnings {
 //!     eprintln!("warning: {}", w.message);
 //! }

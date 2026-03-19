@@ -116,3 +116,7 @@ tracing-subscriber = { workspace = true, features = [
     "ansi",
     "env-filter",
 ] }
+
+[dev-dependencies]
+rawr-storage = { workspace = true, features = ["mock"] }
+tempfile = { workspace = true }

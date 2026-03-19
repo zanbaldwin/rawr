@@ -8,6 +8,7 @@
 pub(crate) mod assets;
 pub(crate) mod variables;
 
+#[cfg(feature = "pdf")]
 pub(crate) use self::variables::CssVariables;
 use crate::error::{ErrorKind, Result};
 use crate::style::assets::Builtins;

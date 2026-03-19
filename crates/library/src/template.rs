@@ -48,7 +48,7 @@
 //! #         fandoms: vec![Fandom { name: "Marvel".into() }],
 //! #         rating: Some(Rating::TeenAndUp), warnings: vec![], tags: vec![],
 //! #         summary: None, language: Language::from_str("English").unwrap(),
-//! #         chapters: Chapters { written: 1, total: None },
+//! #         chapters: ChapterCount { written: 1, total: None },
 //! #         words: 5000,
 //! #         published: Date::from_calendar_date(2024, Month::January, 1).unwrap(),
 //! #         last_modified: Date::from_calendar_date(2024, Month::January, 1).unwrap(),

@@ -4,7 +4,7 @@ mod style;
 pub mod util;
 
 pub use self::render::line::{Line, Loudness};
-pub use self::render::piece::{Flexibility, Piece};
+pub use self::render::piece::Piece;
 pub use self::render::{IntoLines, Render};
 #[cfg(test)]
 pub(crate) use self::sink::BufferingOutput;

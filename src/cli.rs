@@ -41,5 +41,6 @@ pub enum Commands {
     Import(ImportCommand),
     /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
+    /// Show library statistics
     Stats(StatsCommand),
 }

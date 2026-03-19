@@ -25,7 +25,10 @@ tracing = { workspace = true }
 upon = { workspace = true, features = ["functions", "serde"] }
 
 [dev-dependencies]
+futures = { workspace = true, features = ["std"] }
+rawr-cache = { workspace = true, features = ["stats"] }
+rawr-config = { workspace = true }
 rawr-storage = { path = "../storage", features = ["mock"] }
 rstest = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 time = { workspace = true }

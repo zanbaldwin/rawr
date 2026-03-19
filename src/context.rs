@@ -147,12 +147,11 @@ impl IntoLines for AppContext {
                 ),
                 &PALETTE.muted,
             )])
-            .with_volume(Loudness::Shout),
+            .with_volume(Loudness::Whisper),
             Line::new([Piece::fixed(
                 format!("Main library: {}", import_location),
                 &PALETTE.muted,
-            )])
-            .with_volume(Loudness::Normal),
+            )]),
             Line::new([Piece::fixed(
                 format!("Cache database: {}", cache.canonicalize().unwrap_or(cache).display()),
                 &PALETTE.muted,

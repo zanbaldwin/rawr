@@ -122,6 +122,15 @@ impl Loader for Config {
     }
 }
 
+/// Returns the default config file path for the current platform.
+///
+/// - Linux: `$XDG_CONFIG_HOME/rawr/config.toml` or `~/.config/rawr/config.toml`
+/// - macOS: `~/Library/Application Support/rawr/config.toml`
+/// - Windows: `C:\Users\<User>\AppData\Roaming\rawr\config.toml`
+pub fn default_config_path() -> Option<PathBuf> {
+    ProjectDirs::from("", "", APP_NAME).map(|d| d.config_dir().join("config.toml"))
+}
+
 /// Search `directory` for a file named `{name}.{ext}` with any of the
 /// [`VALID_EXTENSIONS`], returning the first match.
 fn search_in_dir(directory: impl AsRef<Path>, name: impl AsRef<str>) -> Option<PathBuf> {

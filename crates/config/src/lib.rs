@@ -32,7 +32,7 @@ mod maybe;
 pub mod models;
 mod validation;
 
-pub use crate::loader::Loader;
+pub use crate::loader::{Loader, default_config_path};
 pub use crate::models::Config;
 pub use crate::validation::Validator;
 

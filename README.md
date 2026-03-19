@@ -110,7 +110,7 @@ Options:
 - [x] Library statistics
 - [ ] Render works to PDF `export pdf` (basic)
 - [ ] Render works to epub `export epub` (basic)
-- [ ] Config initialization `init`
+- [x] Config initialization `init`
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation
 - [ ] Render multiple works (interactive)

@@ -2,7 +2,8 @@
 
 use memchr::memrchr;
 
-pub const ESTIMATED_HEADER_SIZE_BYTES: usize = 16 * 1024;
+/// The largest header size I've found so far is approx 22.5KiB
+pub const ESTIMATED_HEADER_SIZE_BYTES: usize = 25 * 1024;
 
 /// Truncates raw HTML bytes to approximately `max_bytes` while ensuring
 /// the cut point is at a safe boundary (not mid-tag or mid-entity).

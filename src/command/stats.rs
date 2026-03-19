@@ -107,14 +107,13 @@ impl Command for StatsCommand {
 
         // Resolve fandoms: merge aliases if config has renames, otherwise take top-N directly
         let raw_fandom_count = stats.fandoms.len() as u64;
-        let (display_fandoms, fandom_count, fandom_unique) =
-            if !ctx.config.fandoms.renames.is_empty() {
-                let (merged, count) = merge_fandom_aliases(stats.fandoms, &ctx.config.fandoms, self.top);
-                (merged, count, Some(raw_fandom_count))
-            } else {
-                let top: Vec<_> = stats.fandoms.into_iter().take(self.top as usize).collect();
-                (top, raw_fandom_count, None)
-            };
+        let (display_fandoms, fandom_count, fandom_unique) = if !ctx.config.fandoms.renames.is_empty() {
+            let (merged, count) = merge_fandom_aliases(stats.fandoms, &ctx.config.fandoms, self.top);
+            (merged, count, Some(raw_fandom_count))
+        } else {
+            let top: Vec<_> = stats.fandoms.into_iter().take(self.top as usize).collect();
+            (top, raw_fandom_count, None)
+        };
 
         // Pre-compute dynamic labels for section 3
         let fandom_label = format!("{} fandoms", format_number(fandom_count));
@@ -219,7 +218,7 @@ impl Command for StatsCommand {
         if !stats.languages.is_empty() {
             let mut pieces = vec![Piece::fixed(label("Languages", w), &PALETTE.label)];
             pieces.push(Piece::fixed(stats.languages.len().to_string(), &PALETTE.highlight));
-            pieces.push(Piece::plain("("));
+            pieces.push(Piece::plain(" ("));
             let items = stats.languages.iter().take(self.top as usize).map(|(l, c)| (l.as_str(), *c));
             pieces.extend(pieces_key_value(items, &PALETTE.highlight));
             pieces.push(Piece::plain(")"));

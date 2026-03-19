@@ -95,8 +95,13 @@ async fn import_file_inner<R: AsyncRead + Send + Unpin>(
     //    Place in a directory that contains a character that would normally be
     //    stripped away by the slug filter, for additional collision prevention.
     // Safety: we know this is a valid path, we just constructed it ourselves.
-    let temp_path =
-        ValidPath::new(format!(".tmp/{:08x}-{}", crc32fast::hash(head), now.unix_timestamp_nanos())).unwrap();
+    let temp_path = ValidPath::new(format!(
+        ".tmp/{:08x}-{}.html{}",
+        crc32fast::hash(head),
+        now.unix_timestamp_nanos(),
+        target_compression.extension()
+    ))
+    .unwrap();
     // 4. Set up the reading part of the streaming pipeline:
     //    peekable data → decompressor → InspectReader (content blake3 + crc32 + length)
     let decompressed = peekable.into_reader();
@@ -178,10 +183,10 @@ async fn import_file_inner<R: AsyncRead + Send + Unpin>(
         {
             Action::CleanedUp(path) => {
                 cache.delete_by_target_path(&file_info.target, &file_info.path).await.or_raise(|| ErrorKind::Cache)?;
-                backend.delete(&file_info.path).await.or_raise(|| ErrorKind::Storage)?;
-                // CleanedUp can mean two things in organize:
-                // - File didn't exist on disk (shouldn't happen — we just wrote it)
-                // - A duplicate already existed at the target location (the incoming file was discarded)
+                // Organize already handled the temp file: either it never existed on
+                // disk, or it was deleted during conflict resolution (DiscardIncoming/
+                // TrashIncoming). A redundant delete would fail with NotFound.
+                _ = backend.delete(&file_info.path).await;
                 return Ok(Import::AlreadyExists(file_info.with_path(path).or_raise(|| ErrorKind::Storage)?, version));
             },
             Action::Renamed { to, .. } => {

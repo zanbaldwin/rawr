@@ -66,17 +66,16 @@ impl Command for ImportCommand {
         })?;
         let source_path = match &self.path {
             Some(path) => path.clone(),
-            None => UserDirs::new()
-                .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
-                .ok_or_else(|| {
-                    miette::miette!(
-                        help = "Specify a path explicitly: rawr import <PATH>",
-                        "Could not determine your downloads directory"
-                    )
-                })?,
+            None => UserDirs::new().and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf())).ok_or_else(|| {
+                miette::miette!(
+                    help = "Specify a path explicitly: rawr import <PATH>",
+                    "Could not determine your downloads directory"
+                )
+            })?,
         };
-        let import_path =
-            source_path.canonicalize().map_err(|e| miette::miette!("Cannot access '{}': {e}", source_path.display()))?;
+        let import_path = source_path
+            .canonicalize()
+            .map_err(|e| miette::miette!("Cannot access '{}': {e}", source_path.display()))?;
         // TODO: Make sure that import path does not overlap the import backend.
 
         let mut file_stream = pin!(discover_files(import_path, self.recursive)?);

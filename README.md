@@ -47,15 +47,14 @@ lunatics come up with.
 - Thus `rawr` (or "**R**idiculously **A**ccumulating **W**orks to **R**ead" for long).
 
 #### Why HTML only?
-HTML compresses down the most.
-AO3 also generates the ebook and PDF versions from the HTML.
-HTML is king.
+- HTML compresses the most to save space.
+- The PDF and ebook versions can be rendered from HTML.
+- HTML can be customised/styled before rendering to other formats.
 
 ## Disclaimer
-This CLI is to manage HTML files that **you** download _manually_. I do not
-support bots or other automated tools that auto-download fics, or put other
-unnecessary strain on the service. AO3 had to implement WAF and rate-limiting
-for a reason: don't be a dick about it.
+This CLI is designed as an offline tool to manage HTML files that **you**
+download _manually_. It will not include features to automatically download fics
+from AO3, there's already enough of those.
 
 ## Installation
 Pre-built releases will be available starting from the initial public release

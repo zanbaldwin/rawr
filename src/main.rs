@@ -22,6 +22,12 @@ async fn main() -> Result<ExitCode> {
 
     let cli = Cli::parse();
     let output = Box::new(PrintingOutput::new(cli.color, cli.verbose, cli.quiet));
+
+    // Init runs before context building (no config required).
+    if let Some(Commands::Init(command)) = &cli.command {
+        return command.execute(output.as_ref()).await;
+    }
+
     let (mut context, warnings) = AppContext::build(&cli, output).await?;
     print_context(&context, &warnings);
 
@@ -35,6 +41,7 @@ async fn main() -> Result<ExitCode> {
     };
 
     let exit = match command {
+        Commands::Init(_) => unreachable!(),
         Commands::Scan(command) => command.execute(&mut context).await?,
         Commands::Import(command) => command.execute(&mut context).await?,
         Commands::Organize(command) => command.execute(&mut context).await?,

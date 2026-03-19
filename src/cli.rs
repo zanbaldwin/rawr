@@ -1,4 +1,5 @@
 use crate::command::ImportCommand;
+use crate::command::InitCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
 use crate::command::StatsCommand;
@@ -35,6 +36,8 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Initialize your library by creating a new configuration file
+    Init(InitCommand),
     /// Scan your import library for existing HTML files & extract metadata into the cache
     Scan(ScanCommand),
     /// Import HTML files from the local filesystem (eg, your downloads folder) into your library

@@ -58,7 +58,9 @@ unnecessary strain on the service. AO3 had to implement WAF and rate-limiting
 for a reason: don't be a dick about it.
 
 ## Installation
-Build from source. If you don't know how, ask the nerdiest friend you've got.
+Pre-built releases will be available starting from the initial public release
+(`v1`). For now, build from source. If you don't know how, ask the nerdiest
+friend you've got.
 
 ```shell
 cargo build --release
@@ -70,7 +72,7 @@ cargo build --release
 
 1. `rawr init` to create a configuration file
 2. Download some fics from AO3 in HTML format
-3. `rawr import "Downloads/"`
+3. `rawr import` (defaults to searching for files in your Downloads folder)
 4. Go outside for a walk, you haven't left the apartment in days.
 
 ## Vision
@@ -88,7 +90,7 @@ Commands:
   scan      Scan library and update cache
   import    Import HTML files into library
   organize  Organize files by path template [aliases: defrag]
-  export    Export works as PDFs
+  export    Export works ready for e-reader devices
   push      Push files from local library to a remote target
   pull      Pull files from a remote target to local library
   stats     Show library statistics
@@ -102,6 +104,16 @@ Options:
 ```
 
 ![Screenshot: Library Statistics](stats.png)
+
+## Roadmap
+- [x] Library management (`scan`, `import`, `organize`)
+- [x] Library statistics
+- [ ] Render works to PDF `export pdf` (basic)
+- [ ] Render works to epub `export epub` (basic)
+- [ ] Config initialization `init`
+- [ ] Syncing `push`/`pull` to S3
+- [ ] Non-technical documentation
+- [ ] Render multiple works (interactive)
 
 ### Good first contributions
 - `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs) gated behind a feature flag

@@ -1,10 +1,5 @@
 # 🦖 Rawr!
 
-⚠️ This is a **pet-project** that makes zero stability guarantees.
-
-> This project will remain in beta for as long as AO3 does, which will be until
-> the heat death of the universe.
-
 ## What
 Command-line tool for managing HTML downloads from [AO3](https://archiveofourown.org).
 - **Organize downloaded works** into a central library, automatically renaming
@@ -17,8 +12,8 @@ Command-line tool for managing HTML downloads from [AO3](https://archiveofourown
 - **Back up** to any S3-compatible cloud storage, because computers are fragile
   and what are you talking about "you shouldn't have been messing around with
   system files"?
-- **Export to PDF** with custom styling because GOOD LORD the PDF downloads that
-  AO3 provides are _ugly_.
+- **Export to PDF/Ebook** with custom styling because GOOD LORD the PDF downloads
+  that AO3 provides are _ugly_.
 
 ## Why
 You're having the most wonderful day and you settle down for the evening only to find:
@@ -30,7 +25,7 @@ This has been deleted, sorry!
 
 **tl;dr:**
 See a fic? Download it.
-Fic got updated? Download again.
+Got an email about a chapter update? Download again.
 
 #### Why is the tool called `rawr`?
 This is a tool to manage AO3 downloads, so I wanted to come up with a name that
@@ -47,14 +42,56 @@ lunatics come up with.
 - Thus `rawr` (or "**R**idiculously **A**ccumulating **W**orks to **R**ead" for long).
 
 #### Why HTML only?
-- HTML compresses the most to save space.
-- The PDF and ebook versions can be rendered from HTML.
-- HTML can be customised/styled before rendering to other formats.
+You only need to keep one format. `rawr` handles the rest:
+- Squash it down real small, save space on that crusty ol' laptop of yours.
+- Render to PDF or Ebook with custom themes/skins.
 
-## Disclaimer
-This CLI is designed as an offline tool to manage HTML files that **you**
-download _manually_. It will not include features to automatically download fics
-from AO3, there's already enough of those.
+## Philosophy
+This tool is designed as an offline tool to manage HTML files that **you**
+download _manually_. It **cannot** and **will not** download fics. By design.
+
+AO3 is a resource run by a [non-profit](https://www.transformativeworks.org/),
+and I built this tool specifically to **not** hammer their servers. Respect
+[their terms of service](https://archiveofourown.org/tos), yo.
+
+There's already enough tools focusing on _getting the fics_; `rawr` focuses on
+what happens after you have it. Like your own stern librarian in an inflatable
+dinosaur costume. (**Please,** for the love of everything fandom, somebody make
+_Sexy Stern Dinosaur Librarian_ a real tag 👩‍🏫)
+
+Authors have the right to delete their works, and readers have an interest in
+preserving what they've already read.
+
+> This project will remain in beta for as long as AO3 does, which will be until
+> the heat death of the universe.
+
+## Vision
+
+| Command                 | What it does                                                    |
+|-------------------------|-----------------------------------------------------------------|
+| `rawr init`             | Set up your library                                             |
+| `rawr import`           | Pull HTML files from your Downloads folder into your library    |
+| `rawr scan`             | Re-scan your library and extract/update metadata                |
+| `rawr organize`         | Sort and rename files by fandom/series/title (with compression) |
+| `rawr stats`            | See your library at a glance                                    |
+| `rawr export`           | Render works to PDF/ebook _(coming soon)_                       |
+| `rawr push`/`rawr pull` | Sync to S3-compatible cloud storage _(coming soon)_             |
+
+Use `--dry-run` on any command to preview what would happen without changing
+anything. Useful if the idea of a CLI tool touching your carefully curated hoard
+of smut makes you nervous.
+
+![Screenshot: Library Statistics](stats.png)
+
+## Quick Start
+
+1. ~~Install~~ Build (sorry)
+2. `rawr init` to create a configuration file
+3. Download some fics from AO3 in HTML format
+4. `rawr import` (defaults to searching for files in your Downloads folder)
+5. Go outside for a walk, you haven't left the apartment in days.
+
+# The Technical Stuff
 
 ## Installation
 Pre-built releases will be available starting from the initial public release
@@ -67,43 +104,6 @@ cargo build --release
 
 > If on Linux, use `cargo deploy` alias to enable super muscle builds 💪
 
-## Quick Start
-
-1. `rawr init` to create a configuration file
-2. Download some fics from AO3 in HTML format
-3. `rawr import` (defaults to searching for files in your Downloads folder)
-4. Go outside for a walk, you haven't left the apartment in days.
-
-## Vision
-```
-Using config file: /home/zan/.config/rawr/config.yaml
-Using cache database: /home/zan/.local/share/rawr/cache.db
-Library root: /home/zan/Books/AO3
-Files in cache: 5884
-
-AO3 fan-fiction library manager
-
-Usage: rawr [OPTIONS] [COMMAND]
-
-Commands:
-  scan      Scan library and update cache
-  import    Import HTML files into library
-  organize  Organize files by path template [aliases: defrag]
-  export    Export works ready for e-reader devices
-  push      Push files from local library to a remote target
-  pull      Pull files from a remote target to local library
-  stats     Show library statistics
-
-Options:
-  -c, --config <CONFIG>    Path to configuration file
-  -w, --working-dir <CWD>  Change working directory before change config/cache/files
-  -d, --dry-run            Preview changes without executing [aliases: --read-only]
-  -h, --help               Print help
-  -V, --version            Print version
-```
-
-![Screenshot: Library Statistics](stats.png)
-
 ## Roadmap
 - [x] Library management (`scan`, `import`, `organize`)
 - [x] Library statistics
@@ -113,6 +113,7 @@ Options:
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation
 - [ ] Render multiple works (interactive)
+- [ ] A graphical point-and-click application for you Windows/Mac users (eventually)
 
 ### Good first contributions
 - `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs) gated behind a feature flag
@@ -124,5 +125,4 @@ Options:
 - `rawr-library`: new [template variables](crates/library/src/template.rs) for path generation
 
 ### License
-This project will remain proprietary, yet source-available, until a version
-`1.0` release (read: I haven't decided which open-source license I want to use yet)
+[EU Public License `v1.2`](https://eupl.eu/1.2/en/).

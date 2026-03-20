@@ -6,7 +6,7 @@ members = [".", "crates/*"]
 rust-version = "1.92"
 authors = ["Zan Baldwin"]
 edition = "2024"
-license = "MIT"
+license = "EUPL-1.2"
 version = "0.1.0-beta"
 
 [workspace.dependencies]

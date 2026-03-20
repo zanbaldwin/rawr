@@ -12,11 +12,16 @@ Command-line tool for managing HTML downloads from [AO3](https://archiveofourown
 - **Back up** to any S3-compatible cloud storage, because computers are fragile
   and what are you talking about "you shouldn't have been messing around with
   system files"?
-- **Export to PDF/Ebook** with custom styling because GOOD LORD the PDF downloads
-  that AO3 provides are _ugly_.
+- **Export to PDF/Ebook** with custom styling because GOOD LORD the PDF
+  downloads that AO3 provides are _ugly_.
+
+| Example Screenshot                           |
+|----------------------------------------------|
+| ![Screenshot: Library Statistics](stats.png) |
 
 ## Why
-You're having the most wonderful day and you settle down for the evening only to find:
+You're having the most wonderful day and you settle down for the evening only to
+find:
 
 ```
 This has been deleted, sorry!
@@ -35,11 +40,12 @@ lunatics come up with.
 - I thought of calling it "Dead Dove", but `dd` is already a well-known CLI tool.
 - As a **R**ust-based **Ar**chiver tool, `rar` unfortunately might cause
   flashbacks for people who never paid their WinRAR license.
-- So I changed the pronunciation: imagine it being spoken by an Emo/Scene kid from
-  the mid-2000's who was trying to unironically do an impression of a Tyrannosaurus
-  Rex that had somehow magically gotten into Kawaii culture 65 million years
-  beyond its extinction.
-- Thus `rawr` (or "**R**idiculously **A**ccumulating **W**orks to **R**ead" for long).
+- So I changed the pronunciation: imagine it being spoken by an Emo/Scene kid
+  from the mid-2000's who was trying to unironically do an impression of a
+  Tyrannosaurus Rex that had somehow magically gotten into Kawaii culture 65
+  million years beyond its extinction.
+- Thus `rawr` (or "**R**idiculously **A**ccumulating **W**orks to **R**ead" for
+  long).
 
 #### Why HTML only?
 You only need to keep one format. `rawr` handles the rest:
@@ -47,6 +53,9 @@ You only need to keep one format. `rawr` handles the rest:
 - Render to PDF or Ebook with custom themes/skins.
 
 ## Philosophy
+> Authors have the right to delete their works. Readers have an interest in
+> preserving what they've already read.
+
 This tool is designed as an offline tool to manage HTML files that **you**
 download _manually_. It **cannot** and **will not** download fics. By design.
 
@@ -59,29 +68,22 @@ what happens after you have it. Like your own stern librarian in an inflatable
 dinosaur costume. (**Please,** for the love of everything fandom, somebody make
 _Sexy Stern Dinosaur Librarian_ a real tag 👩‍🏫)
 
-Authors have the right to delete their works, and readers have an interest in
-preserving what they've already read.
-
-> This project will remain in beta for as long as AO3 does, which will be until
-> the heat death of the universe.
-
 ## Vision
 
-| Command                 | What it does                                                    |
-|-------------------------|-----------------------------------------------------------------|
-| `rawr init`             | Set up your library                                             |
-| `rawr import`           | Pull HTML files from your Downloads folder into your library    |
-| `rawr scan`             | Re-scan your library and extract/update metadata                |
-| `rawr organize`         | Sort and rename files by fandom/series/title (with compression) |
-| `rawr stats`            | See your library at a glance                                    |
-| `rawr export`           | Render works to PDF/ebook _(coming soon)_                       |
-| `rawr push`/`rawr pull` | Sync to S3-compatible cloud storage _(coming soon)_             |
+| Command         | What it does                                                                  |
+|-----------------|-------------------------------------------------------------------------------|
+| `rawr init`     | Set up your library                                                           |
+| `rawr import`   | Pull HTML files from your Downloads folder into your library                  |
+| `rawr scan`     | Re-scan your library and extract/update metadata                              |
+| `rawr organize` | Sort and rename files by fandom/series/title (with compression)               |
+| `rawr stats`    | See your library at a glance                                                  |
+| `rawr export`   | Render works to PDF/ebook _(coming soon)_                                     |
+| `rawr push`     | Sync to S3-compatible cloud storage _(coming soon)_                           |
+| `rawr pull`     | Help! I dropped my laptop in the bath! Gimme my library back! _(coming soon)_ |
 
 Use `--dry-run` on any command to preview what would happen without changing
 anything. Useful if the idea of a CLI tool touching your carefully curated hoard
 of smut makes you nervous.
-
-![Screenshot: Library Statistics](stats.png)
 
 ## Quick Start
 
@@ -116,13 +118,20 @@ cargo build --release
 - [ ] A graphical point-and-click application for you Windows/Mac users (eventually)
 
 ### Good first contributions
-- `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs) gated behind a feature flag
+- `rawr-compress`: add a new [compression format](crates/compress/src/lib.rs)
+  gated behind a feature flag
 - `rawr-extract`: extracting additional [AO3 metadata fields](crates/extract/src/extract/mod.rs)
-- `rawr-storage`: adding a [new storage backend](crates/storage/src/backend/mod.rs) (e.g., WebDAV) gated behind a
-  feature flag
-- `rawr-cache`: adding [new queries](crates/cache/queries/) to the [repository](crates/cache/src/repo.rs)
+- `rawr-storage`: adding a [new storage backend](crates/storage/src/backend/mod.rs)
+  (e.g., Google Drive) gated behind a feature flag
+- `rawr-cache`: adding [new queries](crates/cache/queries/) to the
+  [repository](crates/cache/src/repo.rs)
 - `rawr-render`: adding new [built-in themes](assets/styles/) (CSS stylesheets)
-- `rawr-library`: new [template variables](crates/library/src/template.rs) for path generation
+- `rawr-library`: new [template variables](crates/library/src/template.rs) for
+  path generation
+- `docs/`: yeah, we need those.
 
 ### License
 [EU Public License `v1.2`](https://eupl.eu/1.2/en/).
+
+> This project will remain in beta for as long as AO3 does, which will be until
+> the heat death of the universe.

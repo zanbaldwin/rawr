@@ -11,7 +11,7 @@ use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_storage::TryValidatePath;
 use sqlx::SqlitePool;
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::HashMap;
 #[cfg(feature = "stats")]
 use time::UtcDateTime;
@@ -19,6 +19,7 @@ use tracing::instrument;
 
 type FileResult = (File, Version);
 type VersionResult = (Version, Vec<File>);
+type WorkResult = (u64, Vec<VersionResult>);
 
 /// Aggregated library statistics computed from the cache database.
 #[cfg(feature = "stats")]
@@ -77,6 +78,26 @@ fn group_by_version<F: Into<Option<File>>>(
         }
     }
     Ok(map.into_values().collect())
+}
+
+fn group_by_work(rows: impl IntoIterator<Item = Result<(File, Version)>>) -> Result<Vec<WorkResult>> {
+    let mut works: HashMap<u64, Vec<VersionResult>> = HashMap::new();
+    for vr in group_by_version(rows)? {
+        works.entry(vr.0.metadata.work_id).or_default().push(vr);
+    }
+    // Order versions.
+    let mut result: Vec<WorkResult> = works
+        .into_iter()
+        .map(|(work_id, mut versions)| {
+            versions.sort_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap_or(Ordering::Less));
+            (work_id, versions)
+        })
+        .collect();
+    // Order works by most recently discovered.
+    result.sort_by_key(|(_, versions)| {
+        Reverse(versions.iter().flat_map(|(_, files)| files.iter().map(|f| f.discovered_at)).max())
+    });
+    Ok(result)
 }
 
 /// Repository for managing File and Version entries in the cache database.
@@ -328,6 +349,25 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         let pairs = rows.into_iter().map(|r| r.try_into());
         group_by_version(pairs)
+    }
+
+    /// List the N most recently imported works and their versions for a target.
+    ///
+    /// Works are ordered by `MAX(files.discovered_at)` (most recent first).
+    /// Within each work, versions are sorted best-first using `Version::partial_cmp`.
+    /// Each version includes all files referencing it in the target.
+    pub async fn list_recent_works_for_target(&self, target: impl AsRef<str>, limit: usize) -> Result<Vec<WorkResult>> {
+        let limit = i64::try_from(limit).or_raise(|| ErrorKind::InvalidData("limit"))?;
+        let target = target.as_ref();
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_recent_works_for_target.sql"))
+            .bind(target)
+            .bind(limit)
+            .bind(target)
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let pairs = rows.into_iter().map(|r| r.try_into());
+        group_by_work(pairs)
     }
 
     /// List all files for a specific target.
@@ -908,11 +948,46 @@ mod tests {
         }
     }
 
-    fn make_test_file(path: &str, content_hash: &str) -> File {
-        FileMeta::new(DEFAULT_TARGET, path, Compression::Bzip2, 123, UtcDateTime::now())
+    fn make_test_file_with(target: &str, path: &str, content_hash: &str, discovered_at: UtcDateTime) -> File {
+        FileMeta::new(target, path, Compression::Bzip2, 123, discovered_at)
             .expect("File path to be valid")
-            .with_file_hash("file_hash_123")
+            .with_file_hash(path)
             .with_content_hash(content_hash)
+    }
+
+    fn make_test_version_with(
+        work_id: u64,
+        content_hash: &str,
+        title: &str,
+        last_modified: Date,
+        words: u64,
+        chapters: ChapterCount,
+    ) -> Version {
+        Version {
+            hash: content_hash.to_string(),
+            length: 1000,
+            crc32: 12_345_678,
+            metadata: Metadata {
+                work_id,
+                title: title.to_string(),
+                authors: vec![],
+                fandoms: vec![],
+                rating: Some(Rating::GeneralAudiences),
+                warnings: vec![],
+                tags: vec![],
+                summary: None,
+                language: Language {
+                    name: "English".to_string(),
+                    iso_code: Some("en"),
+                },
+                chapters,
+                words,
+                published: Date::from_calendar_date(2024, time::Month::January, 1).unwrap(),
+                last_modified,
+                series: vec![],
+            },
+            extracted_at: UtcDateTime::now(),
+        }
     }
 
     async fn make_repository() -> Repository {
@@ -926,7 +1001,7 @@ mod tests {
     async fn test_insert_and_get() {
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file = make_test_file("fandoms/work.html.bz2", "content_abc");
+        let file = make_test_file_with(DEFAULT_TARGET, "fandoms/work.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file, &version).await.unwrap();
         let retrieved = repo.get_by_target_path(DEFAULT_TARGET, "fandoms/work.html.bz2").await.unwrap();
         assert!(retrieved.is_some());
@@ -938,8 +1013,8 @@ mod tests {
     async fn test_upsert() {
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file1 = make_test_file("fandom/work1.html.bz2", "content_abc");
-        let file2 = make_test_file("fandom/work2.html.bz2", "content_abc");
+        let file1 = make_test_file_with(DEFAULT_TARGET, "fandom/work1.html.bz2", "content_abc", UtcDateTime::now());
+        let file2 = make_test_file_with(DEFAULT_TARGET, "fandom/work2.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file1, &version).await.unwrap();
         repo.upsert(&file2, &version).await.unwrap();
         repo.upsert(&file1, &version).await.unwrap();
@@ -952,7 +1027,7 @@ mod tests {
         let path = "fandoms/work.html.bz2";
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file = make_test_file(path, "content_abc");
+        let file = make_test_file_with(DEFAULT_TARGET, path, "content_abc", UtcDateTime::now());
         repo.upsert(&file, &version).await.unwrap();
         assert!(repo.get_by_target_path(DEFAULT_TARGET, path).await.unwrap().is_some());
         assert!(repo.delete_by_target_path(DEFAULT_TARGET, path).await.unwrap());
@@ -970,9 +1045,9 @@ mod tests {
     async fn test_get_by_content_hash() {
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file1 = make_test_file("file1.html.bz2", "content_abc");
+        let file1 = make_test_file_with(DEFAULT_TARGET, "file1.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file1, &version).await.unwrap();
-        let file2 = make_test_file("file2.html.bz2", "content_abc");
+        let file2 = make_test_file_with(DEFAULT_TARGET, "file2.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file2, &version).await.unwrap();
         let (_version, files) = repo.get_by_content_hash("content_abc").await.unwrap().unwrap();
         assert_eq!(2, files.len());
@@ -988,7 +1063,7 @@ mod tests {
     async fn test_update_path() {
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file = make_test_file("old/path.html.bz2", "content_abc");
+        let file = make_test_file_with(DEFAULT_TARGET, "old/path.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file, &version).await.unwrap();
         let updated = repo
             .update_target_path(DEFAULT_TARGET, "old/path.html.bz2", "new/path.html.bz2", Compression::Bzip2)
@@ -1003,7 +1078,7 @@ mod tests {
     async fn test_cascade_delete() {
         let repo = make_repository().await;
         let version = make_test_version(12345, "content_abc");
-        let file = make_test_file("fandoms/work.html.bz2", "content_abc");
+        let file = make_test_file_with(DEFAULT_TARGET, "fandoms/work.html.bz2", "content_abc", UtcDateTime::now());
         repo.upsert(&file, &version).await.unwrap();
         // Delete version should cascade to file
         repo.delete_by_content_hash("content_abc").await.unwrap();
@@ -1016,14 +1091,96 @@ mod tests {
         let repo = make_repository().await;
         let version1 = make_test_version(111, "hash1");
         let version2 = make_test_version(222, "hash2");
-        let file1 = make_test_file("path1.html.bz2", "hash1");
-        let file2 = make_test_file("path2.html.bz2", "hash1");
-        let file3 = make_test_file("path3.html.bz2", "hash2");
+        let file1 = make_test_file_with(DEFAULT_TARGET, "path1.html.bz2", "hash1", UtcDateTime::now());
+        let file2 = make_test_file_with(DEFAULT_TARGET, "path2.html.bz2", "hash1", UtcDateTime::now());
+        let file3 = make_test_file_with(DEFAULT_TARGET, "path3.html.bz2", "hash2", UtcDateTime::now());
         repo.upsert(&file1, &version1).await.unwrap();
         repo.upsert(&file2, &version1).await.unwrap();
         repo.upsert(&file3, &version2).await.unwrap();
         let dups = repo.find_duplicate_content_across_targets().await.unwrap();
         assert_eq!(dups.len(), 1);
         assert_eq!(dups[0], ("hash1".to_string(), 2));
+    }
+
+    #[tokio::test]
+    async fn test_list_recent_works_for_target() {
+        let repo = make_repository().await;
+        let t1 =
+            UtcDateTime::new(Date::from_calendar_date(2024, time::Month::January, 1).unwrap(), time::Time::MIDNIGHT);
+        let t2 = UtcDateTime::new(Date::from_calendar_date(2024, time::Month::March, 1).unwrap(), time::Time::MIDNIGHT);
+        let t3 = UtcDateTime::new(Date::from_calendar_date(2024, time::Month::June, 1).unwrap(), time::Time::MIDNIGHT);
+        // Work 100: 2 versions, oldest import (t1)
+        let v100a = make_test_version_with(
+            100,
+            "hash_100a",
+            "Work 100",
+            Date::from_calendar_date(2024, time::Month::January, 15).unwrap(),
+            500,
+            ChapterCount::new(3, None),
+        );
+        let v100b = make_test_version_with(
+            100,
+            "hash_100b",
+            "Work 100",
+            Date::from_calendar_date(2024, time::Month::June, 15).unwrap(),
+            1000,
+            ChapterCount::new(5, Some(5)),
+        );
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "w100/v1.html.bz2", "hash_100a", t1), &v100a).await.unwrap();
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "w100/v2.html.bz2", "hash_100b", t1), &v100b).await.unwrap();
+        // Work 200: 1 version, middle import (t2)
+        let v200 = make_test_version_with(
+            200,
+            "hash_200a",
+            "Work 200",
+            Date::from_calendar_date(2024, time::Month::March, 10).unwrap(),
+            800,
+            ChapterCount::new(1, Some(1)),
+        );
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "w200/v1.html.bz2", "hash_200a", t2), &v200).await.unwrap();
+        // Work 300: 1 version, newest import (t3)
+        let v300 = make_test_version_with(
+            300,
+            "hash_300a",
+            "Work 300",
+            Date::from_calendar_date(2024, time::Month::February, 20).unwrap(),
+            600,
+            ChapterCount::new(2, Some(2)),
+        );
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "w300/v1.html.bz2", "hash_300a", t3), &v300).await.unwrap();
+        // Work 400: different target — should not appear
+        let v400 = make_test_version_with(
+            400,
+            "hash_400a",
+            "Work 400",
+            Date::from_calendar_date(2024, time::Month::December, 1).unwrap(),
+            9999,
+            ChapterCount::new(10, Some(10)),
+        );
+        repo.upsert(&make_test_file_with("other", "w400/v1.html.bz2", "hash_400a", t3), &v400).await.unwrap();
+        // Full results: 3 works, ordered by discovered_at DESC
+        let works = repo.list_recent_works_for_target(DEFAULT_TARGET, 10).await.unwrap();
+        assert_eq!(works.len(), 3);
+        // Work order: 300 (t3) → 200 (t2) → 100 (t1)
+        assert_eq!(works[0].0, 300);
+        assert_eq!(works[1].0, 200);
+        assert_eq!(works[2].0, 100);
+        // Work 100 has 2 versions, best first (hash_100b: Jun 2024, more words)
+        assert_eq!(works[2].1.len(), 2);
+        assert_eq!(works[2].1[0].0.hash, "hash_100b");
+        assert_eq!(works[2].1[1].0.hash, "hash_100a");
+        // Single-version works have 1 version each
+        assert_eq!(works[0].1.len(), 1);
+        assert_eq!(works[1].1.len(), 1);
+        // Each version has exactly 1 file
+        assert_eq!(works[0].1[0].1.len(), 1);
+        assert_eq!(works[1].1[0].1.len(), 1);
+        assert_eq!(works[2].1[0].1.len(), 1);
+        assert_eq!(works[2].1[1].1.len(), 1);
+        // Limit: only 2 most recent works
+        let limited = repo.list_recent_works_for_target(DEFAULT_TARGET, 2).await.unwrap();
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].0, 300);
+        assert_eq!(limited[1].0, 200);
     }
 }

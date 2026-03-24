@@ -1,7 +1,7 @@
 use super::Command;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::{Error, Result};
-use crate::output::util::{Reason, format_pair};
+use crate::output::util::{Reason, format_pair_line};
 use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
 use async_stream::stream;
 use clap::Args;
@@ -129,7 +129,7 @@ impl Command for ImportCommand {
                                 Import::AlreadyExists(f, v) => (Reason::Unchanged, f, v),
                                 Import::Outdated(f, v) => (Reason::Outdated, f, v),
                             };
-                            let line = format_pair(reason, file, version, &ctx.config.fandoms);
+                            let line = format_pair_line(reason, file, version, &ctx.config.fandoms);
                             ctx.output.print(Pipe::Out, &line);
                             if should_delete && let Err(e) = tokio::fs::remove_file(&source_path).await {
                                 tracing::info!(path = %source_path.display(), error = %e, "failed to delete source file");

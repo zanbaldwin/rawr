@@ -1,7 +1,7 @@
 use super::Command;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
-use crate::output::util::{Reason, format_pair};
+use crate::output::util::{Reason, format_pair_line};
 use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
 use clap::Args;
 use futures::StreamExt;
@@ -49,7 +49,7 @@ impl Command for ScanCommand {
                         ScanEffort::Cached => Reason::Unchanged,
                         ScanEffort::Processed | ScanEffort::Recalculated => Reason::Added,
                     };
-                    let line = format_pair(reason, &scan.file, &scan.version, &ctx.config.fandoms);
+                    let line = format_pair_line(reason, &scan.file, &scan.version, &ctx.config.fandoms);
                     ctx.output.print(Pipe::Out, &line);
                     bar.inc(1);
                 },

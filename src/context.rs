@@ -14,19 +14,19 @@ use rawr_storage::backend::{LocalBackend, ReadOnlyBackend};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub(crate) enum BackendPurpose {
+    Import,
+    Export,
+    Trash,
+}
+
 pub(crate) struct AppContext {
     pub config: Config,
     loaded_from: PathBuf,
     database: Database,
     pub cache: Repository,
     pub dry_run: bool,
-    pub output: Box<dyn Output>,
-}
-
-pub(crate) enum BackendPurpose {
-    Import,
-    Export,
-    Trash,
+    pub output: Arc<Box<dyn Output>>,
 }
 
 impl AppContext {
@@ -43,7 +43,7 @@ impl AppContext {
             database,
             cache,
             dry_run: cli.dry_run,
-            output,
+            output: Arc::new(output),
         };
         Ok((ctx, warnings))
     }

@@ -11,7 +11,7 @@ use exn::ResultExt;
 use rawr_compress::Compression;
 use rawr_storage::TryValidatePath;
 use sqlx::SqlitePool;
-use std::cmp::{Ordering, Reverse};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 #[cfg(feature = "stats")]
 use time::UtcDateTime;
@@ -94,8 +94,10 @@ fn group_by_work(rows: impl IntoIterator<Item = Result<(File, Version)>>) -> Res
         })
         .collect();
     // Order works by most recently discovered.
-    result.sort_by_key(|(_, versions)| {
-        Reverse(versions.iter().flat_map(|(_, files)| files.iter().map(|f| f.discovered_at)).max())
+    result.sort_by(|(a_id, a_versions), (b_id, b_versions)| {
+        let a_date = a_versions.iter().flat_map(|(_, files)| files.iter().map(|f| f.discovered_at)).max();
+        let b_date = b_versions.iter().flat_map(|(_, files)| files.iter().map(|f| f.discovered_at)).max();
+        b_date.cmp(&a_date).then(b_id.cmp(a_id))
     });
     Ok(result)
 }

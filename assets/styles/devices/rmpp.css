@@ -7,7 +7,7 @@
 @media print {
     body {
         /* Base font size suitable for general reading. Fairly small. */
-        font-size: 8pt !important;
+        font-size: 7.5pt !important;
         /* Increases spacing between lines for easier readability */
         line-height: 1.8;
     }

@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-asyncutils"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "futures",
  "pin-project-lite",
@@ -2455,7 +2455,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-cache"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "derive_more",
  "exn",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-cli"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "async-stream",
  "clap",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-compress"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "async-compression",
  "brotli",
@@ -2521,7 +2521,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-config"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "derive_more",
  "directories",
@@ -2536,7 +2536,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-extract"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -2558,7 +2558,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-library"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "async-stream",
  "blake3",
@@ -2582,7 +2582,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-render"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "derive_more",
  "exn",
@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-storage"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -2615,7 +2615,7 @@ dependencies = [
 
 [[package]]
 name = "rawr-xhtml"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "html5ever",
  "scraper",

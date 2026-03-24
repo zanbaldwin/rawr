@@ -10,6 +10,7 @@ use std::borrow::Cow;
 ///
 /// Works across scan, organize, and import commands, providing a unified
 /// vocabulary for all file-level outcomes.
+#[derive(Clone, Copy, Debug)]
 pub enum Reason {
     /// New content added to the library (scan extraction or first-time import).
     Added,
@@ -73,37 +74,62 @@ impl Reason {
     }
 }
 
-pub fn format_error<'a>(reason: Reason, path: &'a str, message: impl Into<Cow<'a, str>>) -> Line<'a> {
+pub fn format_error<'a>(
+    reason: Reason,
+    path: impl Into<Option<&'a str>>,
+    message: impl Into<Cow<'a, str>>,
+) -> Line<'a> {
     let loudness = reason.loudness();
-    Line::new([
+    let mut line = Line::new([
         Piece::fixed(reason.icon(), reason.style()),
         Piece::space(),
-        Piece::fixed(message, &PALETTE.muted),
-        Piece::space(),
-        Piece::flex(path, &PALETTE.muted, 32),
+        Piece::fixed(message, reason.style()),
     ])
-    .with_volume(loudness)
+    .with_volume(loudness);
+    if let Some(path) = path.into() {
+        line.push(Piece::space());
+        line.push(Piece::flex(path, &PALETTE.muted, 32));
+    }
+    line
 }
 
 const AVG_TITLE_LEN: usize = 28;
-pub fn format_pair<'a, S: HashState>(
+pub fn format_pair_line<'a, S: HashState + 'a>(
     reason: Reason,
-    file: &'a FileInfo<S>,
+    file: impl Into<Option<&'a FileInfo<S>>>,
     version: &'a Version,
     config: impl Into<Option<&'a FandomConfig>>,
 ) -> Line<'a> {
+    let file = file.into();
     if reason.is_error() {
+        let path = file.map(|f| f.path.as_str());
         let msg = reason.icon().trim();
-        return format_error(reason, file.path.as_str(), msg);
+        return format_error(reason, path, msg);
+    }
+    let config = config.into();
+    Line::new(format_pair_pieces(reason, file, version, config))
+        .with_volume(reason.loudness())
+        .with_fallback(format_pair_fallback(reason, version, config))
+}
+
+pub fn format_pair_pieces<'a, S: HashState + 'a>(
+    reason: impl Into<Option<Reason>>,
+    file: impl Into<Option<&'a FileInfo<S>>>,
+    version: &'a Version,
+    config: impl Into<Option<&'a FandomConfig>>,
+) -> Vec<Piece<'a>> {
+    let mut pieces = Vec::with_capacity(13);
+    if let Some(reason) = reason.into() {
+        pieces.push(Piece::fixed(reason.icon(), reason.style()));
+        pieces.push(Piece::space());
     }
     let default_fandom = version.metadata.fandoms.first().map(|f| f.name.as_str());
     let fandom = config
         .into()
         .map(|c| c.preferred_fandom(&version.metadata.fandoms).or(default_fandom))
         .unwrap_or(default_fandom);
-    let words_k = version.metadata.words as f32 / 1000.0;
-    let line = Line::new([
-        Piece::fixed(reason.icon(), reason.style()),
+    let words_k = version.metadata.words.max(101) as f32 / 1000.0;
+    pieces.extend([
         Piece::space(),
         Piece::fixed(format!("#{}", version.metadata.work_id), &PALETTE.highlight),
         Piece::space(),
@@ -117,20 +143,35 @@ pub fn format_pair<'a, S: HashState>(
             version.metadata.chapters.to_string(),
             if version.metadata.chapters.is_complete() { &PALETTE.success } else { &PALETTE.danger },
         ),
-        Piece::space(),
-        Piece::flex(file.path.as_str(), &PALETTE.muted, 32),
     ]);
-    let fandom = fandom.map(|f| format!(", in {f}")).unwrap_or_default();
-    line.with_fallback(format!(
-        "{} #{} \"{}\"{} ({:.1}k, {})",
-        reason.icon(),
-        version.metadata.work_id,
-        version.metadata.title,
-        fandom,
-        words_k,
-        version.metadata.chapters
-    ))
-    .with_volume(reason.loudness())
+    if let Some(file) = file.into() {
+        pieces.push(Piece::space());
+        pieces.push(Piece::flex(file.path.as_str(), &PALETTE.muted, 32));
+    }
+    pieces
+}
+
+pub fn format_pair_fallback<'a>(
+    reason: impl Into<Option<Reason>>,
+    version: &'a Version,
+    config: impl Into<Option<&'a FandomConfig>>,
+) -> String {
+    let default_fandom = version.metadata.fandoms.first().map(|f| f.name.as_str());
+    let fandom = config
+        .into()
+        .map(|c| c.preferred_fandom(&version.metadata.fandoms).or(default_fandom))
+        .unwrap_or(default_fandom)
+        .map(|f| format!(", in {f}"))
+        .unwrap_or_default();
+    let words_k = version.metadata.words.max(101) as f32 / 1000.0;
+    let fallback = format!(
+        "#{} \"{}\"{} ({:.1}k, {})",
+        version.metadata.work_id, version.metadata.title, fandom, words_k, version.metadata.chapters
+    );
+    if let Some(reason) = reason.into() {
+        return format!("{} {}", reason.icon(), fallback);
+    }
+    fallback
 }
 
 pub fn format_number(n: u64) -> String {

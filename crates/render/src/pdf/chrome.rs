@@ -50,28 +50,36 @@ impl Chrome {
         if !html.exists() || !pdf.is_absolute() || pdf.is_dir() {
             exn::bail!(ErrorKind::Io);
         }
+        let user_data = tempfile::TempDir::new().or_raise(|| ErrorKind::Io)?;
         let mut cmd = match self {
             Self::Binary { path } => Command::new(path),
             Self::Flatpak { app_id } => {
                 let mut c = Command::new("flatpak");
                 c.args([
                     "run",
+                    &format!("--filesystem={}", user_data.path().display()),
                     &format!("--filesystem={}", html.parent().unwrap().display()),
                     &format!("--filesystem={}", pdf.parent().unwrap().display()),
-                    app_id,
                     "--",
+                    app_id,
                 ]);
                 c
             },
         };
         cmd.args([
             "--headless=new",
+            // Profile stuff
+            &format!("--user-data-dir={}", user_data.path().display()),
+            "--no-first-run",
+            "--disable-extensions",
+            // Render stuff
             "--disable-gpu",
             "--no-margins",
             "--run-all-compositor-stages-before-draw",
             "--font-render-hinting=none",
             "--no-pdf-header-footer",
             "--generate-pdf-document-outline",
+            // I/O stuff
             &format!("--print-to-pdf={}", pdf.display()),
             &format!("file://{}", html.display()),
         ]);

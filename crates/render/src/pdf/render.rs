@@ -56,7 +56,7 @@ impl PdfRenderer {
 
     // Lol, apparently this is called a "ring-buffer algorithm". I call it a "overlapping search".
     fn persist_html<R: Read>(&self, mut html: R, variables: Option<CssVariables>) -> Result<TempFile> {
-        let mut tmp = TempFile::new().or_raise(|| ErrorKind::Io)?;
+        let mut tmp = TempFile::with_suffix(".html").or_raise(|| ErrorKind::Io)?;
         const NEEDLE: &[u8] = b"</head";
         const CARRY_SIZE: usize = NEEDLE.len() - 1;
         // We want to load 2 pages into memory each time.

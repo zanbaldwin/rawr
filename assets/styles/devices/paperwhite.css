@@ -1,0 +1,12 @@
+@page {
+    /* Kindle Paperwhite (11th Gen): */
+    size: 104mm 138mm;
+    margin: 0.5cm 0.5cm;
+}
+
+body {
+    /* Base font size suitable for general reading. Fairly small. */
+    font-size: 7pt !important;
+    /* Increases spacing between lines for easier readability */
+    line-height: 1.7;
+}

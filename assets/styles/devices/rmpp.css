@@ -1,7 +1,7 @@
 @page {
     /* reMarkable Paper Pro Size: */
-    size: 1620px 2160px;
-    margin: 1cm 2.5cm 0.75cm;
+    size: 180mm 240mm;
+    margin: 1cm 2cm;
 }
 
 @media print {

@@ -1,4 +1,4 @@
-use super::{Output, PerPipe};
+use super::{CursorGuard, Output, PerPipe};
 use crate::error::Result;
 use crate::output::{Line, Pipe, Render, Verbosity};
 use console::Term;
@@ -111,5 +111,17 @@ impl Output for PrintingOutput {
             .default(false)
             .interact_on(stderr)
             .map_err(|e| miette::miette!("{e}"))?)
+    }
+
+    fn is_interactive(&self, pipe: Pipe) -> bool {
+        self.terminal.get(pipe).pipe.is_term()
+    }
+
+    fn alt(&self, pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)> {
+        if !self.is_interactive(pipe) {
+            Err(miette::miette!("Cannot enter alternative screen; pipe is not an interactive terminal"))?;
+        }
+        let term = &self.terminal.get(pipe).pipe;
+        Ok((CursorGuard::new(term), term))
     }
 }

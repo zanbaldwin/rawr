@@ -1,8 +1,10 @@
+mod picker;
 mod render;
 mod sink;
 mod style;
 pub mod util;
 
+pub use self::picker::Picker;
 pub use self::render::line::{Line, Loudness};
 pub use self::render::piece::Piece;
 pub use self::render::{IntoLines, Render};

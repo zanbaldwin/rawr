@@ -1,9 +1,13 @@
+#[cfg(feature = "_render")]
+mod export;
 mod import;
 mod init;
 mod organize;
 mod scan;
 mod stats;
 
+#[cfg(feature = "_render")]
+pub(crate) use self::export::ExportCommand;
 pub(crate) use self::import::ImportCommand;
 pub(crate) use self::init::InitCommand;
 pub(crate) use self::organize::OrganizeCommand;

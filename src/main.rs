@@ -45,6 +45,8 @@ async fn main() -> Result<ExitCode> {
         Commands::Scan(command) => command.execute(&mut context).await?,
         Commands::Import(command) => command.execute(&mut context).await?,
         Commands::Organize(command) => command.execute(&mut context).await?,
+        #[cfg(feature = "_render")]
+        Commands::Export(command) => command.execute(&mut context).await?,
         Commands::Stats(command) => command.execute(&mut context).await?,
     };
 

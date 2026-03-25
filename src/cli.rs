@@ -1,3 +1,5 @@
+#[cfg(feature = "_render")]
+use crate::command::ExportCommand;
 use crate::command::ImportCommand;
 use crate::command::InitCommand;
 use crate::command::OrganizeCommand;
@@ -44,6 +46,9 @@ pub enum Commands {
     Import(ImportCommand),
     /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
+    /// Render works to PDF or EPUB
+    #[cfg(feature = "_render")]
+    Export(ExportCommand),
     /// Show library statistics
     Stats(StatsCommand),
 }

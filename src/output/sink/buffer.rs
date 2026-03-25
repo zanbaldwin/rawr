@@ -3,10 +3,11 @@
 //! In-memory output backend for tests. Captures rendered lines per pipe
 //! so assertions can verify what the CLI would have printed.
 
-use super::{Output, PerPipe};
+use super::{CursorGuard, Output, PerPipe};
 use crate::error::Result;
 use crate::output::{Line, Render};
 use crate::output::{Pipe, Verbosity};
+use console::Term;
 use indicatif::ProgressBar;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -88,5 +89,13 @@ impl Output for BufferingOutput {
     fn confirm(&self, prompt: &str) -> Result<bool> {
         self.confirm_prompts.borrow_mut().push(prompt.to_string());
         Ok(self.confirm_responses.borrow_mut().pop_front().unwrap_or(false))
+    }
+
+    fn is_interactive(&self, _pipe: Pipe) -> bool {
+        false
+    }
+
+    fn alt(&self, _pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)> {
+        Err(miette::miette!("Cannot enter alternative screen; buffering output is not an interactive terminal"))?
     }
 }

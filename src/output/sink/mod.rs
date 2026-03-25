@@ -7,6 +7,7 @@ pub(crate) use self::buffer::BufferingOutput;
 pub use self::print::PrintingOutput;
 use crate::error::Result;
 use crate::output::{Line, Pipe};
+use console::Term;
 use indicatif::ProgressBar;
 
 /// Output abstraction for CLI rendering.
@@ -25,6 +26,12 @@ pub trait Output {
 
     /// Yes/no confirmation prompt. Returns false if not interactive.
     fn confirm(&self, prompt: &str) -> Result<bool>;
+
+    fn is_interactive(&self, pipe: Pipe) -> bool;
+
+    /// Pseudo-alt screen for interactive output (but not the true
+    /// secondary/alt terminal screen like Ratatui uses).
+    fn alt(&self, pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)>;
 }
 
 struct PerPipe<T> {
@@ -41,5 +48,18 @@ impl<T> PerPipe<T> {
             Pipe::Out => &self.out,
             Pipe::Err => &self.err,
         }
+    }
+}
+
+pub(crate) struct CursorGuard<'a>(&'a Term);
+impl<'a> CursorGuard<'a> {
+    pub(crate) fn new(term: &'a Term) -> Self {
+        _ = term.hide_cursor();
+        Self(term)
+    }
+}
+impl Drop for CursorGuard<'_> {
+    fn drop(&mut self) {
+        _ = self.0.show_cursor();
     }
 }

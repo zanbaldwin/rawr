@@ -66,6 +66,13 @@ impl From<CompressError> for Error {
     }
 }
 
+#[cfg(feature = "_render")]
+impl From<rawr_render::error::Error> for Error {
+    fn from(e: rawr_render::error::Error) -> Self {
+        Self(miette::Report::new(ExnDiagnostic::from_frame(e.frame())))
+    }
+}
+
 /// A miette Diagnostic built by recursively walking an exn Frame tree.
 ///
 /// The first child of each frame maps to miette's cause chain (via `source()`),

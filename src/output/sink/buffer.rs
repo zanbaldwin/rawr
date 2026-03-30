@@ -9,27 +9,27 @@ use crate::output::{Line, Render};
 use crate::output::{Pipe, Verbosity};
 use console::Term;
 use indicatif::ProgressBar;
-use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::sync::Mutex;
 
 pub(crate) struct BufferingOutput {
-    lines: PerPipe<RefCell<Vec<String>>>,
+    lines: PerPipe<Mutex<Vec<String>>>,
     verbosity: Verbosity,
     width: Option<usize>,
     colour: bool,
-    confirm_responses: RefCell<VecDeque<bool>>,
-    confirm_prompts: RefCell<Vec<String>>,
+    confirm_responses: Mutex<VecDeque<bool>>,
+    confirm_prompts: Mutex<Vec<String>>,
 }
 
 impl BufferingOutput {
     pub(crate) fn new() -> Self {
         Self {
-            lines: PerPipe::new(RefCell::new(Vec::new()), RefCell::new(Vec::new())),
+            lines: PerPipe::new(Mutex::new(Vec::new()), Mutex::new(Vec::new())),
             verbosity: Verbosity::Normal,
             width: Some(120),
             colour: false,
-            confirm_responses: RefCell::new(VecDeque::new()),
-            confirm_prompts: RefCell::new(Vec::new()),
+            confirm_responses: Mutex::new(VecDeque::new()),
+            confirm_prompts: Mutex::new(Vec::new()),
         }
     }
 
@@ -49,23 +49,23 @@ impl BufferingOutput {
     }
 
     pub(crate) fn push_confirm_response(&self, response: bool) {
-        self.confirm_responses.borrow_mut().push_back(response);
+        self.confirm_responses.lock().unwrap().push_back(response);
     }
 
     pub(crate) fn lines(&self, pipe: Pipe) -> Vec<String> {
-        self.lines.get(pipe).borrow().clone()
+        self.lines.get(pipe).lock().unwrap().clone()
     }
 
     pub(crate) fn line_count(&self, pipe: Pipe) -> usize {
-        self.lines.get(pipe).borrow().len()
+        self.lines.get(pipe).lock().unwrap().len()
     }
 
     pub(crate) fn contains(&self, pipe: Pipe, needle: &str) -> bool {
-        self.lines.get(pipe).borrow().iter().any(|l| l.contains(needle))
+        self.lines.get(pipe).lock().unwrap().iter().any(|l| l.contains(needle))
     }
 
     pub(crate) fn confirm_prompts(&self) -> Vec<String> {
-        self.confirm_prompts.borrow().clone()
+        self.confirm_prompts.lock().unwrap().clone()
     }
 }
 
@@ -75,7 +75,7 @@ impl Output for BufferingOutput {
             return;
         }
         let rendered = line.render(self.width, self.colour);
-        self.lines.get(pipe).borrow_mut().push(rendered.into_owned());
+        self.lines.get(pipe).lock().unwrap().push(rendered.into_owned());
     }
 
     fn spinner(&self, _message: &str) -> ProgressBar {
@@ -87,8 +87,8 @@ impl Output for BufferingOutput {
     }
 
     fn confirm(&self, prompt: &str) -> Result<bool> {
-        self.confirm_prompts.borrow_mut().push(prompt.to_string());
-        Ok(self.confirm_responses.borrow_mut().pop_front().unwrap_or(false))
+        self.confirm_prompts.lock().unwrap().push(prompt.to_string());
+        Ok(self.confirm_responses.lock().unwrap().pop_front().unwrap_or(false))
     }
 
     fn is_interactive(&self, _pipe: Pipe) -> bool {

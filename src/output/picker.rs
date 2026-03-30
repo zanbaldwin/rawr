@@ -24,7 +24,7 @@ impl<'a> Picker<'a> {
     pub async fn interact(
         target: &str,
         cache: Arc<Repository>,
-        output: Arc<Box<dyn Output>>,
+        output: Arc<dyn Output>,
         fandoms: impl Into<Option<&'a FandomConfig>>,
         limit: usize,
     ) -> Result<Vec<VersionFiles>> {
@@ -191,7 +191,7 @@ impl<'a> Picker<'a> {
     fn collect(self) -> Vec<VersionFiles> {
         self.works
             .into_iter()
-            .filter(|w| w.selected && w.selected_version > w.versions.len())
+            .filter(|w| w.selected && w.selected_version < w.versions.len())
             .map(|mut w| w.versions.swap_remove(w.selected_version))
             .collect()
     }

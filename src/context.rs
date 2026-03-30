@@ -14,23 +14,23 @@ use rawr_storage::backend::{LocalBackend, ReadOnlyBackend};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) struct AppContext {
-    pub config: Config,
-    loaded_from: PathBuf,
-    database: Database,
-    pub cache: Repository,
-    pub dry_run: bool,
-    pub output: Box<dyn Output>,
-}
-
 pub(crate) enum BackendPurpose {
     Import,
     Export,
     Trash,
 }
 
+pub(crate) struct AppContext {
+    pub config: Config,
+    loaded_from: PathBuf,
+    database: Database,
+    pub cache: Repository,
+    pub dry_run: bool,
+    pub output: Arc<dyn Output>,
+}
+
 impl AppContext {
-    pub async fn build(cli: &Cli, output: Box<dyn Output>) -> Result<(Self, Vec<ConstraintViolation>)> {
+    pub async fn build(cli: &Cli, output: Arc<dyn Output>) -> Result<(Self, Vec<ConstraintViolation>)> {
         if let Some(ref cwd) = cli.cwd {
             std::env::set_current_dir(cwd)?;
         }
@@ -52,7 +52,6 @@ impl AppContext {
         self.database.close().await;
     }
 }
-
 impl AppContext {
     pub(crate) async fn get_backend_by_purpose(&self, purpose: BackendPurpose) -> Result<Option<BackendHandle>> {
         let target_name = match purpose {

@@ -15,13 +15,14 @@ use clap::{CommandFactory, Parser};
 use console::Term;
 use rawr_config::error::ConstraintViolation;
 use std::process::ExitCode;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<ExitCode> {
     init_tracing();
 
     let cli = Cli::parse();
-    let output = Box::new(PrintingOutput::new(cli.color, cli.verbose, cli.quiet));
+    let output = Arc::new(PrintingOutput::new(cli.color, cli.verbose, cli.quiet));
 
     // Init runs before context building (no config required).
     if let Some(Commands::Init(command)) = &cli.command {

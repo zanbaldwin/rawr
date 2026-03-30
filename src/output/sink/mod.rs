@@ -14,7 +14,7 @@ use indicatif::ProgressBar;
 ///
 /// `Pipe` (stdout vs stderr) and `Loudness` (verbosity filter) are orthogonal
 /// concerns, combined via the `Line` builder passed to `print()`.
-pub trait Output {
+pub trait Output: Send + Sync {
     /// Render a line to the appropriate stream, filtered by loudness.
     fn print(&self, pipe: Pipe, line: &Line<'_>);
 

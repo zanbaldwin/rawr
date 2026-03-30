@@ -85,7 +85,7 @@ zstd = ["rawr-compress/zstd"]
 _sync = []
 s3 = ["_sync", "rawr-storage/s3"]
 _render = ["dep:rawr-render"]
-pdf = ["_render"]
+pdf = ["_render", "rawr-render/pdf", "rawr-render/metadata"]
 epub = ["_render"]
 
 [dependencies]

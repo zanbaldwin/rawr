@@ -77,7 +77,7 @@ name = "rawr"
 path = "src/main.rs"
 
 [features]
-default = ["s3", "pdf", "epub"]
+default = ["s3", "pdf"]
 brotli = ["rawr-compress/brotli"]
 bzip3 = ["rawr-compress/bzip3"]
 xz = ["rawr-compress/xz"]

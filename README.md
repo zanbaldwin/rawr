@@ -109,12 +109,12 @@ cargo build --release
 ## Roadmap
 - [x] Library management (`scan`, `import`, `organize`)
 - [x] Library statistics
-- [ ] Render works to PDF `export pdf` (basic)
+- [x] Render works to PDF `export pdf` (basic)
 - [ ] Render works to epub `export epub` (basic)
 - [x] Config initialization `init`
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation
-- [ ] Render multiple works (interactive)
+- [x] Render multiple works (interactive)
 - [ ] A graphical point-and-click application for you Windows/Mac users (eventually)
 
 ### Good first contributions

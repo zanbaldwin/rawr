@@ -1,41 +1,37 @@
 //! CLI helpers for resolving compression from command-line flags.
 //!
-//! Maps the three-state CLI pattern (`--compress`, `--compress=gz`,
-//! or omitted) into a [`Preference`] that can be resolved against
-//! a configured default and an original file's format.
+//! Maps the `--compress=FORMAT` / `--no-compress` / omitted pattern
+//! into a [`Preference`] that can be resolved against a configured
+//! default and an original file's format.
 
 use crate::Compression;
 use crate::error::Error;
 use std::str::FromStr;
 
-/// Raw CLI flag value: `None` = flag absent, `Some(None)` = flag present
-/// without a value, `Some(Some(..))` = flag present with an explicit format.
-pub type Flag = Option<Option<String>>;
-
 /// Resolved user intent for compression from a CLI invocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Preference {
-    /// Compression format was specified on the command-line
+    /// An explicit format was specified via `--compress=FORMAT`
     Explicit(Compression),
-    /// Compression flag was enabled on the command-line, but no format was specified
+    /// No compression flag was provided — use the configured default
     Implicit,
-    /// Compression was omitted from the command-line
+    /// Compression was explicitly disabled via `--no-compress`
     NotSpecified,
 }
 
-/// Parse a [`Flag`] into a [`Preference`], validating any explicit format string
-/// via [`Compression::from_str`].
-impl TryFrom<Flag> for Preference {
-    type Error = Error;
-    fn try_from(value: Flag) -> Result<Self, Self::Error> {
-        match value {
-            Some(Some(s)) if s.is_empty() => Ok(Self::Implicit),
-            Some(Some(s)) => Ok(Self::Explicit(Compression::from_str(&s)?)),
-            Some(None) => Ok(Self::Implicit),
-            None => Ok(Self::NotSpecified),
+impl Preference {
+    /// Build a [`Preference`] from the `--compress` / `--no-compress` flag pair.
+    pub fn from_flags(compress: Option<String>, no_compress: bool) -> Result<Self, Error> {
+        if no_compress {
+            return Ok(Self::NotSpecified);
+        }
+        match compress {
+            Some(s) => Ok(Self::Explicit(Compression::from_str(&s)?)),
+            None => Ok(Self::Implicit),
         }
     }
 }
+
 impl Preference {
     /// Determine the final [`Compression`] format to use.
     ///
@@ -59,31 +55,27 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(None, Preference::NotSpecified)]
-    #[case(Some(None), Preference::Implicit)]
-    #[case(Some(Some("gz".to_string())), Preference::Explicit(Compression::Gzip))]
-    #[case(Some(Some("gzip".to_string())), Preference::Explicit(Compression::Gzip))]
-    #[case(Some(Some("bz2".to_string())), Preference::Explicit(Compression::Bzip2))]
-    #[case(Some(Some("bzip2".to_string())), Preference::Explicit(Compression::Bzip2))]
-    #[cfg_attr(feature = "brotli", case(Some(Some("br".to_string())), Preference::Explicit(Compression::Brotli)))]
-    #[cfg_attr(feature = "brotli", case(Some(Some("brotli".to_string())), Preference::Explicit(Compression::Brotli)))]
-    #[cfg_attr(feature = "bzip3", case(Some(Some("bz3".to_string())), Preference::Explicit(Compression::Bzip3)))]
-    #[cfg_attr(feature = "bzip3", case(Some(Some("bzip3".to_string())), Preference::Explicit(Compression::Bzip3)))]
-    #[cfg_attr(feature = "xz", case(Some(Some("xz".to_string())), Preference::Explicit(Compression::Xz)))]
-    #[cfg_attr(feature = "xz", case(Some(Some("lzma".to_string())), Preference::Explicit(Compression::Xz)))]
-    #[cfg_attr(feature = "zstd", case(Some(Some("zst".to_string())), Preference::Explicit(Compression::Zstd)))]
-    #[cfg_attr(feature = "zstd", case(Some(Some("zstd".to_string())), Preference::Explicit(Compression::Zstd)))]
-    // Omitting feature-dependent format XZ, Zstd
-    fn test_construct(#[case] flag: Flag, #[case] expected: Preference) {
-        let preference: Preference = flag.try_into().unwrap();
-        assert_eq!(preference, expected);
+    #[case(None, false, Preference::Implicit)]
+    #[case(None, true, Preference::NotSpecified)]
+    #[case(Some("gz".to_string()), false, Preference::Explicit(Compression::Gzip))]
+    #[case(Some("gzip".to_string()), false, Preference::Explicit(Compression::Gzip))]
+    #[case(Some("bz2".to_string()), false, Preference::Explicit(Compression::Bzip2))]
+    #[case(Some("bzip2".to_string()), false, Preference::Explicit(Compression::Bzip2))]
+    #[cfg_attr(feature = "brotli", case(Some("br".to_string()), false, Preference::Explicit(Compression::Brotli)))]
+    #[cfg_attr(feature = "brotli", case(Some("brotli".to_string()), false, Preference::Explicit(Compression::Brotli)))]
+    #[cfg_attr(feature = "bzip3", case(Some("bz3".to_string()), false, Preference::Explicit(Compression::Bzip3)))]
+    #[cfg_attr(feature = "bzip3", case(Some("bzip3".to_string()), false, Preference::Explicit(Compression::Bzip3)))]
+    #[cfg_attr(feature = "xz", case(Some("xz".to_string()), false, Preference::Explicit(Compression::Xz)))]
+    #[cfg_attr(feature = "xz", case(Some("lzma".to_string()), false, Preference::Explicit(Compression::Xz)))]
+    #[cfg_attr(feature = "zstd", case(Some("zst".to_string()), false, Preference::Explicit(Compression::Zstd)))]
+    #[cfg_attr(feature = "zstd", case(Some("zstd".to_string()), false, Preference::Explicit(Compression::Zstd)))]
+    fn test_from_flags(#[case] compress: Option<String>, #[case] no_compress: bool, #[case] expected: Preference) {
+        assert_eq!(Preference::from_flags(compress, no_compress).unwrap(), expected);
     }
 
     #[test]
-    fn test_construct_invalid() {
-        let flag = Some(Some("definitely not valid".to_string()));
-        let preference: Result<Preference, Error> = flag.try_into();
-        assert!(preference.is_err());
+    fn test_from_flags_invalid() {
+        assert!(Preference::from_flags(Some("definitely not valid".to_string()), false).is_err());
     }
 
     #[rstest]

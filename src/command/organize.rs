@@ -17,20 +17,19 @@ use std::process::ExitCode;
 /// mismatched files. Files already at their correct path are skipped.
 #[derive(Debug, Args)]
 pub(crate) struct OrganizeCommand {
-    /// Compress files during organize. Optionally specify format (eg, --compress=bz2).
-    /// Without a value, uses the configured default. Omit to preserve existing compression.
+    /// Override the configured compression format (eg, --compress=bz2).
     ///
     /// Formats: none, gz (gzip), bz2 (bzip2), br (brotli), bz3 (bzip3), xz (lzma), zst (zstd).
     /// Some formats require the corresponding feature flag at compile time.
-    #[arg(long, num_args = 0..=1, default_missing_value = "")]
+    #[arg(long, conflicts_with = "no_compress")]
     compress: Option<String>,
+    /// Disable compression, preserving existing file format.
+    #[arg(long, conflicts_with = "compress")]
+    no_compress: bool,
 }
 impl Command for OrganizeCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {
-        // Clap can't handle `Option<Option<String>>` so we have to manually
-        // map the configured default in place of an empty string.
-        let flag: rawr_compress::cli::Flag = self.compress.clone().map(|s| if s.is_empty() { None } else { Some(s) });
-        let compression = match Preference::try_from(flag)? {
+        let compression = match Preference::from_flags(self.compress.clone(), self.no_compress)? {
             Preference::Explicit(c) => Some(c),
             Preference::Implicit => Some(ctx.config.library.compression),
             Preference::NotSpecified => None,

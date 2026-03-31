@@ -34,13 +34,15 @@ pub(crate) struct ImportCommand {
     /// Recurse into subdirectories when importing a folder.
     #[arg(short, long)]
     recursive: bool,
-    /// Compress files during import. Optionally specify format (eg, --compress=bz2).
-    /// Without a value, uses the configured default. Omit to preserve source compression.
+    /// Override the configured compression format (eg, --compress=bz2).
     ///
     /// Formats: none, gz (gzip), bz2 (bzip2), br (brotli), bz3 (bzip3), xz (lzma), zst (zstd).
     /// Some formats require the corresponding feature flag at compile time.
-    #[arg(long, num_args = 0..=1, default_missing_value = "")]
+    #[arg(long, conflicts_with = "no_compress")]
     compress: Option<String>,
+    /// Disable compression, preserving the source file's format as-is.
+    #[arg(long, conflicts_with = "compress")]
+    no_compress: bool,
     /// Delete source files after successful import (default).
     #[arg(long, conflicts_with = "keep")]
     rm: bool,
@@ -51,8 +53,7 @@ pub(crate) struct ImportCommand {
 
 impl Command for ImportCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {
-        let flag: rawr_compress::cli::Flag = self.compress.clone().map(|s| if s.is_empty() { None } else { Some(s) });
-        let compression = match Preference::try_from(flag)? {
+        let compression = match Preference::from_flags(self.compress.clone(), self.no_compress)? {
             Preference::Explicit(c) => Some(c),
             Preference::Implicit => Some(ctx.config.library.compression),
             Preference::NotSpecified => None,

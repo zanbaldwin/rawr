@@ -43,6 +43,7 @@ pub enum Commands {
     /// Scan your import library for existing HTML files & extract metadata into the cache
     Scan(ScanCommand),
     /// Import HTML files from the local filesystem (eg, your downloads folder) into your library
+    #[command(alias = "i")]
     Import(ImportCommand),
     /// Reorganize files in the import target to match the configured location/compression
     Organize(OrganizeCommand),
@@ -50,5 +51,6 @@ pub enum Commands {
     #[cfg(feature = "_render")]
     Export(ExportCommand),
     /// Show library statistics
+    #[command(alias = "s")]
     Stats(StatsCommand),
 }

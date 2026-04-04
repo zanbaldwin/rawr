@@ -133,5 +133,7 @@ cargo build --release
 ### License
 [EU Public License `v1.2`](https://eupl.eu/1.2/en/).
 
-> This project will remain in beta for as long as AO3 does, which will be until
-> the heat death of the universe.
+> ~~This project will remain in beta for as long as AO3 does, which will be until
+> the heat death of the universe.~~
+>
+> Oh, guess we're [stable now](https://www.transformativeworks.org/ao3-is-exiting-open-beta/)...

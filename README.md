@@ -65,8 +65,9 @@ and I built this tool specifically to **not** hammer their servers. Respect
 
 There's already enough tools focusing on _getting the fics_; `rawr` focuses on
 what happens after you have it. Like your own stern librarian in an inflatable
-dinosaur costume. (**Please,** for the love of everything fandom, somebody make
-_Sexy Stern Dinosaur Librarian_ a real tag 👩‍🏫)
+dinosaur costume. (~~**Please,** for the love of everything fandom, somebody
+make _Sexy Stern Dinosaur Librarian_ a real tag~~ 👩‍🏫 update: [thank you
+ThoseDarnNuns](https://archiveofourown.org/works/81555506)!)
 
 ## Vision
 

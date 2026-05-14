@@ -32,6 +32,9 @@ This has been deleted, sorry!
 See a fic? Download it.
 Got an email about a chapter update? Download again.
 
+> For those using Gmail, auto-label emails from AO3 into new/update/complete
+> using the [Google Apps script](./ao3-gmail-labeller.gs) (draft).
+
 #### Why is the tool called `rawr`?
 This is a tool to manage AO3 downloads, so I wanted to come up with a name that
 was (a) related to the Archive, and (b) as ridiculous as the tags you depraved

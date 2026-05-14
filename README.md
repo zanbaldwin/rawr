@@ -71,16 +71,16 @@ ThoseDarnNuns](https://archiveofourown.org/works/81555506)!)
 
 ## Vision
 
-| Command         | What it does                                                                  |
-|-----------------|-------------------------------------------------------------------------------|
-| `rawr init`     | Set up your library                                                           |
-| `rawr import`   | Pull HTML files from your Downloads folder into your library                  |
-| `rawr scan`     | Re-scan your library and extract/update metadata                              |
-| `rawr organize` | Sort and rename files by fandom/series/title (with compression)               |
-| `rawr stats`    | See your library at a glance                                                  |
-| `rawr export`   | Render works to PDF/ebook _(coming soon)_                                     |
-| `rawr push`     | Sync to S3-compatible cloud storage _(coming soon)_                           |
-| `rawr pull`     | Help! I dropped my laptop in the bath! Gimme my library back! _(coming soon)_ |
+| Command             | What it does                                                                  |
+|---------------------|-------------------------------------------------------------------------------|
+| `rawr init`         | Set up your library                                                           |
+| `rawr import` (`i`) | Pull HTML files from your Downloads folder into your library                  |
+| `rawr scan`         | Re-scan your library and extract/update metadata                              |
+| `rawr organize`     | Sort and rename files by fandom/series/title (with compression)               |
+| `rawr stats` (`s`)  | See your library at a glance                                                  |
+| `rawr export`       | Render works to PDF/ebook _(coming soon)_                                     |
+| `rawr push`         | Sync to S3-compatible cloud storage _(coming soon)_                           |
+| `rawr pull`         | Help! I dropped my laptop in the bath! Gimme my library back! _(coming soon)_ |
 
 Use `--dry-run` on any command to preview what would happen without changing
 anything. Useful if the idea of a CLI tool touching your carefully curated hoard
@@ -112,7 +112,7 @@ cargo build --release
 - [x] Library statistics
 - [x] Render works to PDF `export pdf` (basic)
 - [ ] Render works to epub `export epub` (basic)
-- [x] Config initialization `init`
+- [x] Config initialization `init` (basic)
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation
 - [x] Render multiple works (interactive)

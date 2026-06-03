@@ -5,6 +5,7 @@ pub mod organize;
 pub mod scan;
 mod template;
 
+pub use crate::conflict::trash;
 pub use crate::template::PathGenerator;
 use rawr_compress::Compression;
 use rawr_storage::BackendHandle;

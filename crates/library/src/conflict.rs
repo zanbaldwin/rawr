@@ -102,7 +102,13 @@ pub(crate) async fn handle_conflict<S: HashState>(
     }
 }
 
-pub(crate) async fn trash<S: HashState>(
+/// Move a file out of `backend` and into the `trash` backend.
+///
+/// Reads the file's bytes, writes them to the trash backend under a flattened,
+/// collision-resistant name (see [`make_trash_name`]), then deletes the
+/// original. Only touches storage — the caller is responsible for any cache
+/// bookkeeping.
+pub async fn trash<S: HashState>(
     backend: &BackendHandle,
     trash: &BackendHandle,
     file: &FileInfo<S>,

@@ -1,3 +1,4 @@
+use crate::command::DuplicatesCommand;
 #[cfg(feature = "_render")]
 use crate::command::ExportCommand;
 use crate::command::ImportCommand;
@@ -53,4 +54,7 @@ pub enum Commands {
     /// Show library statistics
     #[command(alias = "s")]
     Stats(StatsCommand),
+    /// Review & clean up near-duplicate versions of works
+    #[command(visible_alias = "dup")]
+    Duplicates(DuplicatesCommand),
 }

@@ -36,7 +36,7 @@ pub enum ErrorKind {
     Figment(Box<figment::Error>),
     /// One or more [`ConstraintViolation`]s with [`ViolationSeverity::Error`]
     /// severity were produced during post-parse validation.
-    #[display("configuration validation failed")]
+    #[display("configuration validation failed:\n{}", format_violations(errors))]
     Validation { errors: Vec<ConstraintViolation> },
     /// I/O error during file operations.
     #[display("I/O error: {_0}")]
@@ -49,6 +49,12 @@ impl ErrorKind {
     pub fn is_retryable(&self) -> bool {
         matches!(self, Self::Io(_))
     }
+}
+
+/// Render constraint violations as an indented bullet list for the
+/// [`Validation`](ErrorKind::Validation) error message, one violation per line.
+fn format_violations(errors: &[ConstraintViolation]) -> String {
+    errors.iter().map(|v| format!("  • {}: {}", v.path, v.message)).collect::<Vec<_>>().join("\n")
 }
 
 /// A single validation problem found after parsing, tied to a dotted config

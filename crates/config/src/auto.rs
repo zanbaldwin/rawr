@@ -133,7 +133,8 @@ impl Configurator {
 
     /// Sets `library.cache` to the platform-specific data directory
     /// (e.g. `~/.local/share/rawr/cache.db` on Linux) when no cache path is
-    /// configured. Uses [`directories::ProjectDirs`] for platform resolution.
+    /// configured, creating that directory if it doesn't already exist. Uses
+    /// [`directories::ProjectDirs`] for platform resolution.
     fn autoconfigure_cache_database(source: &ProviderData, defaults: &mut ProviderData) {
         // Do any of the profiles contain a cache database path?
         let is_database_specified = source
@@ -146,7 +147,14 @@ impl Configurator {
         if let Some((library_tag, library)) = get_or_insert_dict(default_profile, "library")
             && let Some(dirs) = ProjectDirs::from("", "", APP_NAME)
         {
-            let database = dirs.data_dir().join("cache.db").to_string_lossy().to_string();
+            // rawr owns this directory, so create it eagerly. Otherwise a fresh
+            // machine fails config validation (the parent must exist) before any
+            // command has a chance to create it.
+            let data_dir = dirs.data_dir();
+            if let Err(error) = std::fs::create_dir_all(data_dir) {
+                tracing::warn!(directory = %data_dir.display(), %error, "Failed to create data directory for cache database");
+            }
+            let database = data_dir.join("cache.db").to_string_lossy().to_string();
             tracing::debug!(setting = "library.cache", value = &database, "Auto-configuring");
             library.insert("cache".into(), Value::String(library_tag, database));
         }

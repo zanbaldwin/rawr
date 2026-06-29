@@ -3,6 +3,12 @@ use super::piece::{Flexibility, Piece};
 use crate::Verbosity;
 use std::borrow::Cow;
 
+/// How insistently a [`Line`] wants to be seen, filtered against the active
+/// [`Verbosity`].
+///
+/// Whisper shows only when [`Verbosity::Verbose`]; Normal shows unless
+/// [`Verbosity::Quiet`]; Shout always shows. Loudness is orthogonal to which
+/// stream a line goes to.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Loudness {
     Whisper,
@@ -11,6 +17,7 @@ pub enum Loudness {
     Shout,
 }
 impl Loudness {
+    /// Whether a line at this loudness should be shown at the given [`Verbosity`].
     pub fn is_visible(&self, verbosity: Verbosity) -> bool {
         match self {
             Self::Whisper => matches!(verbosity, Verbosity::Verbose),
@@ -20,13 +27,34 @@ impl Loudness {
     }
 }
 
+/// One row of output, built from styled [`Piece`]s, carrying a [`Loudness`] and
+/// an optional plain-text fallback.
+///
+/// The fallback is returned verbatim when colour is off (see the [`Render`] impl),
+/// letting a caller hand-write the uncoloured form rather than relying on piece
+/// concatenation.
+///
+/// # Examples
+/// ```
+/// use rawr_output::{Line, Piece, Render, PALETTE};
+/// let line = Line::new([
+///     Piece::fixed("name:", &PALETTE.label),
+///     Piece::space(),
+///     Piece::flex("a-very-long-value", &PALETTE.muted, 3),
+/// ]);
+/// // Fixed pieces keep their width; the flex piece is truncated into what remains.
+/// let out = line.render(Some(12), false);
+/// assert!(out.contains('…'));
+/// ```
 #[derive(Default)]
 pub struct Line<'a> {
+    /// How insistently this line wants to be shown; see [`Loudness`].
     pub loudness: Loudness,
     pieces: Vec<Piece<'a>>,
     fallback: Option<Cow<'a, str>>,
 }
 impl<'a> Line<'a> {
+    /// Builds a [`Loudness::Normal`] line from the given pieces.
     pub fn new(pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
         Self {
             loudness: Loudness::default(),
@@ -35,34 +63,42 @@ impl<'a> Line<'a> {
         }
     }
 
+    /// Builds a line with no pieces, rendering to the empty string.
     pub fn empty() -> Self {
         Self::default()
     }
 
+    /// Sets the [`Loudness`], returning the line for chaining.
     pub fn with_volume(mut self, loudness: Loudness) -> Self {
         self.loudness = loudness;
         self
     }
 
+    /// Sets the plain-text fallback used when rendering without colour; pass
+    /// `None` to clear it.
     pub fn with_fallback<S: Into<Cow<'a, str>>>(mut self, fallback: impl Into<Option<S>>) -> Self {
         self.fallback = fallback.into().map(|s| s.into());
         self
     }
 
+    /// Whether this line is shown at the given [`Verbosity`], per its [`Loudness`].
     pub fn is_visible(&self, verbosity: Verbosity) -> bool {
         self.loudness.is_visible(verbosity)
     }
 
+    /// Appends a [`Piece`] to the end of the line.
     pub fn push(&mut self, piece: Piece<'a>) {
         self.pieces.push(piece)
     }
 }
 
+/// Builds an empty line carrying the given [`Loudness`].
 impl From<Loudness> for Line<'_> {
     fn from(value: Loudness) -> Self {
         Self::empty().with_volume(value)
     }
 }
+/// Builds a line from any iterator of [`Piece`]s, like [`Line::new`].
 impl<'a, I> From<I> for Line<'a>
 where
     I: IntoIterator<Item = Piece<'a>>,
@@ -129,6 +165,13 @@ fn allocate_flex_budgets(entries: &[FlexEntry], budget: usize) -> Vec<(usize, us
     }
 }
 
+/// Lays the pieces out into a single string.
+///
+/// With colour off and a fallback set, the fallback is returned as-is. An empty
+/// line yields the empty string and a single piece is rendered directly. Otherwise,
+/// given a width, fixed pieces keep their natural width and truncatable pieces
+/// share the remainder proportionally by elasticity (via `allocate_flex_budgets`);
+/// without a width every piece renders at full width.
 impl<'a> Render<'a> for Line<'a> {
     fn render(&'a self, width: Option<usize>, colour: bool) -> Cow<'a, str> {
         if !colour && let Some(ref fallback) = self.fallback {

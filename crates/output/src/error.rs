@@ -1,8 +1,13 @@
 use std::fmt;
 use std::io::Error as IoError;
 
+/// Shorthand for a [`Result`](std::result::Result) whose error is this crate's [`Error`](crate::Error).
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Failures raised by the output layer.
+///
+/// Marked `#[non_exhaustive]`, so match arms must include a wildcard and new
+/// variants can be added without a breaking change.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {

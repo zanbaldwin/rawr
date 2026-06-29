@@ -11,30 +11,40 @@ use console::Term;
 #[cfg(feature = "progress")]
 use indicatif::ProgressBar;
 
-/// Output abstraction for CLI rendering.
+/// Where rendered [`Line`]s go, with verbosity filtering applied per line.
 ///
-/// `Pipe` (stdout vs stderr) and `Loudness` (verbosity filter) are orthogonal
-/// concerns, combined via the `Line` builder passed to `print()`.
+/// Held as `Arc<dyn Output>`, hence the `Send + Sync` bound. The chosen [`Pipe`]
+/// and a line's [`Loudness`](crate::Loudness) are orthogonal: the pipe picks the
+/// stream, the loudness decides whether the line survives the active
+/// [`Verbosity`](crate::Verbosity).
 pub trait Output: Send + Sync {
-    /// Render a line to the appropriate stream, filtered by loudness.
+    /// Render `line` to the stream named by `pipe`, dropping it if its
+    /// [`Loudness`](crate::Loudness) is not visible at the active
+    /// [`Verbosity`](crate::Verbosity).
     fn print(&self, pipe: Pipe, line: &Line<'_>);
 
-    /// Create a spinner for indeterminate progress. Returns hidden bar in quiet mode.
+    /// Spinner for indeterminate progress; hidden in quiet mode.
     #[cfg(feature = "progress")]
     fn spinner(&self, message: &str) -> ProgressBar;
 
-    /// Create a progress bar for determinate progress. Returns hidden bar in quiet mode.
+    /// Progress bar for determinate progress; hidden in quiet mode.
     #[cfg(feature = "progress")]
     fn progress_bar(&self, label: &str) -> ProgressBar;
 
-    /// Yes/no confirmation prompt. Returns false if not interactive.
+    /// Yes/no confirmation prompt on stderr, returning `false` when stderr is
+    /// not interactive.
     #[cfg(feature = "confirm")]
     fn confirm(&self, prompt: &str) -> Result<bool>;
 
+    /// Whether `pipe` is an interactive terminal rather than a file or another
+    /// pipe.
     fn is_interactive(&self, pipe: Pipe) -> bool;
 
-    /// Pseudo-alt screen for interactive output (but not the true
-    /// secondary/alt terminal screen like Ratatui uses).
+    /// Enter a pseudo alt-screen on `pipe`, returning a `CursorGuard` and the
+    /// underlying terminal.
+    ///
+    /// This is not a real secondary screen (as Ratatui uses); it only manages
+    /// the cursor for in-place updates on the current screen.
     fn alt(&self, pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)>;
 }
 
@@ -55,6 +65,8 @@ impl<T> PerPipe<T> {
     }
 }
 
+/// RAII guard returned by [`Output::alt`]. With the `progress` feature it hides
+/// the cursor on creation and restores it on drop.
 pub struct CursorGuard<'a>(&'a Term);
 impl<'a> CursorGuard<'a> {
     pub(crate) fn new(term: &'a Term) -> Self {

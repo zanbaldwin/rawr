@@ -13,6 +13,12 @@ struct Terminal {
     colors: bool,
 }
 
+/// The real [`Output`] backend that writes to stdout and stderr.
+///
+/// Terminal width and colour support are probed once per stream at construction,
+/// so each [`Pipe`] renders to fit its own destination. Under the `progress`
+/// feature it owns the `indicatif` `MultiProgress` that draws any active bars;
+/// under the `confirm` feature it drives `dialoguer` prompts on stderr.
 pub struct PrintingOutput {
     terminal: PerPipe<Terminal>,
     verbosity: Verbosity,
@@ -20,6 +26,10 @@ pub struct PrintingOutput {
     multi: MultiProgress,
 }
 impl PrintingOutput {
+    /// Builds a backend, probing width and colour for each pipe from the live
+    /// terminals.
+    ///
+    /// `quiet` takes precedence over `verbose`: passing both yields [`Verbosity::Quiet`].
     pub fn new(color: clap::ColorChoice, verbose: bool, quiet: bool) -> Self {
         let stdout = Term::stdout();
         let stderr = Term::stderr();
@@ -57,6 +67,10 @@ impl PrintingOutput {
         }
     }
 
+    /// Decides whether to emit ANSI colour for `term` under a given `choice`.
+    ///
+    /// `Always` and `Never` answer directly; `Auto` returns true only when `term`
+    /// is an interactive terminal that reports colour support.
     pub fn term_has_colour(term: &Term, choice: &clap::ColorChoice) -> bool {
         match choice {
             clap::ColorChoice::Always => true,
@@ -67,6 +81,11 @@ impl PrintingOutput {
 }
 
 impl Output for PrintingOutput {
+    /// Drops lines not visible at the active [`Verbosity`], then writes the rest
+    /// to `pipe`.
+    ///
+    /// Under the `progress` feature the write suspends any live bars so output
+    /// is not interleaved with their redraws.
     fn print(&self, pipe: Pipe, line: &Line<'_>) {
         if !line.is_visible(self.verbosity) {
             return;
@@ -115,6 +134,8 @@ impl Output for PrintingOutput {
         bar
     }
 
+    /// Prompts on stderr, returning `Ok(false)` without asking when stderr is
+    /// not interactive.
     #[cfg(feature = "confirm")]
     fn confirm(&self, prompt: &str) -> Result<bool> {
         let stderr = &self.terminal.get(Pipe::Err).pipe;
@@ -128,6 +149,8 @@ impl Output for PrintingOutput {
         self.terminal.get(pipe).pipe.is_term()
     }
 
+    /// Enters the alternate screen on `pipe`, erroring when `pipe` is not an
+    /// interactive terminal.
     fn alt(&self, pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)> {
         if !self.is_interactive(pipe) {
             return Err(Error::AltScreenUnavailable("pipe"));

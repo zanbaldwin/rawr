@@ -1,7 +1,7 @@
 //! Buffering Output
 //!
-//! In-memory output backend for tests. Captures rendered lines per pipe
-//! so assertions can verify what the CLI would have printed.
+//! In-memory output backend for tests. Captures rendered lines per pipe so
+//! assertions can verify what the CLI would have printed.
 
 use super::{CursorGuard, Output, PerPipe};
 use crate::error::{Error, Result};
@@ -13,6 +13,8 @@ use indicatif::ProgressBar;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+/// In-memory [`Output`](crate::Output) backend for tests, capturing rendered
+/// lines per [`Pipe`](crate::Pipe).
 pub(crate) struct BufferingOutput {
     lines: PerPipe<Mutex<Vec<String>>>,
     verbosity: Verbosity,
@@ -49,6 +51,8 @@ impl BufferingOutput {
         self
     }
 
+    /// Queues a reply for a later [`confirm`](Self::confirm) call; replies are
+    /// consumed in order, defaulting to `false` once drained.
     pub(crate) fn push_confirm_response(&self, response: bool) {
         self.confirm_responses.lock().unwrap().push_back(response);
     }

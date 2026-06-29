@@ -2,17 +2,35 @@ use crate::Render;
 use console::Style;
 use std::borrow::{Borrow, Cow};
 
+/// How a [`Piece`] reacts to a width limit during rendering.
 pub enum Flexibility {
+    /// Never truncated; the piece always renders at its full display width.
     Fixed,
+    /// May be shortened with an ellipsis down to the given minimum display columns.
     Truncatable(usize),
 }
 
+/// A styled text fragment, the unit a [`Line`](crate::Line) is built from.
+///
+/// # Examples
+///
+/// ```
+/// use rawr_output::{Line, Piece, Render, PALETTE};
+/// let line = Line::new([
+///     Piece::fixed("hello", &PALETTE.heading),
+///     Piece::space(),
+///     Piece::plain("world"),
+/// ]);
+/// // Without colour, styling is dropped and pieces render verbatim.
+/// assert_eq!(&*line.render(None, false), "hello world");
+/// ```
 pub struct Piece<'a> {
     pub(crate) text: Cow<'a, str>,
     pub(crate) style: Style,
     pub(crate) flex: Flexibility,
 }
 impl<'a> Piece<'a> {
+    /// A styled piece that is never truncated.
     pub fn fixed(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>) -> Self {
         Self {
             text: text.into(),
@@ -21,6 +39,8 @@ impl<'a> Piece<'a> {
         }
     }
 
+    /// A piece that may shrink with an ellipsis, but never below `min_width`
+    /// display columns.
     pub fn flex(text: impl Into<Cow<'a, str>>, style: impl Borrow<Style>, min_width: usize) -> Self {
         Self {
             text: text.into(),
@@ -29,10 +49,12 @@ impl<'a> Piece<'a> {
         }
     }
 
+    /// A single unstyled space, for separating pieces on a [`Line`](crate::Line).
     pub fn space() -> Self {
         Self::plain(" ")
     }
 
+    /// An unstyled piece that is never truncated.
     pub fn plain(text: impl Into<Cow<'a, str>>) -> Self {
         Self {
             text: text.into(),
@@ -41,11 +63,14 @@ impl<'a> Piece<'a> {
         }
     }
 
+    /// The piece's display width in columns, measured ANSI-aware via the
+    /// `console` crate.
     pub(crate) fn width(&self) -> usize {
         console::measure_text_width(&self.text)
     }
 }
 
+/// `(text,)` builds a [`plain`](Piece::plain) piece.
 impl<'a, S> From<(S,)> for Piece<'a>
 where
     S: Into<Cow<'a, str>>,
@@ -54,6 +79,7 @@ where
         Self::plain(value.0)
     }
 }
+/// `(text, style)` builds a [`fixed`](Piece::fixed) piece.
 impl<'a, S, Y> From<(S, Y)> for Piece<'a>
 where
     S: Into<Cow<'a, str>>,
@@ -63,6 +89,8 @@ where
         Self::fixed(value.0, value.1)
     }
 }
+/// `(text, style, width)` builds a [`flex`](Piece::flex) piece when `width` is
+/// `Some`, otherwise a [`fixed`](Piece::fixed) one.
 impl<'a, S, Y, W> From<(S, Y, W)> for Piece<'a>
 where
     S: Into<Cow<'a, str>>,
@@ -78,6 +106,9 @@ where
     }
 }
 
+/// Renders the piece. A truncatable piece that exceeds `width` is shortened with
+/// a `…` ellipsis; when even its minimum will not fit the result is an empty
+/// string. The style is applied (with forced styling) only when `colour` is true.
 impl<'a> Render<'a> for Piece<'a> {
     fn render(&'a self, width: Option<usize>, colour: bool) -> Cow<'a, str> {
         let text = match (width, &self.flex) {

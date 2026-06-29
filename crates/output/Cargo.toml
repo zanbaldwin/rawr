@@ -1,0 +1,20 @@
+[package]
+name = "rawr-output"
+description = "Output handling for rawr"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+progress = ["dep:indicatif"]
+confirm = ["dep:dialoguer"]
+
+[dependencies]
+clap.workspace = true
+console.workspace = true
+dialoguer = { workspace = true, default-features = false, optional = true }
+indicatif = { workspace = true, default-features = false, optional = true }
+
+[dev-dependencies]

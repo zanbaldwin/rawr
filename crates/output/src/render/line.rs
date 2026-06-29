@@ -1,6 +1,6 @@
 use super::Render;
 use super::piece::{Flexibility, Piece};
-use crate::Verbosity;
+use crate::{Pipe, Verbosity};
 use std::borrow::Cow;
 
 /// How insistently a [`Line`] wants to be seen, filtered against the active
@@ -27,8 +27,8 @@ impl Loudness {
     }
 }
 
-/// One row of output, built from styled [`Piece`]s, carrying a [`Loudness`] and
-/// an optional plain-text fallback.
+/// One row of output, built from styled [`Piece`]s, carrying a [`Loudness`], a
+/// [`Pipe`] hint, and an optional plain-text fallback.
 ///
 /// The fallback is returned verbatim when colour is off (see the [`Render`] impl),
 /// letting a caller hand-write the uncoloured form rather than relying on piece
@@ -50,6 +50,8 @@ impl Loudness {
 pub struct Line<'a> {
     /// How insistently this line wants to be shown; see [`Loudness`].
     pub loudness: Loudness,
+    /// Which stream this line prefers; see [`Pipe`](crate::Pipe).
+    pub pipe_hint: Pipe,
     pieces: Vec<Piece<'a>>,
     fallback: Option<Cow<'a, str>>,
 }
@@ -58,6 +60,7 @@ impl<'a> Line<'a> {
     pub fn new(pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
         Self {
             loudness: Loudness::default(),
+            pipe_hint: Pipe::default(),
             pieces: pieces.into_iter().collect(),
             fallback: None,
         }
@@ -71,6 +74,12 @@ impl<'a> Line<'a> {
     /// Sets the [`Loudness`], returning the line for chaining.
     pub fn with_volume(mut self, loudness: Loudness) -> Self {
         self.loudness = loudness;
+        self
+    }
+
+    /// Sets the [`Pipe`](crate::Pipe) hint, returning the line for chaining.
+    pub fn with_hint(mut self, pipe: Pipe) -> Self {
+        self.pipe_hint = pipe;
         self
     }
 
@@ -468,6 +477,32 @@ mod tests {
         let line: Line = vec![Piece::plain("a"), Piece::plain("b")].into();
         assert_eq!(line.loudness, Loudness::Normal);
         assert_eq!(line.render(None, false), "ab");
+    }
+
+    #[test]
+    fn new_line_defaults_to_out_pipe() {
+        let line = Line::new([Piece::plain("a")]);
+        assert_eq!(line.pipe_hint, Pipe::Out);
+    }
+
+    #[test]
+    fn empty_and_default_lines_default_to_out_pipe() {
+        assert_eq!(Line::empty().pipe_hint, Pipe::Out);
+        assert_eq!(Line::default().pipe_hint, Pipe::Out);
+    }
+
+    #[test]
+    fn from_iterator_defaults_to_out_pipe() {
+        let line: Line = vec![Piece::plain("a")].into();
+        assert_eq!(line.pipe_hint, Pipe::Out);
+    }
+
+    #[test]
+    fn with_pipe_sets_pipe_and_chains() {
+        let line = Line::new([Piece::plain("a")]).with_hint(Pipe::Err);
+        assert_eq!(line.pipe_hint, Pipe::Err);
+        // The hint is not consumed yet, so rendering is unaffected.
+        assert_eq!(line.render(None, false), "a");
     }
 
     #[test]

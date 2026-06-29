@@ -49,9 +49,10 @@ pub use self::sink::{Output, PrintingOutput};
 pub use self::style::PALETTE;
 
 /// Which stream a line is written to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Pipe {
     /// Standard output.
+    #[default]
     Out,
     /// Standard error.
     Err,

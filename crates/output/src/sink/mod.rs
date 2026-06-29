@@ -55,7 +55,7 @@ impl<T> PerPipe<T> {
     }
 }
 
-pub(crate) struct CursorGuard<'a>(&'a Term);
+pub struct CursorGuard<'a>(&'a Term);
 impl<'a> CursorGuard<'a> {
     pub(crate) fn new(term: &'a Term) -> Self {
         #[cfg(feature = "progress")]

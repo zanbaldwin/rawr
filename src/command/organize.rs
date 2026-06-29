@@ -1,11 +1,11 @@
 use super::Command;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
-use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
 use clap::Args;
 use futures::StreamExt;
 use rawr_compress::cli::Preference;
 use rawr_library::organize::{Action, OrganizeEvent, organize};
+use rawr_output::{Line, Loudness, PALETTE, Piece, Pipe};
 use similar::{ChangeTag, TextDiff};
 use std::pin::pin;
 use std::process::ExitCode;

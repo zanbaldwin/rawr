@@ -1,7 +1,7 @@
-use crate::output::{Line, Loudness, PALETTE, Piece};
 use console::Style;
 use rawr_config::models::FandomConfig;
 use rawr_extract::models::Version;
+use rawr_output::{Line, Loudness, PALETTE, Piece};
 use rawr_storage::file::{FileInfo, HashState};
 
 use std::borrow::Cow;

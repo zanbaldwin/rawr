@@ -1,9 +1,9 @@
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
-use crate::output::Output;
 use rawr_cache::Repository;
 use rawr_config::models::FandomConfig;
 use rawr_library::PathGenerator;
+use rawr_output::Output;
 use rawr_render::StyleConfig;
 use rawr_storage::BackendHandle;
 use std::{str::FromStr, sync::Arc};

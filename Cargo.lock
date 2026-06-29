@@ -2488,6 +2488,7 @@ dependencies = [
  "rawr-config",
  "rawr-extract",
  "rawr-library",
+ "rawr-output",
  "rawr-render",
  "rawr-storage",
  "similar",
@@ -2578,6 +2579,16 @@ dependencies = [
  "tokio",
  "tracing",
  "upon",
+]
+
+[[package]]
+name = "rawr-output"
+version = "0.2.0-beta"
+dependencies = [
+ "clap",
+ "console",
+ "dialoguer",
+ "indicatif",
 ]
 
 [[package]]

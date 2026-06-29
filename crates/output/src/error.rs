@@ -1,4 +1,5 @@
 use std::fmt;
+use std::io::Error as IoError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -9,7 +10,7 @@ pub enum Error {
     /// The held value names the backend that refused the request.
     AltScreenUnavailable(&'static str),
     /// An I/O error from the terminal or an interactive prompt.
-    Io(std::io::Error),
+    Io(IoError),
 }
 
 impl fmt::Display for Error {
@@ -17,7 +18,7 @@ impl fmt::Display for Error {
         match self {
             Error::AltScreenUnavailable(what) => {
                 write!(f, "Cannot enter alternative screen; {what} is not an interactive terminal")
-            }
+            },
             Error::Io(e) => write!(f, "{e}"),
         }
     }
@@ -43,6 +44,6 @@ impl From<dialoguer::Error> for Error {
     fn from(e: dialoguer::Error) -> Self {
         // dialoguer::Error is effectively an io wrapper; stringify to stay
         // robust against its #[non_exhaustive] shape rather than matching.
-        Self::Io(std::io::Error::other(e.to_string()))
+        Self::Io(IoError::other(e.to_string()))
     }
 }

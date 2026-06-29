@@ -3,6 +3,7 @@ use rawr_cache::error::Error as CacheError;
 use rawr_compress::error::Error as CompressError;
 use rawr_config::error::Error as ConfigError;
 use rawr_library::error::Error as LibraryError;
+use rawr_output::Error as OutputError;
 use rawr_storage::error::Error as StorageError;
 use std::fmt;
 
@@ -63,6 +64,11 @@ impl From<StorageError> for Error {
 impl From<CompressError> for Error {
     fn from(e: CompressError) -> Self {
         Self(miette::Report::new(ExnDiagnostic::from_frame(e.frame())))
+    }
+}
+impl From<OutputError> for Error {
+    fn from(e: OutputError) -> Self {
+        Self(miette::Report::msg(e.to_string()))
     }
 }
 

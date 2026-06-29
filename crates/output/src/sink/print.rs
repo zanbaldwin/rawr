@@ -57,7 +57,7 @@ impl PrintingOutput {
         }
     }
 
-    pub(crate) fn term_has_colour(term: &Term, choice: &clap::ColorChoice) -> bool {
+    pub fn term_has_colour(term: &Term, choice: &clap::ColorChoice) -> bool {
         match choice {
             clap::ColorChoice::Always => true,
             clap::ColorChoice::Never => false,

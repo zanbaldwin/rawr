@@ -1,10 +1,10 @@
 use crate::error::Result;
 use crate::output::util::format_pair_pieces;
-use crate::output::{Line, Loudness, Output, PALETTE, Piece, Pipe};
 use console::Key;
 use rawr_cache::Repository;
 use rawr_config::models::FandomConfig;
 use rawr_extract::models::Version;
+use rawr_output::{Line, Loudness, Output, PALETTE, Piece, Pipe};
 use rawr_storage::file::{FileInfo, Processed};
 use std::sync::Arc;
 

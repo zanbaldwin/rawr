@@ -66,9 +66,9 @@ fn print_context(ctx: &AppContext, warnings: &[ConstraintViolation]) {
         .with_volume(Loudness::Shout)
     });
     for line in ctx.to_lines().into_iter().chain(warning_lines) {
-        ctx.output.print(Pipe::Err, &line);
+        ctx.output.print_to(Pipe::Err, &line);
     }
-    ctx.output.print(Pipe::Err, &Line::empty());
+    ctx.output.print_to(Pipe::Err, &Line::empty());
 }
 
 fn init_tracing() {

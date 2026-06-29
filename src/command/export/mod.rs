@@ -72,7 +72,7 @@ async fn resolve_work_refs(ctx: &ExportContext<'_>, works: &[WorkRef]) -> Vec<(V
         match resolve_one(ctx, work_ref).await {
             Ok(pair) => resolved.push(pair),
             Err(msg) => {
-                ctx.output.print(
+                ctx.output.print_to(
                     Pipe::Err,
                     &Line::new([("\u{2717} ", &PALETTE.danger).into(), (msg,).into()]).with_volume(Loudness::Shout),
                 );

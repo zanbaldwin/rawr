@@ -131,7 +131,7 @@ impl Command for ImportCommand {
                                 Import::Outdated(f, v) => (Reason::Outdated, f, v),
                             };
                             let line = format_pair_line(reason, file, version, &ctx.config.fandoms);
-                            ctx.output.print(Pipe::Out, &line);
+                            ctx.output.print_to(Pipe::Out, &line);
                             if should_delete && let Err(e) = tokio::fs::remove_file(&source_path).await {
                                 tracing::info!(path = %source_path.display(), error = %e, "failed to delete source file");
                             }
@@ -151,7 +151,7 @@ impl Command for ImportCommand {
         bar.finish();
 
         if discovered == 0 {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Err,
                 &Line::new([Piece::fixed("No importable files found", &PALETTE.warning)]).with_volume(Loudness::Shout),
             );
@@ -159,7 +159,7 @@ impl Command for ImportCommand {
         }
 
         if error_count > 0 {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Err,
                 &Line::new([
                     ("WARN: ", &PALETTE.warning).into(),

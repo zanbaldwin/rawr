@@ -59,7 +59,7 @@ impl Command for OrganizeCommand {
                         Action::AlreadyCorrect(_) => Loudness::Whisper,
                         Action::CleanedUp(_) => Loudness::Shout,
                     };
-                    ctx.output.print(Pipe::Out, &line.with_volume(loudness));
+                    ctx.output.print_to(Pipe::Out, &line.with_volume(loudness));
                     bar.inc(1);
                 },
                 Ok(OrganizeEvent::Complete) => {
@@ -73,7 +73,7 @@ impl Command for OrganizeCommand {
         }
 
         if error_count > 0 {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Err,
                 &Line::new([
                     ("WARN: ", &PALETTE.warning).into(),

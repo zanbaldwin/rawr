@@ -86,7 +86,7 @@ impl Output for PrintingOutput {
     ///
     /// Under the `progress` feature the write suspends any live bars so output
     /// is not interleaved with their redraws.
-    fn print(&self, pipe: Pipe, line: &Line<'_>) {
+    fn print_to(&self, pipe: Pipe, line: &Line<'_>) {
         if !line.is_visible(self.verbosity) {
             return;
         }

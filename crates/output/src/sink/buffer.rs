@@ -75,7 +75,7 @@ impl BufferingOutput {
 }
 
 impl Output for BufferingOutput {
-    fn print(&self, pipe: Pipe, line: &Line<'_>) {
+    fn print_to(&self, pipe: Pipe, line: &Line<'_>) {
         if !line.is_visible(self.verbosity) {
             return;
         }
@@ -93,6 +93,7 @@ impl Output for BufferingOutput {
         ProgressBar::hidden()
     }
 
+    #[cfg(feature = "confirm")]
     fn confirm(&self, prompt: &str) -> Result<bool> {
         self.confirm_prompts.lock().unwrap().push(prompt.to_string());
         Ok(self.confirm_responses.lock().unwrap().pop_front().unwrap_or(false))

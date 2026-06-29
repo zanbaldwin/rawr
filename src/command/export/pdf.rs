@@ -28,7 +28,7 @@ pub(crate) async fn export(mut ctx: ExportContext<'_>, works: Vec<(Version, Vec<
         let Some(file) = selected else {
             error_count += 1;
             let line = format_pair_line(Reason::Failed, None::<&File>, &version, ctx.fandoms);
-            ctx.output.print(Pipe::Err, &line);
+            ctx.output.print_to(Pipe::Err, &line);
             bar.inc(1);
             continue 'work;
         };
@@ -45,14 +45,14 @@ pub(crate) async fn export(mut ctx: ExportContext<'_>, works: Vec<(Version, Vec<
         let export_path = ctx.path_generator.generate(&version, "pdf", None)?;
         ctx.save.write(&export_path, &pdf_bytes).await?;
         let line = format_pair_line(Reason::Added, &file, &version, ctx.fandoms);
-        ctx.output.print(Pipe::Out, &line);
+        ctx.output.print_to(Pipe::Out, &line);
         bar.inc(1);
     }
 
     bar.finish();
 
     if error_count > 0 {
-        ctx.output.print(
+        ctx.output.print_to(
             Pipe::Err,
             &Line::new([
                 ("WARN: ", &PALETTE.warning).into(),

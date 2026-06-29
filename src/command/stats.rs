@@ -95,7 +95,7 @@ impl Command for StatsCommand {
         let stats = ctx.cache.stats(target, self.top).await?;
 
         if stats.works == 0 {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Out,
                 &Line::new([Piece::fixed(
                     "Your library is empty. Run `rawr scan` or `rawr import` to get started.",
@@ -139,7 +139,7 @@ impl Command for StatsCommand {
         let w = all_labels.iter().map(|l| l.len()).max().unwrap_or(0) + 2;
 
         // Section 1: Headline
-        ctx.output.print(
+        ctx.output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed("Your library:", &PALETTE.heading),
@@ -153,10 +153,10 @@ impl Command for StatsCommand {
             ])
             .with_volume(Loudness::Shout),
         );
-        ctx.output.print(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
+        ctx.output.print_to(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
 
         // Section 2: Key metrics
-        ctx.output.print(
+        ctx.output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed(label("Words", w), &PALETTE.label),
@@ -174,7 +174,7 @@ impl Command for StatsCommand {
         } else {
             String::new()
         };
-        ctx.output.print(
+        ctx.output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed(label("Storage", w), &PALETTE.label),
@@ -188,7 +188,7 @@ impl Command for StatsCommand {
             .with_volume(Loudness::Shout),
         );
 
-        ctx.output.print(
+        ctx.output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed(label("Completion", w), &PALETTE.label),
@@ -205,11 +205,11 @@ impl Command for StatsCommand {
             let items = stats.ratings.iter().map(|(r, c)| (r.as_deref().unwrap_or("NR"), *c));
             let mut pieces = vec![Piece::fixed(label("Ratings", w), &PALETTE.label)];
             pieces.extend(pieces_key_value(items, &PALETTE.highlight));
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         if let (Some(oldest), Some(newest)) = (stats.oldest_published, stats.newest_published) {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Out,
                 &Line::new([
                     Piece::fixed(label("Date range", w), &PALETTE.label),
@@ -228,25 +228,25 @@ impl Command for StatsCommand {
             let items = stats.languages.iter().take(self.top as usize).map(|(l, c)| (l.as_str(), *c));
             pieces.extend(pieces_key_value(items, &PALETTE.highlight));
             pieces.push(Piece::plain(")"));
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         // Section 3: Top tags
-        ctx.output.print(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
+        ctx.output.print_to(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
 
         if !display_fandoms.is_empty() {
             let pieces = row_with_counts(&fandom_label, w, &display_fandoms, &PALETTE.warning, fandom_unique);
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         if !stats.top_characters.is_empty() {
             let pieces = row_with_counts("Characters", w, &stats.top_characters, &PALETTE.success, None);
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         if !stats.top_relationships.is_empty() {
             let pieces = row_with_counts("Top ships", w, &stats.top_relationships, &PALETTE.accent, None);
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         if !stats.top_freeform_tags.is_empty() {
@@ -257,7 +257,7 @@ impl Command for StatsCommand {
                 &PALETTE.success,
                 Some(stats.unique_tag_count),
             );
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         if stats.series_count > 0 {
@@ -265,12 +265,12 @@ impl Command for StatsCommand {
                 Piece::fixed(label(&series_label, w), &PALETTE.label),
                 Piece::plain(format!("containing {} works", format_number(stats.works_in_series))),
             ];
-            ctx.output.print(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
+            ctx.output.print_to(Pipe::Out, &Line::new(pieces).with_volume(Loudness::Shout));
         }
 
         // Section 4: Sign-off
-        ctx.output.print(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
-        ctx.output.print(
+        ctx.output.print_to(Pipe::Out, &Line::empty().with_volume(Loudness::Shout));
+        ctx.output.print_to(
             Pipe::Out,
             &Line::new([Piece::fixed("Happy reading!", &PALETTE.muted)]).with_volume(Loudness::Shout),
         );

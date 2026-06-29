@@ -33,7 +33,7 @@ impl<'a> Picker<'a> {
                 "Interactive mode requires a terminal. Provide work references as arguments instead.",
                 &PALETTE.warning,
             )]);
-            output.print(PICKER_PIPE, &line.with_volume(Loudness::Shout));
+            output.print_to(PICKER_PIPE, &line.with_volume(Loudness::Shout));
             return Ok(Vec::new());
         }
         let works = WorkEntry::build(cache.list_recent_works_for_target(target, limit).await?);
@@ -42,7 +42,7 @@ impl<'a> Picker<'a> {
                 "No works found in the library. Run `rawr scan` or `rawr import` first.",
                 &PALETTE.warning,
             )]);
-            output.print(PICKER_PIPE, &line.with_volume(Loudness::Shout));
+            output.print_to(PICKER_PIPE, &line.with_volume(Loudness::Shout));
             return Ok(Vec::new());
         }
         let (_guard, term) = output.alt(PICKER_PIPE)?;
@@ -62,7 +62,7 @@ impl<'a> Picker<'a> {
             let viewport = (term_rows as usize).saturating_sub(1);
             state.adjust_scroll(viewport);
             let lines = state.render(viewport);
-            lines.iter().for_each(|l| output.print(PICKER_PIPE, l));
+            lines.iter().for_each(|l| output.print_to(PICKER_PIPE, l));
             lines_drawn = lines.len();
             let key = term.read_key().map_err(term_err)?;
             match state.handle_key(key, viewport) {

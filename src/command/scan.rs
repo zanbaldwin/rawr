@@ -50,7 +50,7 @@ impl Command for ScanCommand {
                         ScanEffort::Processed | ScanEffort::Recalculated => Reason::Added,
                     };
                     let line = format_pair_line(reason, &scan.file, &scan.version, &ctx.config.fandoms);
-                    ctx.output.print(Pipe::Out, &line);
+                    ctx.output.print_to(Pipe::Out, &line);
                     bar.inc(1);
                 },
                 Ok(ScanEvent::Complete) => {
@@ -65,7 +65,7 @@ impl Command for ScanCommand {
         }
 
         if error_count > 0 {
-            ctx.output.print(
+            ctx.output.print_to(
                 Pipe::Err,
                 &Line::new([
                     ("warning:", &PALETTE.warning).into(),

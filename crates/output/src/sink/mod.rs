@@ -18,10 +18,11 @@ use indicatif::ProgressBar;
 /// stream, the loudness decides whether the line survives the active
 /// [`Verbosity`](crate::Verbosity).
 pub trait Output: Send + Sync {
-    /// Render `line` to the stream named by `pipe`, dropping it if its
+    /// Render `line` to the stream named by `pipe`, ignoring the line's
+    /// [`pipe_hint`](crate::Line::pipe_hint), dropping it if its
     /// [`Loudness`](crate::Loudness) is not visible at the active
     /// [`Verbosity`](crate::Verbosity).
-    fn print(&self, pipe: Pipe, line: &Line<'_>);
+    fn print_to(&self, pipe: Pipe, line: &Line<'_>);
 
     /// Spinner for indeterminate progress; hidden in quiet mode.
     #[cfg(feature = "progress")]
@@ -47,6 +48,21 @@ pub trait Output: Send + Sync {
     /// the cursor for in-place updates on the current screen.
     fn alt(&self, pipe: Pipe) -> Result<(CursorGuard<'_>, &Term)>;
 }
+
+/// Ergonomic [`Output`] helpers; bring into scope with `use rawr_output::OutputExt`.
+///
+/// Implemented for every [`Output`] (including `dyn Output`) via a blanket impl,
+/// so callers keep the convenience surface without the backend trait having to
+/// carry generic, non-dyn-compatible methods.
+pub trait OutputExt: Output {
+    /// Render `line`, choosing the stream from `pipe`: pass a [`Pipe`], `None`,
+    /// or `Some(Pipe)`. `None` falls back to the line's
+    /// [`pipe_hint`](crate::Line::pipe_hint).
+    fn print(&self, pipe: impl Into<Option<Pipe>>, line: &Line<'_>) {
+        self.print_to(pipe.into().unwrap_or(line.pipe_hint), line);
+    }
+}
+impl<T: Output + ?Sized> OutputExt for T {}
 
 struct PerPipe<T> {
     out: T,

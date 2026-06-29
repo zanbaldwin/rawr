@@ -25,7 +25,7 @@ impl InitCommand {
             default_config_path().ok_or_else(|| miette::miette!("Could not determine platform config directory"))?;
 
         if config_path.exists() {
-            output.print(
+            output.print_to(
                 Pipe::Err,
                 &Line::new([
                     Piece::fixed("Configuration file already exists:", &PALETTE.danger),
@@ -34,7 +34,7 @@ impl InitCommand {
                 ])
                 .with_volume(Loudness::Shout),
             );
-            output.print(
+            output.print_to(
                 Pipe::Err,
                 &Line::new([Piece::fixed(
                     "Delete the existing file to generate a new one.",
@@ -55,8 +55,8 @@ impl InitCommand {
         sync_write(&config_path, &toml_content)
             .map_err(|e| miette::miette!("Failed to write config file '{}': {e}", config_path.display()))?;
 
-        output.print(Pipe::Out, &Line::empty());
-        output.print(
+        output.print_to(Pipe::Out, &Line::empty());
+        output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed("Config written to ", &PALETTE.success),
@@ -64,7 +64,7 @@ impl InitCommand {
             ])
             .with_volume(Loudness::Shout),
         );
-        output.print(
+        output.print_to(
             Pipe::Out,
             &Line::new([
                 Piece::fixed("Library directory: ", &PALETTE.success),
@@ -73,8 +73,8 @@ impl InitCommand {
             .with_volume(Loudness::Shout),
         );
 
-        output.print(Pipe::Out, &Line::empty());
-        output.print(
+        output.print_to(Pipe::Out, &Line::empty());
+        output.print_to(
             Pipe::Out,
             &Line::new([Piece::fixed(
                 "Run `rawr scan` or `rawr import` to get started.",

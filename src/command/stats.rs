@@ -1,11 +1,11 @@
 use super::Command;
 use crate::context::AppContext;
 use crate::error::Result;
-use crate::output::util::{format_bytes, format_number};
-use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
+use crate::output::{format_bytes, format_number};
 use clap::Args;
 use console::Style;
 use rawr_config::models::FandomConfig;
+use rawr_output::{Line, Loudness, PALETTE, Piece, Pipe};
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::process::ExitCode;

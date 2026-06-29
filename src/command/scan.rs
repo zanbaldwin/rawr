@@ -1,11 +1,11 @@
 use super::Command;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
-use crate::output::util::{Reason, format_pair_line};
-use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
+use crate::output::{Reason, format_pair_line};
 use clap::Args;
 use futures::StreamExt;
 use rawr_library::scan::{ScanEffort, ScanEvent, scan};
+use rawr_output::{Line, Loudness, PALETTE, Piece, Pipe};
 use rawr_storage::BackendHandle;
 use rawr_storage::backend::HtmlOnlyBackend;
 use std::pin::pin;

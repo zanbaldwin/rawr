@@ -1,8 +1,7 @@
 use super::Command;
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::{Error, Result};
-use crate::output::util::{Reason, format_pair_line};
-use crate::output::{Line, Loudness, PALETTE, Piece, Pipe};
+use crate::output::{Reason, format_pair_line};
 use async_stream::stream;
 use clap::Args;
 use directories::UserDirs;
@@ -11,6 +10,7 @@ use rawr_compress::Compression;
 use rawr_compress::cli::Preference;
 use rawr_library::RECOMMENDED_MAX_CONCURRENCY;
 use rawr_library::import::{Import, import_file};
+use rawr_output::{Line, Loudness, PALETTE, Piece, Pipe};
 use rawr_storage::backend::is_html_path;
 use std::path::PathBuf;
 use std::pin::pin;

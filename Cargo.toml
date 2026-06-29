@@ -41,6 +41,7 @@ rawr-compress = { path = "crates/compress", default-features = false }
 rawr-config = { path = "crates/config", default-features = false }
 rawr-extract = { path = "crates/extract", default-features = false }
 rawr-library = { path = "crates/library", default-features = false }
+rawr-output = { path = "crates/output", default-features = false }
 rawr-render = { path = "crates/render", default-features = false }
 rawr-storage = { path = "crates/storage", default-features = false }
 rawr-xhtml = { path = "crates/xhtml", default-features = false }
@@ -103,6 +104,7 @@ rawr-compress = { workspace = true, features = ["cli"] }
 rawr-config = { workspace = true }
 rawr-extract = { workspace = true }
 rawr-library = { workspace = true }
+rawr-output = { workspace = true, features = ["progress", "confirm"] }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
 similar = { workspace = true }

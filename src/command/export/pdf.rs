@@ -1,9 +1,9 @@
 use super::File;
 use super::context::ExportContext;
 use crate::error::Result;
-use crate::output::util::{Reason, format_pair_line};
-use crate::output::{Line, Loudness, PALETTE, Pipe};
+use crate::output::{Reason, format_pair_line};
 use rawr_extract::models::Version;
+use rawr_output::{Line, Loudness, PALETTE, Pipe};
 use rawr_render::{CssVariables, PdfRenderer};
 use std::process::ExitCode;
 use std::sync::Arc;

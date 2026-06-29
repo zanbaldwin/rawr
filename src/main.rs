@@ -10,10 +10,10 @@ use crate::cli::{Cli, Commands};
 use crate::command::Command;
 use crate::context::AppContext;
 use crate::error::Result;
-use crate::output::{IntoLines, Line, Loudness, PALETTE, Piece, Pipe, PrintingOutput};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use rawr_config::error::ConstraintViolation;
+use rawr_output::{IntoLines, Line, Loudness, PALETTE, Piece, Pipe, PrintingOutput};
 use std::process::ExitCode;
 use std::sync::Arc;
 

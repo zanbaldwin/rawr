@@ -1,12 +1,12 @@
 use crate::cli::Cli;
 use crate::error::Result;
-use crate::output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
 use rawr_cache::{Database, Repository};
 use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
 use rawr_config::models::TargetConfig;
 use rawr_config::{Config, Loader};
 use rawr_library::{Context as LibraryContext, PathGenerator};
+use rawr_output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
 use rawr_storage::BackendHandle;
 #[cfg(feature = "s3")]
 use rawr_storage::backend::S3Backend;

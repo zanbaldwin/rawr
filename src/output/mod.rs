@@ -1,27 +1,11 @@
 mod picker;
-mod render;
-mod sink;
-mod style;
-pub mod util;
+mod util;
 
 pub use self::picker::Picker;
-pub use self::render::line::{Line, Loudness};
-pub use self::render::piece::Piece;
-pub use self::render::{IntoLines, Render};
-#[cfg(test)]
-pub(crate) use self::sink::BufferingOutput;
-pub use self::sink::{Output, PrintingOutput};
-pub use self::style::PALETTE;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Pipe {
-    Out,
-    Err,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Verbosity {
-    Quiet,
-    Normal,
-    Verbose,
-}
+pub use self::util::Reason;
+pub use self::util::format_bytes;
+pub use self::util::format_error;
+pub use self::util::format_number;
+pub use self::util::format_pair_fallback;
+pub use self::util::format_pair_line;
+pub use self::util::format_pair_pieces;

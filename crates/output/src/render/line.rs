@@ -11,7 +11,7 @@ pub enum Loudness {
     Shout,
 }
 impl Loudness {
-    pub(crate) fn is_visible(&self, verbosity: Verbosity) -> bool {
+    pub fn is_visible(&self, verbosity: Verbosity) -> bool {
         match self {
             Self::Whisper => matches!(verbosity, Verbosity::Verbose),
             Self::Normal => !matches!(verbosity, Verbosity::Quiet),
@@ -22,12 +22,12 @@ impl Loudness {
 
 #[derive(Default)]
 pub struct Line<'a> {
-    pub(crate) loudness: Loudness,
+    pub loudness: Loudness,
     pieces: Vec<Piece<'a>>,
     fallback: Option<Cow<'a, str>>,
 }
 impl<'a> Line<'a> {
-    pub(crate) fn new(pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
+    pub fn new(pieces: impl IntoIterator<Item = Piece<'a>>) -> Self {
         Self {
             loudness: Loudness::default(),
             pieces: pieces.into_iter().collect(),
@@ -35,25 +35,25 @@ impl<'a> Line<'a> {
         }
     }
 
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 
-    pub(crate) fn with_volume(mut self, loudness: Loudness) -> Self {
+    pub fn with_volume(mut self, loudness: Loudness) -> Self {
         self.loudness = loudness;
         self
     }
 
-    pub(crate) fn with_fallback<S: Into<Cow<'a, str>>>(mut self, fallback: impl Into<Option<S>>) -> Self {
+    pub fn with_fallback<S: Into<Cow<'a, str>>>(mut self, fallback: impl Into<Option<S>>) -> Self {
         self.fallback = fallback.into().map(|s| s.into());
         self
     }
 
-    pub(crate) fn is_visible(&self, verbosity: Verbosity) -> bool {
+    pub fn is_visible(&self, verbosity: Verbosity) -> bool {
         self.loudness.is_visible(verbosity)
     }
 
-    pub(crate) fn push(&mut self, piece: Piece<'a>) {
+    pub fn push(&mut self, piece: Piece<'a>) {
         self.pieces.push(piece)
     }
 }

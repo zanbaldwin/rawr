@@ -16,5 +16,3 @@ clap.workspace = true
 console.workspace = true
 dialoguer = { workspace = true, default-features = false, optional = true }
 indicatif = { workspace = true, default-features = false, optional = true }
-
-[dev-dependencies]

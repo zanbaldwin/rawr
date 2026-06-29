@@ -1,8 +1,8 @@
 use crate::error::Result;
-use crate::output::{Line, Loudness, Output, PALETTE, Piece, Pipe};
 use clap::Args;
 use directories::UserDirs;
 use rawr_config::default_config_path;
+use rawr_output::{Line, Loudness, Output, PALETTE, Piece, Pipe};
 use std::fs::write as sync_write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

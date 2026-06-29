@@ -7,8 +7,6 @@ pub use self::error::{Error, Result};
 pub use self::render::line::{Line, Loudness};
 pub use self::render::piece::Piece;
 pub use self::render::{IntoLines, Render};
-#[cfg(test)]
-pub(crate) use self::sink::BufferingOutput;
 pub use self::sink::{Output, PrintingOutput};
 pub use self::style::PALETTE;
 

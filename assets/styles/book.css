@@ -1147,6 +1147,11 @@ h6 {
     hyphens: auto;
     -webkit-hyphens: auto;
     hyphenate-limit-chars: 6 3 2;
+    /* Unbreakable runs (NBSP chains, ***** dividers) wider than the page trigger
+     * Chrome's print shrink-to-fit, scaling the whole document down (~0.66).
+     * Must be `anywhere`: word-break:break-all won't break U+00A0 runs.
+     */
+    overflow-wrap: anywhere;
 }
 
 #chapters>.userstuff p,

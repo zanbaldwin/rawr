@@ -81,7 +81,8 @@ ThoseDarnNuns](https://archiveofourown.org/works/81555506)!)
 | `rawr scan`         | Re-scan your library and extract/update metadata                              |
 | `rawr organize`     | Sort and rename files by fandom/series/title (with compression)               |
 | `rawr stats` (`s`)  | See your library at a glance                                                  |
-| `rawr export`       | Render works to PDF/ebook _(coming soon)_                                     |
+| `rawr export pdf`   | Render works to PDF                                                           |
+| `rawr export epub`  | Render works to ebook _(coming soon)_                                         |
 | `rawr push`         | Sync to S3-compatible cloud storage _(coming soon)_                           |
 | `rawr pull`         | Help! I dropped my laptop in the bath! Gimme my library back! _(coming soon)_ |
 
@@ -95,7 +96,7 @@ of smut makes you nervous.
 2. `rawr init` to create a configuration file
 3. Download some fics from AO3 in HTML format
 4. `rawr import` (defaults to searching for files in your Downloads folder)
-5. Go outside for a walk, you haven't left the apartment in days.
+5. Go outside for a walk, you probably haven't left the apartment in a few days.
 
 # The Technical Stuff
 

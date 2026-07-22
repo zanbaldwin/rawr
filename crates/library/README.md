@@ -15,7 +15,7 @@ let target_compression: Compression = todo!();
 
 // WHEN compress is sync THEN:
 let async_reader = backend.reader(&source.path).await?;
-// Good fucking god. I think I've just discovered that, even if I add async
+// Good grief. I think I've just discovered that, even if I add async
 // reader/writer methods to the backend trait, compress being purely async is
 // the WORST. I need to go back and add (gated?) async methods.
 let (version, compressed_bytes) = tokio::task::spawn_blocking(move || {

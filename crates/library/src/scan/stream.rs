@@ -68,7 +68,7 @@ fn scan_inner<'a>(
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
     // This was using FuturesUnordered before, but it polled all the futures
     // on the same thread. Async is great and all that, but what's the
-    // fucking point if it's still single-threaded? This way we can delegate
+    // point if it's still single-threaded? This way we can delegate
     // to Tokio's (BOO TOKIO) work scheduler.
     let mut processing = JoinSet::new();
     stream!({
@@ -85,7 +85,7 @@ fn scan_inner<'a>(
         //    complex because streams are hard, yo.
         // ... guess which one we're gonna implement, kiddos!
 
-        // Well fuck, processing needs to return a future for tokio::select
+        // Well, great. Processing needs to return a future for tokio::select
         // to work. So much for "a queue of files will be easy!". Do I really
         // want to push thousands and thousands of futures onto the heap?
         // How many bytes do state machines require?? They could possibly
@@ -114,7 +114,7 @@ fn scan_inner<'a>(
         // out the type signature of that.
 
         // This is ending up waaay harder than I thought it was going to be, I'm neck-deep
-        // in docs.rs pages, and this entire time VSCode has highlighted this entire fucking
+        // in docs.rs pages, and this entire time VSCode has highlighted this entire
         // function as "unreachable statement" so I don't even get IDE completions while writing it.
 
         // The code compiles! The LSP is giving me type information again! Hallelujah!

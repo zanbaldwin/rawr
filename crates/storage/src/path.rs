@@ -74,7 +74,7 @@ impl ValidPath {
                     components.push(s.to_str().ok_or_raise(|| ErrorKind::InvalidPath(path.display().to_string()))?)
                 },
                 Component::CurDir | Component::RootDir => {},
-                // Yeah, fuck off Windows.
+                // Yeah, no thanks, Windows.
                 Component::Prefix(_) => exn::bail!(ErrorKind::InvalidPath(path.display().to_string())),
                 Component::ParentDir => {
                     if components.pop().is_none() {

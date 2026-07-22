@@ -6,8 +6,8 @@
 //! doing things. So I've hardcoded `&ValidatedPath` into the trait, because
 //! that's what the majority of the methods need.
 //!
-//! But I want to get `impl TryValidatePath` working, because fuck you Rust,
-//! that's why. I also don't want to do this in the main trait, because honestly
+//! But I want to get `impl TryValidatePath` working, because I refuse to let
+//! Rust win, that's why. I also don't want to do this in the main trait, because honestly
 //! they never need to take ownership. I'm just doing this because the compiler
 //! told me no. It'll be a learning exercise.
 

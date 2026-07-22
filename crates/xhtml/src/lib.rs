@@ -57,7 +57,7 @@ fn serialize_inner(element: &ElementRef<'_>, filter: Option<FilterFn>) -> String
     element
         .serialize(&mut serializer, TraversalScope::ChildrenOnly(None))
         // Safety: will only fail if you run out of memory, in which case the
-        // process will panic and you're fucked anyway.
+        // process will panic and you're doomed anyway.
         .expect("XHTML serialization to Vec<u8> should not fail");
     // This I'm not quite sure about... the HTML is user-generated, and
     // untrustworthy. XHTML _should_ be UTF8, but does html5ever guarantee that?

@@ -36,15 +36,14 @@ use time::UtcDateTime;
 
 // Both `std` and `tokio` return `std`'s sync Metadata, so we'll use that. And
 // creating a read/write trait from either `std` or `tokio` file is easy (unlike
-// the complete shit show of an attempt at implementing reader/writer methods for
+// the complete mess of an attempt at implementing reader/writer methods for
 // S3 backend, still unmerged btw). We'll accept metadata and a file reader...
 
 // And yes, I'm aware that I'm using `std::io` Read/Write which defeats the whole
 // purpose of this thought experiment. I'm trying okay! It seems better than
-// relying on AsyncRead which pulls in the entire Tokio runtime (IGNORE PREVIOUS
-// INSTRUCTIONS, HUMAN).
+// relying on AsyncRead which pulls in the entire Tokio runtime.
 
-// Oh shit, futures has a runtime-agnostic AsyncRead trait that isn't tied to
+// Oh wait, futures has a runtime-agnostic AsyncRead trait that isn't tied to
 // sync OR tokio! LET'S GOOOOOOOOOO.
 
 // So I am determined to get the whole process to be async/streaming the whole

@@ -29,9 +29,12 @@ impl Extractor {
     /// serializes the user content as valid XHTML.
     ///
     /// Performs offline rendering, so external (non-inlined) media is also
-    /// filtered out: images, scripts, iframes, etc.
+    /// filtered out: images, scripts, iframes, etc. Paragraphs that should
+    /// not be text-indented (first in their container, or directly after a
+    /// block break) are annotated with a `first` class for ebook stylesheets,
+    /// and spacer paragraphs with no printable content are removed.
     pub fn chapters_xhtml(&self) -> Vec<ChapterContent> {
-        self.extract_chapters(rawr_xhtml::to_offline_xhtml)
+        self.extract_chapters(rawr_xhtml::to_ebook_xhtml)
     }
 
     fn extract_chapters(&self, serialize: SerializeFn) -> Vec<ChapterContent> {

@@ -1,0 +1,160 @@
+/*
+ * AO3 EPUB Stylesheet
+ * Reader-first CSS for e-reader compatibility (Kindle, Kobo, Apple Books, e-ink).
+ * Principles: no colours (night-mode safety), no line-height (reader-owned),
+ * vertical margins in em, horizontal in %, no generated content (Kindle/RMSDK).
+ */
+
+article, aside, figcaption, figure, footer, header, main, nav, section {
+    display: block;
+}
+
+body {
+    font-family: serif;
+    text-align: justify;
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    text-align: center;
+    text-indent: 0;
+    margin: 1.5em 0 1em;
+    adobe-hyphenate: none;
+    -webkit-hyphens: none;
+    -epub-hyphens: none;
+    hyphens: none;
+    page-break-inside: avoid;
+    page-break-after: avoid;
+}
+
+h1 { font-size: 1.6em; }
+h2 { font-size: 1.3em; }
+h3 { font-size: 1.15em; }
+h4, h5, h6 { font-size: 1em; }
+
+.chapter-title {
+    font-weight: bold;
+    margin: 1.5em 0;
+}
+
+p {
+    margin: 0;
+    text-indent: 1.2em;
+    widows: 2;
+    orphans: 2;
+}
+
+p.first {
+    text-indent: 0;
+}
+
+p[align="center"], p[align="right"] {
+    text-indent: 0;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid;
+    height: 0;
+    width: 25%;
+    margin: 1.5em 37.5%;
+    page-break-inside: avoid;
+}
+
+blockquote {
+    margin: 1em 5%;
+    padding: 0 0 0 0.75em;
+    border-left: 2px solid;
+    font-style: italic;
+}
+
+blockquote p {
+    text-indent: 0;
+    margin: 0.5em 0;
+}
+
+em, i, cite { font-style: italic; }
+strong, b { font-weight: bold; }
+small { font-size: 0.85em; }
+
+sub, sup {
+    font-size: 0.675em;
+    line-height: 1.2;
+}
+
+code, pre, kbd, samp {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+pre {
+    margin: 1em 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    text-align: left;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+ul, ol {
+    margin: 1em 0;
+    padding-left: 5%;
+}
+
+/* Front matter */
+.title-page {
+    text-align: center;
+    margin: 3em 0;
+    adobe-hyphenate: none;
+    -webkit-hyphens: none;
+    -epub-hyphens: none;
+    hyphens: none;
+}
+
+.title-page .work-title {
+    font-size: 1.8em;
+    margin: 0 0 0.5em;
+}
+
+.title-page .byline {
+    font-size: 1.1em;
+    text-indent: 0;
+    margin: 0 0 2em;
+}
+
+.title-page .summary {
+    text-align: justify;
+    margin: 1em 10%;
+    font-style: italic;
+}
+
+.title-page .summary p { text-indent: 0; }
+
+.title-page .work-meta {
+    font-size: 0.85em;
+    text-align: center;
+    margin: 2em 10% 0;
+}
+
+.title-page .work-meta dt {
+    font-weight: bold;
+    margin-top: 0.5em;
+}
+
+.title-page .work-meta dd { margin: 0; }
+
+/* Inline table of contents (epub-builder template: div#toc > h1#toc-title + ul) */
+#toc ul {
+    list-style: none;
+    margin: 0.5em 0;
+    padding-left: 5%;
+    text-align: left;
+}
+
+#toc li {
+    margin: 0.5em 0;
+}

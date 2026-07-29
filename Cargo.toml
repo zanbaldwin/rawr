@@ -10,20 +10,21 @@ license = "EUPL-1.2"
 version = "0.2.0-beta"
 
 [workspace.dependencies]
-async-compression = "^0.4.41"
+async-compression = "^0.4.42"
 async-stream = "^0.3.6"
 async-trait = "^0.1"
 blake3 = "^1.8"
 brotli = "^8.0"
 bzip2 = "^0.6.0"
-clap = "^4.5"
+clap = "^4.6"
 console = "^0.16.2"
 crc32fast = "^1.5"
 derive_more = "^2.1"
 dialoguer = { version = "^0.12.0", default-features = false }
 directories = "^6.0"
+epub-builder = "^0.8.3"
 exn = "^0.3"
-fast_html2md = "^0.0.58"
+fast_html2md = "^0.0.61"
 figment = "^0.10.19"
 flate2 = "^1.1"
 futures = { version = "^0.3.30", default-features = false }
@@ -52,12 +53,12 @@ rust-embed = "^8.11"
 scraper = { git = "https://github.com/rust-scraper/scraper", rev = "bca18390fa23e367ba3980e930454f87c6b13131", default-features = false }
 serde = "^1.0"
 serde_json = "^1.0"
-similar = "^2.7"
+similar = "^3.1"
 sqlx = { version = "^0.8.6", default-features = false }
 tempfile = "^3.25"
 tendril = "^0.5.0"
 time = "^0.3.47"
-tokio = { version = "^1.49", default-features = false }
+tokio = { version = "^1.52", default-features = false }
 tokio-util = { version = "^0.7", default-features = false }
 tracing = "^0.1.0"
 tracing-subscriber = { version = "^0.3.22", default-features = false }
@@ -78,7 +79,7 @@ name = "rawr"
 path = "src/main.rs"
 
 [features]
-default = ["s3", "pdf"]
+default = ["s3", "pdf", "epub"]
 brotli = ["rawr-compress/brotli"]
 bzip3 = ["rawr-compress/bzip3"]
 xz = ["rawr-compress/xz"]
@@ -88,7 +89,7 @@ _sync = []
 s3 = ["_sync", "rawr-storage/s3"]
 _render = ["dep:rawr-render"]
 pdf = ["_render", "rawr-render/pdf", "rawr-render/metadata"]
-epub = ["_render"]
+epub = ["_render", "rawr-render/epub"]
 
 [dependencies]
 async-stream = { workspace = true }

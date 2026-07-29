@@ -115,8 +115,9 @@ cargo build --release
 - [x] Library management (`scan`, `import`, `organize`)
 - [x] Library statistics
 - [x] Render works to PDF `export pdf` (basic)
-- [ ] Render works to epub `export epub` (basic)
-- [x] Config initialization `init` (basic)
+- [x] Render works to epub `export epub` (basic; _needs more testing_)
+- [ ] Render works to mobi and/or azw3 (basic)
+- [x] Config initialization `init`
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation
 - [x] Render multiple works (interactive)

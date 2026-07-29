@@ -7,13 +7,14 @@ license.workspace = true
 version.workspace = true
 
 [features]
-default = ["pdf"]
+default = ["epub", "pdf"]
+epub = ["dep:epub-builder", "dep:rawr-extract", "rawr-extract/chapters"]
 metadata = ["dep:rawr-extract"]
 pdf = ["dep:which"]
-epub = ["dep:rawr-extract", "rawr-extract?/chapters"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
+epub-builder = { workspace = true, optional = true }
 exn = { workspace = true }
 rawr-extract = { workspace = true, optional = true }
 rslug = { workspace = true }
@@ -24,3 +25,4 @@ which = { workspace = true, optional = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
+time = { workspace = true }

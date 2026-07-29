@@ -4,6 +4,7 @@
 //! documents into other formats. Each format lives behind its own feature flag:
 //!
 //! - **`pdf`** — Chrome/Chromium-based HTML-to-PDF rendering ([`pdf`] module)
+//! - **`epub`** — EPUB archive generation ([`epub`] module)
 //!
 //! The shared [`StyleConfig`] builder and [`CssVariables`] types are always
 //! available for assembling CSS stylesheets used by any renderer.
@@ -28,11 +29,15 @@
 //! # }
 //! ```
 
+#[cfg(feature = "epub")]
+pub mod epub;
 pub mod error;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 mod style;
 
+#[cfg(feature = "epub")]
+pub use crate::epub::EpubRenderer;
 #[cfg(feature = "pdf")]
 pub use crate::pdf::PdfRenderer;
 pub use crate::style::{StyleConfig, variables::CssVariables};

@@ -29,7 +29,7 @@ enum ExportFormat {
     /// Render works to PDF using Chrome/Chromium
     #[cfg(feature = "pdf")]
     Pdf,
-    /// Render works to EPUB (not yet implemented)
+    /// Render works to EPUB
     #[cfg(feature = "epub")]
     Epub,
 }

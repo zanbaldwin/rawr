@@ -33,6 +33,14 @@ pub enum ErrorKind {
     AssetNotFound(#[error(not(source))] String),
     /// An underlying I/O operation failed (file read, temp file creation, etc.).
     Io,
+    /// EPUB archive generation failed.
+    #[cfg(feature = "epub")]
+    #[display("failed to generate EPUB")]
+    EpubGeneration,
+    /// No chapter content found in the HTML document.
+    #[cfg(feature = "epub")]
+    #[display("no chapter content found in HTML document")]
+    NoChapterContent,
 }
 
 impl ErrorKind {

@@ -154,4 +154,9 @@ impl StyleConfig {
     pub(crate) fn write_style_to(&self, w: &mut impl Write) -> IoResult<usize> {
         self.write_all_to(w, (b"<style>", b"</style>\n"))
     }
+
+    #[cfg(feature = "epub")]
+    pub(crate) fn write_raw_to(&self, w: &mut impl Write) -> IoResult<usize> {
+        self.write_all_to(w, None::<(&[u8], &[u8])>)
+    }
 }

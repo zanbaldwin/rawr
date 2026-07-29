@@ -84,7 +84,7 @@ impl Compression {
     pub fn compress_into(&self, input: &[u8], output: &mut Vec<u8>) -> Result<usize> {
         // Compressed output will become corrupt if there is already data in the
         // buffer, plus it messes with the "number of bytes written" output value.
-        output.truncate(0);
+        output.clear();
         let size = match self {
             Compression::None => {
                 output.extend_from_slice(input);
@@ -152,7 +152,7 @@ impl Compression {
         // a non-zero buffer, it will mess with the "number of bytes written"
         // output value... not to mention that it will mess with extraction and
         // is considered undefined behaviour.
-        output.truncate(0);
+        output.clear();
         let size = match self {
             Compression::None => {
                 output.extend_from_slice(input);

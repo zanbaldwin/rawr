@@ -12,6 +12,7 @@ version = "0.2.0-beta"
 [workspace.dependencies]
 async-compression = "^0.4.42"
 async-stream = "^0.3.6"
+axum = { version = "^0.8.9", default-features = false }
 async-trait = "^0.1"
 blake3 = "^1.8"
 brotli = "^9.0"

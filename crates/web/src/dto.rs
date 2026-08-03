@@ -693,6 +693,26 @@ pub struct ApiMeta {
     pub generated_at: i64,
 }
 
+/// Progress/result of the (single-flight) library scan.
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(TS), ts(export))]
+pub struct ScanStatusDto {
+    pub running: bool,
+    /// Files found so far by discovery.
+    pub discovered: u32,
+    /// Files fully handled (including cache hits).
+    pub processed: u32,
+    /// Files that produced new or recalculated metadata.
+    pub changed: u32,
+    pub errors: u32,
+    /// Unix seconds; null when a scan has never run.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub started_at: Option<i64>,
+    /// Unix seconds; null while running or never run.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub finished_at: Option<i64>,
+}
+
 /// Storage sizes — the only stats the client cannot derive from the index.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(TS), ts(export))]

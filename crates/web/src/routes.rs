@@ -20,6 +20,7 @@ pub fn build(state: AppState) -> Router {
         // axum's default body limit is 2 MiB — far too small for fic HTML.
         .route("/uploads", post(handlers::upload::upload).route_layer(DefaultBodyLimit::max(64 * 1024 * 1024)))
         .route("/stats", get(handlers::stats::stats))
+        .route("/scan", get(handlers::scan::status).post(handlers::scan::trigger))
         // Explicit fallback: without it, unmatched paths inside the nest
         // fall through to the OUTER router's fallback and skip the JSON
         // guard below.

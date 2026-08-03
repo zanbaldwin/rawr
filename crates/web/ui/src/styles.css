@@ -524,6 +524,16 @@ main {
   color: var(--fg-muted);
 }
 
+.file-target {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 0.7rem;
+}
+
 .update-toast {
   display: flex;
   align-items: center;

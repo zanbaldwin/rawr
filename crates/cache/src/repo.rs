@@ -47,6 +47,21 @@ pub struct LibraryStats {
     pub top_freeform_tags: Vec<(String, u64)>,
 }
 
+/// A cheap change-detection token for a storage target's cache contents.
+///
+/// Two tokens comparing equal means the target *almost certainly* hasn't
+/// changed — the aggregates are chosen so that imports, deletions, and
+/// re-compressions each move at least one field. It is not a cryptographic
+/// guarantee; callers needing certainty should compare content hashes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SnapshotToken {
+    pub file_count: i64,
+    pub latest_discovered_at: i64,
+    pub total_file_size: i64,
+    pub version_count: i64,
+    pub latest_extracted_at: i64,
+}
+
 /// Result of checking whether a file exists in the cache.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExistenceResult {
@@ -370,6 +385,41 @@ impl Repository {
             .or_raise(|| ErrorKind::Database)?;
         let pairs = rows.into_iter().map(|r| r.try_into());
         group_by_work(pairs)
+    }
+
+    /// List every work in a target, grouped and ordered for browsing.
+    ///
+    /// Works are ordered by `MAX(files.discovered_at)` (most recently added
+    /// first, `work_id` descending as the tie-break). Within each work,
+    /// versions are sorted best-first using `Version::partial_cmp`, so the
+    /// first version of each work is the one a consumer should present.
+    pub async fn list_works_for_target(&self, target: impl AsRef<str>) -> Result<Vec<WorkResult>> {
+        let rows: Vec<FullJoinRow> = sqlx::query_as(include_str!("../queries/list_versions_for_target.sql"))
+            .bind(target.as_ref())
+            .fetch_all(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        let pairs = rows.into_iter().map(|r| r.try_into());
+        group_by_work(pairs)
+    }
+
+    /// Compute a cheap change-detection token for a target.
+    ///
+    /// Five aggregate values (see [`SnapshotToken`]) served almost entirely
+    /// by existing indexes; suitable for calling on every request.
+    pub async fn snapshot_token(&self, target: impl AsRef<str>) -> Result<SnapshotToken> {
+        let row: (i64, i64, i64, i64, i64) = sqlx::query_as(include_str!("../queries/snapshot_token.sql"))
+            .bind(target.as_ref())
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok(SnapshotToken {
+            file_count: row.0,
+            latest_discovered_at: row.1,
+            total_file_size: row.2,
+            version_count: row.3,
+            latest_extracted_at: row.4,
+        })
     }
 
     /// List all files for a specific target.
@@ -1184,5 +1234,187 @@ mod tests {
         assert_eq!(limited.len(), 2);
         assert_eq!(limited[0].0, 300);
         assert_eq!(limited[1].0, 200);
+    }
+
+    #[tokio::test]
+    async fn test_list_works_for_target_orders_versions_and_works() {
+        let repo = make_repository().await;
+        let jan = Date::from_calendar_date(2024, time::Month::January, 1).unwrap();
+        let jun = Date::from_calendar_date(2024, time::Month::June, 1).unwrap();
+        let t = |secs: i64| UtcDateTime::from_unix_timestamp(secs).unwrap();
+
+        // Work 100: two versions, the June one is better (newer last_modified).
+        let old =
+            make_test_version_with(100, "hash_100a", "Work 100", jan, 1000, ChapterCount { written: 3, total: None });
+        let new =
+            make_test_version_with(100, "hash_100b", "Work 100", jun, 2000, ChapterCount { written: 6, total: None });
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "a.html.bz2", "hash_100a", t(1_000)), &old).await.unwrap();
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "b.html.bz2", "hash_100b", t(2_000)), &new).await.unwrap();
+        // Work 200: discovered more recently, so it lists first.
+        let solo =
+            make_test_version_with(200, "hash_200", "Work 200", jan, 500, ChapterCount { written: 1, total: Some(1) });
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "c.html.bz2", "hash_200", t(3_000)), &solo).await.unwrap();
+
+        let works = repo.list_works_for_target(DEFAULT_TARGET).await.unwrap();
+        assert_eq!(works.len(), 2);
+        assert_eq!(works[0].0, 200);
+        assert_eq!(works[1].0, 100);
+        assert_eq!(works[1].1[0].0.hash, "hash_100b");
+        assert_eq!(works[1].1[1].0.hash, "hash_100a");
+    }
+
+    #[tokio::test]
+    async fn test_list_works_for_target_demotes_deletion_notice() {
+        let repo = make_repository().await;
+        let jan = Date::from_calendar_date(2024, time::Month::January, 1).unwrap();
+        let jun = Date::from_calendar_date(2024, time::Month::June, 1).unwrap();
+        let t = |secs: i64| UtcDateTime::from_unix_timestamp(secs).unwrap();
+
+        // The full fic: 10 chapters, 100k of content.
+        let mut full = make_test_version_with(
+            100,
+            "hash_full",
+            "Real Fic",
+            jan,
+            50_000,
+            ChapterCount { written: 10, total: None },
+        );
+        full.length = 100_000;
+        // The "found God" replacement: newer, but 1 chapter and tiny.
+        let mut notice = make_test_version_with(
+            100,
+            "hash_notice",
+            "Real Fic",
+            jun,
+            50,
+            ChapterCount { written: 1, total: Some(1) },
+        );
+        notice.length = 500;
+
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "full.html.bz2", "hash_full", t(1_000)), &full)
+            .await
+            .unwrap();
+        repo.upsert(&make_test_file_with(DEFAULT_TARGET, "notice.html.bz2", "hash_notice", t(2_000)), &notice)
+            .await
+            .unwrap();
+
+        let works = repo.list_works_for_target(DEFAULT_TARGET).await.unwrap();
+        assert_eq!(works.len(), 1);
+        // Best-first must keep the full fic on top despite the notice being newer.
+        assert_eq!(works[0].1[0].0.hash, "hash_full");
+        assert_eq!(works[0].1[1].0.hash, "hash_notice");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_token_moves_on_change() {
+        let repo = make_repository().await;
+        let empty = repo.snapshot_token(DEFAULT_TARGET).await.unwrap();
+        assert_eq!(empty.file_count, 0);
+        assert_eq!(empty.version_count, 0);
+
+        let version = make_test_version(100, "hash_a");
+        let file = make_test_file_with(DEFAULT_TARGET, "a.html.bz2", "hash_a", UtcDateTime::now());
+        repo.upsert(&file, &version).await.unwrap();
+
+        let after = repo.snapshot_token(DEFAULT_TARGET).await.unwrap();
+        assert_ne!(empty, after);
+        assert_eq!(after.file_count, 1);
+        // Stable when nothing changes.
+        assert_eq!(after, repo.snapshot_token(DEFAULT_TARGET).await.unwrap());
+        // Blind to other targets.
+        let other = repo.snapshot_token("elsewhere").await.unwrap();
+        assert_eq!(other.file_count, 0);
+        // ... but version aggregates are global, so `elsewhere` still moved.
+        assert_eq!(other.version_count, 1);
+    }
+
+    /// Measurement harness, not a test: prints per-column byte tallies for
+    /// the web index payload against the real library cache, so the
+    /// summaries-in-or-out decision is made on data rather than estimates.
+    ///
+    /// Run explicitly:
+    /// `cargo test -p rawr-cache measure_real_library_index_size -- --ignored --nocapture`
+    /// Override the cache path with `RAWR_CACHE_DB`, the target with `RAWR_TARGET`.
+    #[tokio::test]
+    #[ignore = "measurement harness against the real library cache"]
+    async fn measure_real_library_index_size() {
+        use std::collections::HashSet;
+
+        let default_db = format!("{}/.local/share/rawr/cache.db", std::env::var("HOME").expect("HOME set"));
+        let path = std::env::var("RAWR_CACHE_DB").unwrap_or(default_db);
+        let db = Database::connect(&path).await.expect("open cache db");
+        let repo = Repository::from(&db);
+        let target = match std::env::var("RAWR_TARGET") {
+            Ok(t) => t,
+            Err(_) => {
+                repo.list_scanned_targets().await.unwrap().into_iter().next().expect("at least one scanned target")
+            },
+        };
+        let works = repo.list_works_for_target(&target).await.unwrap();
+
+        let (mut titles, mut summaries, mut summary_count) = (0usize, 0usize, 0usize);
+        let mut fandoms: HashSet<String> = HashSet::new();
+        let mut authors: HashSet<(String, Option<String>)> = HashSet::new();
+        let mut tags: HashSet<String> = HashSet::new();
+        let mut series: HashSet<u64> = HashSet::new();
+        let mut series_bytes = 0usize;
+        let (mut fandom_refs, mut author_refs, mut tag_refs, mut series_refs) = (0usize, 0usize, 0usize, 0usize);
+
+        for (_, versions) in &works {
+            let (best, _) = &versions[0];
+            let m = &best.metadata;
+            titles += m.title.len();
+            if let Some(s) = &m.summary {
+                summaries += s.len();
+                summary_count += 1;
+            }
+            fandom_refs += m.fandoms.len();
+            author_refs += m.authors.len();
+            tag_refs += m.tags.len();
+            series_refs += m.series.len();
+            for f in &m.fandoms {
+                fandoms.insert(f.name.clone());
+            }
+            for a in &m.authors {
+                authors.insert((a.username.clone(), a.pseudonym.clone()));
+            }
+            for t in &m.tags {
+                tags.insert(t.name.clone());
+            }
+            for s in &m.series {
+                if series.insert(s.id) {
+                    series_bytes += s.name.len();
+                }
+            }
+        }
+
+        let count = works.len();
+        let dict_bytes = |set: &HashSet<String>| set.iter().map(String::len).sum::<usize>();
+        let fandom_bytes = dict_bytes(&fandoms);
+        let tag_bytes = dict_bytes(&tags);
+        let author_bytes = authors.iter().map(|(u, p)| u.len() + p.as_deref().map_or(0, str::len)).sum::<usize>();
+        // JSON overhead estimates: ~7 bytes per numeric cell across 13 numeric
+        // columns, ~4 bytes per u32 dictionary reference, 64+2 per cid,
+        // 8+2 per crc32 hash.
+        let numeric = count * 13 * 7;
+        let refs = (fandom_refs + author_refs + tag_refs + series_refs) * 4;
+        let ids = count * (66 + 10);
+        let strings = titles + summaries + fandom_bytes + tag_bytes + author_bytes + series_bytes;
+        println!("== index sizing for target `{target}` ==");
+        println!("works: {count} (best versions only)");
+        println!("titles:            {titles:>10} B");
+        println!("summaries:         {summaries:>10} B  ({summary_count} works have one)");
+        println!("fandom dict:       {fandom_bytes:>10} B  ({} unique, {fandom_refs} refs)", fandoms.len());
+        println!("author dict:       {author_bytes:>10} B  ({} unique, {author_refs} refs)", authors.len());
+        println!("tag dict:          {tag_bytes:>10} B  ({} unique, {tag_refs} refs)", tags.len());
+        println!("series dict:       {series_bytes:>10} B  ({} unique, {series_refs} refs)", series.len());
+        println!("cid + crc32 cols:  {ids:>10} B");
+        println!("numeric cols est:  {numeric:>10} B");
+        println!("dict ref cols est: {refs:>10} B");
+        println!("---");
+        println!("string total:      {strings:>10} B");
+        println!("rough JSON total:  {:>10} B (strings + ids + numeric + refs)", strings + ids + numeric + refs);
+        println!("without summaries: {:>10} B", strings - summaries + ids + numeric + refs);
+        db.close().await;
     }
 }

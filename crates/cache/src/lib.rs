@@ -22,7 +22,7 @@ mod repo;
 pub use crate::db::Database;
 #[cfg(feature = "stats")]
 pub use crate::repo::LibraryStats;
-pub use crate::repo::{ExistenceResult, Repository};
+pub use crate::repo::{ExistenceResult, Repository, SnapshotToken};
 use rawr_extract::models as extract;
 use rawr_storage::file as storage;
 

@@ -1,6 +1,7 @@
 //! Request handlers.
 
 pub mod index;
+pub mod works;
 
 use crate::dto::ApiMeta;
 use crate::error::{ErrorKind, WebError};

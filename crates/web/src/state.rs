@@ -43,6 +43,9 @@ pub struct Inner {
     pub fandoms: FandomConfig,
     pub dry_run: bool,
     pub index: IndexCache,
+    /// Single-entry render cache keyed `"{cid}-{renderer version}"` —
+    /// Safari's range probe re-requests the same EPUB immediately.
+    pub epub_cache: tokio::sync::RwLock<Option<(String, axum::body::Bytes)>>,
 }
 
 impl AppState {
@@ -68,6 +71,7 @@ impl AppState {
             fandoms: config.fandoms.clone(),
             dry_run,
             index: IndexCache::new(),
+            epub_cache: tokio::sync::RwLock::new(None),
         })))
     }
 }

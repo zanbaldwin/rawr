@@ -14,6 +14,8 @@ pub fn build(state: AppState) -> Router {
         .route("/meta", get(handlers::meta))
         .route("/index", get(handlers::index::index))
         .route("/works/{work_id}", get(handlers::works::detail))
+        .route("/works/{work_id}/download.epub", get(handlers::download::best_epub))
+        .route("/versions/{cid}/download.epub", get(handlers::download::version_epub))
         // Explicit fallback: without it, unmatched paths inside the nest
         // fall through to the OUTER router's fallback and skip the JSON
         // guard below.

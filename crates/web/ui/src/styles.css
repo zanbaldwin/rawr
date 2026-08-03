@@ -429,6 +429,25 @@ main {
   color: var(--fg-muted);
 }
 
+.update-toast {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.update-toast button {
+  border: 1px solid var(--accent-fg);
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius);
+  padding: 0.25rem 0.75rem;
+  min-height: 36px;
+}
+
 /* ---------- upload ---------- */
 
 .upload {

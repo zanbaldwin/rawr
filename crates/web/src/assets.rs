@@ -39,6 +39,10 @@ pub async fn serve(uri: Uri) -> Response {
     };
     let cache_control = if MANIFEST.contains(path) {
         "public, max-age=31536000, immutable"
+    } else if path == "sw.js" {
+        // The service worker script drives its own update cycle; a cached
+        // copy would pin users to old bundles for a day.
+        "no-cache"
     } else {
         // Icons, manifest.webmanifest — replaceable, but not hot.
         "public, max-age=86400"

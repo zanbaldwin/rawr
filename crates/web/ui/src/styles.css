@@ -204,6 +204,101 @@ main {
   }
 }
 
+.fandom-select {
+  position: relative;
+}
+
+.fandom-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.fandom-control input {
+  flex: 1;
+  min-width: 8rem;
+  min-height: 34px;
+  border: none;
+  background: transparent;
+  padding: 0.2rem;
+}
+
+.fandom-control input:focus {
+  outline: none;
+}
+
+.fandom-select:focus-within .fandom-control {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.fandom-chip {
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  min-height: 32px;
+  font-size: 0.85rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fandom-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(50vh, 20rem);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.fandom-panel li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.6rem;
+  min-height: 44px;
+  border-radius: calc(var(--radius) - 4px);
+  cursor: pointer;
+}
+
+.fandom-panel li.is-highlighted {
+  background: var(--bg);
+}
+
+.fandom-panel li.is-selected .fandom-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.fandom-name {
+  overflow-wrap: anywhere;
+}
+
+.fandom-count {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  flex: none;
+}
+
 .result-count {
   color: var(--fg-muted);
   font-size: 0.85rem;

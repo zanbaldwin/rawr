@@ -87,8 +87,9 @@ export interface Library {
 export interface Query {
   /** Lowercased needle; empty = no text filter. */
   q: string;
-  /** Index into `dict.fandoms`. */
-  fandom: number;
+  /** Indices into `dict.fandoms`; empty = any. A work matches when it
+   * belongs to ANY selected fandom (OR semantics). */
+  fandoms: number[];
   /** Rating code. */
   rating: number;
   /** 1 = complete only, 0 = incomplete only. */
@@ -96,4 +97,4 @@ export interface Query {
   sort: SortKey;
 }
 
-export const DEFAULT_QUERY: Query = { q: "", fandom: -1, rating: -1, complete: -1, sort: "recent" };
+export const DEFAULT_QUERY: Query = { q: "", fandoms: [], rating: -1, complete: -1, sort: "recent" };

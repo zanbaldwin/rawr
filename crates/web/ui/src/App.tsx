@@ -6,6 +6,7 @@ import { formatBytes } from "./format";
 import { useStore } from "./hooks/useStore";
 import { useLibrary, useSyncState } from "./hooks/useSync";
 import { routeStore } from "./router";
+import { applyUpdate, updateStore } from "./sw/register";
 import { AboutScreen } from "./screens/AboutScreen";
 import { ListScreen } from "./screens/ListScreen";
 import { StatsScreen } from "./screens/StatsScreen";
@@ -17,12 +18,26 @@ export function App() {
     <ErrorBoundary label="the app">
       <Header />
       <OfflineBanner />
+      <UpdateToast />
       <main>
         <ErrorBoundary label="this screen">
           <Screen />
         </ErrorBoundary>
       </main>
     </ErrorBoundary>
+  );
+}
+
+function UpdateToast() {
+  const { waiting } = useStore(updateStore);
+  if (!waiting) return null;
+  return (
+    <div className="update-toast">
+      <span>A new version is ready.</span>
+      <button type="button" onClick={applyUpdate}>
+        Reload
+      </button>
+    </div>
   );
 }
 

@@ -37,6 +37,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 flate2 = { workspace = true }
+futures = { workspace = true, features = ["std"] }
 rawr-app = { workspace = true, features = ["render"] }
 rawr-cache = { workspace = true }
 # All four optional codecs are MANDATORY here, not features: a codec that is

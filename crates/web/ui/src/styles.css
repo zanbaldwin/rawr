@@ -429,6 +429,52 @@ main {
   color: var(--fg-muted);
 }
 
+/* ---------- upload ---------- */
+
+.upload {
+  padding: 1rem max(1rem, env(safe-area-inset-right)) 1rem max(1rem, env(safe-area-inset-left));
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.upload input[type="file"] {
+  width: 100%;
+  padding: 1.5rem 1rem;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.upload-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.upload-jobs li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.upload-name {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.upload-state {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.upload-jobs progress {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 /* ---------- states ---------- */
 
 .full-state {

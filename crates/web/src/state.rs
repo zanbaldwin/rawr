@@ -46,6 +46,8 @@ pub struct Inner {
     /// Single-entry render cache keyed `"{cid}-{renderer version}"` —
     /// Safari's range probe re-requests the same EPUB immediately.
     pub epub_cache: tokio::sync::RwLock<Option<(String, axum::body::Bytes)>>,
+    /// Single-flight library scan bookkeeping.
+    pub scan: crate::handlers::scan::ScanTracker,
 }
 
 impl AppState {
@@ -72,6 +74,7 @@ impl AppState {
             dry_run,
             index: IndexCache::new(),
             epub_cache: tokio::sync::RwLock::new(None),
+            scan: crate::handlers::scan::ScanTracker::default(),
         })))
     }
 }

@@ -149,8 +149,14 @@ export function WorkScreen({ library, id }: Props) {
                   <td>{formatWords(version.metadata.words)}</td>
                   <td>{formatBytes(version.length)}</td>
                   <td className="path-cell">
+                    {/* (target, path) is the files table's primary key —
+                        the path alone repeats when a version lives on
+                        several targets. */}
                     {version.files.map((file) => (
-                      <code key={file.path}>{file.path}</code>
+                      <code key={`${file.target}:${file.path}`}>
+                        <span className="file-target">{file.target}</span>
+                        {file.path}
+                      </code>
                     ))}
                   </td>
                   <td>

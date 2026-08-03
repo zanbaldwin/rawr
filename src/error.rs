@@ -1,4 +1,5 @@
 use miette::Diagnostic;
+use rawr_app::error::Error as AppError;
 use rawr_cache::error::Error as CacheError;
 use rawr_compress::error::Error as CompressError;
 use rawr_config::error::Error as ConfigError;
@@ -34,6 +35,12 @@ impl From<miette::Report> for Error {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Self(miette::Report::msg(e.to_string()))
+    }
+}
+
+impl From<AppError> for Error {
+    fn from(e: AppError) -> Self {
+        Self(miette::Report::new(ExnDiagnostic::from_frame(e.frame())))
     }
 }
 

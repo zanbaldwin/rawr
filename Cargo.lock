@@ -2501,6 +2501,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawr-app"
+version = "0.2.0-beta"
+dependencies = [
+ "derive_more",
+ "exn",
+ "rawr-compress",
+ "rawr-config",
+ "rawr-library",
+ "rawr-render",
+ "rawr-storage",
+]
+
+[[package]]
 name = "rawr-asyncutils"
 version = "0.2.0-beta"
 dependencies = [
@@ -2540,6 +2553,7 @@ dependencies = [
  "futures",
  "indicatif",
  "miette",
+ "rawr-app",
  "rawr-cache",
  "rawr-compress",
  "rawr-config",

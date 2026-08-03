@@ -3,22 +3,14 @@ use crate::error::Result;
 use rawr_cache::{Database, Repository};
 use rawr_compress::Compression;
 use rawr_config::error::ConstraintViolation;
-use rawr_config::models::TargetConfig;
 use rawr_config::{Config, Loader};
-use rawr_library::{Context as LibraryContext, PathGenerator};
+use rawr_library::Context as LibraryContext;
 use rawr_output::{IntoLines, Line, Loudness, Output, PALETTE, Piece};
 use rawr_storage::BackendHandle;
-#[cfg(feature = "s3")]
-use rawr_storage::backend::S3Backend;
-use rawr_storage::backend::{LocalBackend, ReadOnlyBackend};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) enum BackendPurpose {
-    Import,
-    Export,
-    Trash,
-}
+pub(crate) use rawr_app::BackendPurpose;
 
 pub(crate) struct AppContext {
     pub config: Config,
@@ -54,78 +46,20 @@ impl AppContext {
 }
 impl AppContext {
     pub(crate) async fn get_backend_by_purpose(&self, purpose: BackendPurpose) -> Result<Option<BackendHandle>> {
-        let target_name = match purpose {
-            BackendPurpose::Import => Some(&self.config.library.targets.import),
-            BackendPurpose::Export => Some(&self.config.library.targets.export),
-            BackendPurpose::Trash => self.config.library.targets.trash.as_ref(),
-        };
-        let Some(target_name) = target_name else {
-            return Ok(None);
-        };
-        self.get_backend_by_name(target_name).await.map(Some)
+        Ok(rawr_app::backend_by_purpose(&self.config, purpose, self.dry_run).await?)
     }
 
     pub(crate) async fn get_backend_by_name(&self, name: impl AsRef<str>) -> Result<BackendHandle> {
-        let target_config = self
-            .config
-            .targets
-            .get(name.as_ref())
-            .ok_or_else(|| miette::miette!("Config `targets.{}` is not defined.", name.as_ref()))?;
-        let mut backend: BackendHandle = match target_config {
-            TargetConfig::Local { directory, auto_create } => {
-                let path = directory.relative();
-                Arc::new(LocalBackend::new(name.as_ref(), path.to_string_lossy(), *auto_create)?)
-            },
-            #[cfg(not(feature = "s3"))]
-            TargetConfig::S3 { .. } => {
-                return Err(miette::miette!(
-                    help = "Recompile with the `s3` feature enabled to use S3 backends.",
-                    "Target `{}` is configured as S3, but S3 support is not available.",
-                    name.as_ref(),
-                ))?;
-            },
-            #[cfg(feature = "s3")]
-            TargetConfig::S3 {
-                bucket,
-                region,
-                endpoint,
-                key_id,
-                key_secret,
-            } => Arc::new(
-                S3Backend::new(
-                    name.as_ref(),
-                    bucket,
-                    None::<String>,
-                    region,
-                    endpoint.as_deref(),
-                    key_id.as_ref(),
-                    key_secret.as_ref(),
-                )
-                .await?,
-            ),
-        };
-        if self.dry_run {
-            backend = Arc::new(ReadOnlyBackend::new(backend));
-        }
-        Ok(backend)
+        Ok(rawr_app::backend_by_name(&self.config, name, self.dry_run).await?)
     }
 
     pub async fn get_library_context(
         &self,
         compression: impl Into<Option<Compression>>,
     ) -> Result<Arc<LibraryContext>> {
-        let fandoms = self.config.fandoms.clone();
-        let generator = self.config.library.path_templates.import.parse::<PathGenerator>()?;
-        let generator = generator.with_fandom_selector(move |fandom_list| {
-            let names: Vec<&str> = fandom_list.iter().map(|f| f.name.as_str()).collect();
-            fandoms.preferred_fandom(&names).map(String::from)
-        });
-        Ok(Arc::new(LibraryContext::new(
-            generator,
-            compression.into(),
-            self.get_backend_by_purpose(BackendPurpose::Trash).await?,
-            self.dry_run,
-        )))
+        Ok(Arc::new(
+            rawr_app::library_context(&self.config, compression, self.dry_run).await?,
+        ))
     }
 }
 

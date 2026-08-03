@@ -1,0 +1,21 @@
+[package]
+name = "rawr-app"
+description = "Shared configuration-to-runtime wiring for rawr binaries"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+s3 = ["rawr-storage/s3"]
+render = ["dep:rawr-render"]
+
+[dependencies]
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+rawr-compress = { workspace = true }
+rawr-config = { workspace = true }
+rawr-library = { workspace = true }
+rawr-render = { workspace = true, optional = true }
+rawr-storage = { workspace = true }

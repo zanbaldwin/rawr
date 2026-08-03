@@ -6,7 +6,8 @@ use rawr_library::PathGenerator;
 use rawr_output::Output;
 use rawr_render::StyleConfig;
 use rawr_storage::BackendHandle;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
+use std::sync::Arc;
 
 /// A user-supplied reference to a work for export.
 #[derive(Clone, Debug)]
@@ -47,12 +48,7 @@ pub(crate) struct ExportContext<'a> {
 }
 impl<'a> ExportContext<'a> {
     pub(crate) async fn try_from_app(ctx: &'a AppContext) -> Result<Self> {
-        let fandoms = ctx.config.fandoms.clone();
-        let path_generator = ctx.config.library.path_templates.export.parse::<PathGenerator>()?;
-        let path_generator = path_generator.with_fandom_selector(move |fandom_list| {
-            let names: Vec<&str> = fandom_list.iter().map(|f| f.name.as_str()).collect();
-            fandoms.preferred_fandom(&names).map(String::from)
-        });
+        let path_generator = rawr_app::export_path_generator(&ctx.config)?;
 
         Ok(Self {
             load: ctx.get_backend_by_purpose(BackendPurpose::Import).await?.ok_or_else(|| {
@@ -66,9 +62,7 @@ impl<'a> ExportContext<'a> {
                 )
             })?,
             cache: Arc::new(ctx.cache.clone()),
-            styles: ctx.config.library.styles.iter().try_fold(StyleConfig::new(), |c, i| {
-                if let Some(n) = i.strip_prefix("builtin:") { c.with_builtin(n) } else { c.with_file(i) }
-            })?,
+            styles: rawr_app::style_config(&ctx.config.library.styles, [])?,
             path_generator,
             output: Arc::clone(&ctx.output),
             fandoms: &ctx.config.fandoms,

@@ -1378,6 +1378,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
+name = "globset"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07c34a9410465b45bd9787443bc7370f37735bad04b0f0cd57ff1a3186c98988"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "gloo-timers"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3020,6 +3033,7 @@ dependencies = [
  "rawr-render",
  "rawr-storage",
  "rstest",
+ "rust-embed",
  "serde",
  "serde_json",
  "time",
@@ -3028,6 +3042,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ts-rs",
+ "vite-chunks",
 ]
 
 [[package]]
@@ -3281,6 +3296,7 @@ version = "8.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ffa149f6aa81b58a5b3011d01a857c4ed12c7a732d2c51947a4c7c692185f0"
 dependencies = [
+ "globset",
  "sha2 0.11.0",
  "walkdir",
 ]
@@ -4588,6 +4604,14 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vite-chunks"
+version = "0.2.0-beta"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "walkdir"

@@ -18,10 +18,13 @@ pub fn build(state: AppState) -> Router {
         // guard below.
         .fallback(|| async { axum::http::StatusCode::NOT_FOUND })
         .layer(axum::middleware::map_response(json_error_guard));
-    Router::new()
-        .nest("/api/v1", api)
-        // Placeholder until the SPA embed lands; becomes the shell +
-        // asset routes + SPA fallback.
-        .route("/", get(|| async { "rawr-web: API only (frontend not built yet)" }))
-        .with_state(state)
+    let router = Router::new().nest("/api/v1", api);
+    // One fallback covers `/`, `/assets/*`, icons, and SPA deep links.
+    #[cfg(ui_built)]
+    let router = router.fallback(crate::assets::serve);
+    #[cfg(not(ui_built))]
+    let router = router.fallback(|| async {
+        "rawr-web: API only — frontend not built. Run `make assets`, or `npm run dev` on :5173."
+    });
+    router.with_state(state)
 }

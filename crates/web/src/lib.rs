@@ -6,6 +6,8 @@
 //! index (`dto::LibraryIndex`); the client filters in memory and works
 //! offline from a cached copy.
 
+#[cfg(ui_built)]
+pub mod assets;
 pub mod dto;
 pub mod error;
 pub mod handlers;

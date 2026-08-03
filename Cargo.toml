@@ -66,6 +66,7 @@ tracing = "^0.1.0"
 ts-rs = "^12.0"
 tracing-subscriber = { version = "^0.3.22", default-features = false }
 upon = { version = "^0.10.0", default-features = false }
+vite-chunks = { path = "crates/vite", default-features = false }
 which = "^8.0"
 zstd = "^0.14"
 

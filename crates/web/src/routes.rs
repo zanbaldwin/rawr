@@ -4,7 +4,8 @@ use crate::error::json_error_guard;
 use crate::handlers;
 use crate::state::AppState;
 use axum::Router;
-use axum::routing::get;
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{get, post};
 
 pub fn build(state: AppState) -> Router {
     // Every `/api/v1` response is JSON, always — including axum's own
@@ -16,6 +17,8 @@ pub fn build(state: AppState) -> Router {
         .route("/works/{work_id}", get(handlers::works::detail))
         .route("/works/{work_id}/download.epub", get(handlers::download::best_epub))
         .route("/versions/{cid}/download.epub", get(handlers::download::version_epub))
+        // axum's default body limit is 2 MiB — far too small for fic HTML.
+        .route("/uploads", post(handlers::upload::upload).route_layer(DefaultBodyLimit::max(64 * 1024 * 1024)))
         // Explicit fallback: without it, unmatched paths inside the nest
         // fall through to the OUTER router's fallback and skip the JSON
         // guard below.

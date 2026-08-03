@@ -8,6 +8,7 @@ import { useLibrary, useSyncState } from "./hooks/useSync";
 import { routeStore } from "./router";
 import { AboutScreen } from "./screens/AboutScreen";
 import { ListScreen } from "./screens/ListScreen";
+import { UploadScreen } from "./screens/UploadScreen";
 import { WorkScreen } from "./screens/WorkScreen";
 
 export function App() {
@@ -68,7 +69,7 @@ function Screen() {
     case "work":
       return <WorkScreen library={library} id={route.id} />;
     case "upload":
-      return <p className="empty-state">Uploads are on the way — this screen lands with the upload endpoint.</p>;
+      return <UploadScreen />;
     case "stats":
       return <p className="empty-state">Stats are on the way.</p>;
     case "about":

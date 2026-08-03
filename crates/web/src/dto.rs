@@ -639,6 +639,22 @@ fn version_dto(version: &Version, files: &[File], is_best: bool) -> Result<Versi
 |  Meta/stats/upload  |
 \* ================= */
 
+/// The JSON error body every `/api/v1` error response carries — the
+/// contract is "every API response is JSON, always".
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(TS), ts(export))]
+pub struct ApiError {
+    /// Stable machine slug (`not_found`, `too_large`, …) from an
+    /// exhaustive match — never `Display` output.
+    pub kind: String,
+    pub status: u16,
+    pub message: String,
+    /// The underlying error chain, outermost first. This is a no-auth LAN
+    /// tool for its own author: reading the real cause on the iPad beats
+    /// hiding it.
+    pub chain: Vec<String>,
+}
+
 /// Tiny "is the NAS awake, has anything changed" probe.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(TS), ts(export))]

@@ -14,9 +14,29 @@ s3 = ["_sync", "rawr-storage/s3", "rawr-app/s3"]
 # --features ts`); release builds carry no ts-rs proc macro.
 ts = ["dep:ts-rs"]
 
+[[bin]]
+name = "rawr-web"
+path = "src/main.rs"
+
 [dependencies]
+axum = { workspace = true, features = [
+    "http1",
+    "tokio",
+    "json",
+    "query",
+    "form",
+    "multipart",
+    "matched-path",
+    "tracing",
+] }
+blake3 = { workspace = true }
+# Direct flate2/brotli at moderate levels: rawr-compress hard-codes maximum
+# levels by design, and q11 brotli over a ~6 MB index is seconds of latency.
+brotli = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
+flate2 = { workspace = true }
 rawr-app = { workspace = true, features = ["render"] }
 rawr-cache = { workspace = true }
 # All four optional codecs are MANDATORY here, not features: a codec that is
@@ -31,7 +51,10 @@ rawr-storage = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true, features = ["compat", "io"] }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["std", "fmt", "ansi", "env-filter"] }
 ts-rs = { workspace = true, optional = true }
 
 [dev-dependencies]

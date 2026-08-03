@@ -69,7 +69,9 @@ impl EpubRenderer {
         Ok(path)
     }
 
-    fn write(&self, input: &EpubInput, writer: &mut impl Write) -> Result<()> {
+    /// Generate an EPUB into any writer — the path for rendering straight
+    /// into a `Vec<u8>` (no tempfile) when serving over the network.
+    pub fn write(&self, input: &EpubInput, writer: &mut impl Write) -> Result<()> {
         if input.chapters.is_empty() {
             exn::bail!(ErrorKind::NoChapterContent);
         }

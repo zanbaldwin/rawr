@@ -1,3 +1,7 @@
+[env]
+# ts-rs writes TypeScript bindings here (committed; drift-checked in CI).
+TS_RS_EXPORT_DIR = { value = "crates/web/ui/src/types/generated", relative = true }
+
 [alias]
 # Use string instead of array to guarantee alias replaces whatever is in
 # global config or errors, rather than concatenating.

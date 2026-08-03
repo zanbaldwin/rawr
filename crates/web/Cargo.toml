@@ -1,0 +1,38 @@
+[package]
+name = "rawr-web"
+description = "LAN web API + app for browsing your rawr library"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = ["s3"]
+_sync = []
+s3 = ["_sync", "rawr-storage/s3", "rawr-app/s3"]
+# Generates the committed TypeScript bindings (`cargo test -p rawr-web
+# --features ts`); release builds carry no ts-rs proc macro.
+ts = ["dep:ts-rs"]
+
+[dependencies]
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+rawr-app = { workspace = true, features = ["render"] }
+rawr-cache = { workspace = true }
+# All four optional codecs are MANDATORY here, not features: a codec that is
+# not compiled in makes FileRow -> File conversion fail, so works stored with
+# it become unlistable and break the whole index. bzip3 needs clang.
+rawr-compress = { workspace = true, features = ["brotli", "bzip3", "xz", "zstd"] }
+rawr-config = { workspace = true }
+rawr-extract = { workspace = true, features = ["chapters", "serde"] }
+rawr-library = { workspace = true }
+rawr-render = { workspace = true, features = ["epub"] }
+rawr-storage = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
+tracing = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest = { workspace = true }

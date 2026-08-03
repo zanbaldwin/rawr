@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_QUERY } from "../types";
 import type { Query } from "../types";
 import { decode } from "./decode";
-import { syntheticIndex } from "./decode.test";
+import { syntheticIndex } from "./fixture";
 import { fandomCounts, runQuery } from "./query";
 
 const lib = decode(syntheticIndex());

@@ -2,3 +2,8 @@
 /tests/mock/
 /tests/*.rs
 /.worktrees/
+
+# Web frontend build artefacts
+/crates/web/ui/node_modules/
+/crates/web/ui/dist/*
+!/crates/web/ui/dist/.gitkeep

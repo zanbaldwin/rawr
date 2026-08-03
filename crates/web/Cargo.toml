@@ -57,5 +57,11 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["std", "fmt", "ansi", "env-filter"] }
 ts-rs = { workspace = true, optional = true }
 
+rust-embed = { workspace = true, features = ["include-exclude"] }
+vite-chunks = { workspace = true }
+
+[build-dependencies]
+vite-chunks = { workspace = true }
+
 [dev-dependencies]
 rstest = { workspace = true }

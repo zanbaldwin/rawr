@@ -475,6 +475,81 @@ main {
   width: 100%;
 }
 
+/* ---------- stats ---------- */
+
+.stats {
+  padding: 1rem max(1rem, env(safe-area-inset-right)) 1rem max(1rem, env(safe-area-inset-left));
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.stats h2 {
+  font-size: 1rem;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+.stat-tile {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.stat-label {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+}
+
+.count-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.count-table td {
+  padding: 0.3rem 0.5rem 0.3rem 0;
+  vertical-align: middle;
+}
+
+.count-name {
+  overflow-wrap: anywhere;
+}
+
+.count-value {
+  text-align: right;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.count-bar {
+  width: 40%;
+}
+
+.count-bar span {
+  display: block;
+  height: 0.5rem;
+  border-radius: 4px;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
 /* ---------- states ---------- */
 
 .full-state {

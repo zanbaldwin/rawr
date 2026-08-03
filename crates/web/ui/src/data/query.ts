@@ -4,11 +4,14 @@
 import type { Csr, Library, Query } from "../types";
 import { titlePermutation } from "./decode";
 
-/** Does row `i` of `csr` contain `value`? Rows are tiny (1–3 entries). */
-function csrContains(csr: Csr, i: number, value: number): boolean {
+/** Does row `i` of `csr` contain any of `values`? Rows are tiny (1–3
+ * entries) and selections small, so the nested loop beats a Set. */
+function csrContainsAny(csr: Csr, i: number, values: readonly number[]): boolean {
   const end = csr.offsets[i + 1]!;
   for (let cursor = csr.offsets[i]!; cursor < end; cursor++) {
-    if (csr.values[cursor] === value) return true;
+    for (const value of values) {
+      if (csr.values[cursor] === value) return true;
+    }
   }
   return false;
 }
@@ -55,7 +58,7 @@ export function runQuery(library: Library, query: Query): Uint32Array {
     // Cheapest predicates first.
     if (query.rating !== -1 && library.rating[i] !== query.rating) continue;
     if (query.complete !== -1 && library.complete[i] !== query.complete) continue;
-    if (query.fandom !== -1 && !csrContains(library.fandoms, i, query.fandom)) continue;
+    if (query.fandoms.length > 0 && !csrContainsAny(library.fandoms, i, query.fandoms)) continue;
     if (needle !== "" && !matchesText(library, i, needle, authors!)) continue;
     scratch[n++] = i;
   }

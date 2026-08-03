@@ -27,14 +27,16 @@ describe("runQuery", () => {
   });
 
   it("filters by fandom, rating, and completion", () => {
-    expect(Array.from(runQuery(lib, query({ fandom: 1 })))).toEqual([1, 2]);
+    expect(Array.from(runQuery(lib, query({ fandoms: [1] })))).toEqual([1, 2]);
+    // Multi-select is OR: works in fandom 0 OR fandom 1 = everything here.
+    expect(Array.from(runQuery(lib, query({ fandoms: [0, 1] })))).toEqual([0, 1, 2, 3]);
     expect(Array.from(runQuery(lib, query({ rating: 0 })))).toEqual([0, 2]);
     expect(Array.from(runQuery(lib, query({ complete: 0 })))).toEqual([1, 3]);
   });
 
   it("combines filters", () => {
-    expect(Array.from(runQuery(lib, query({ fandom: 0, rating: 0, complete: 1 })))).toEqual([0, 2]);
-    expect(Array.from(runQuery(lib, query({ fandom: 0, q: "charlie" })))).toEqual([2]);
+    expect(Array.from(runQuery(lib, query({ fandoms: [0], rating: 0, complete: 1 })))).toEqual([0, 2]);
+    expect(Array.from(runQuery(lib, query({ fandoms: [0], q: "charlie" })))).toEqual([2]);
   });
 
   it("orders by the requested sort", () => {
@@ -44,7 +46,7 @@ describe("runQuery", () => {
   });
 
   it("returns a copy, not a view of the scratch buffer", () => {
-    const first = runQuery(lib, query({ fandom: 0 }));
+    const first = runQuery(lib, query({ fandoms: [0] }));
     const snapshot = Array.from(first);
     runQuery(lib, query({})); // would overwrite a shared view
     expect(Array.from(first)).toEqual(snapshot);
@@ -94,7 +96,7 @@ describe("fandomCounts", () => {
   });
 
   it("excludes the fandom filter itself (facet self-exclusion)", () => {
-    const withFandom = fandomCounts(lib, query({ fandom: 1 }));
+    const withFandom = fandomCounts(lib, query({ fandoms: [1] }));
     expect(Array.from(withFandom)).toEqual([3, 2]);
   });
 

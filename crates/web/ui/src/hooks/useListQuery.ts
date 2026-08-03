@@ -13,23 +13,28 @@ const SORTS: SortKey[] = ["recent", "title", "words", "updated"];
  * index refreshes) and resolves to a dictionary index here. */
 export function paramsToQuery(library: Library, params: URLSearchParams, qOverride?: string): Query {
   const q = (qOverride ?? params.get("q") ?? "").trim().toLowerCase();
-  const fandomName = params.get("fandom");
-  const fandom = fandomName ? library.dict.fandoms.indexOf(fandomName) : -1;
+  // Repeated ?fandom= params; names that no longer resolve are dropped.
+  const fandoms = params
+    .getAll("fandom")
+    .map((name) => library.dict.fandoms.indexOf(name))
+    .filter((index) => index !== -1);
   const ratingShort = (params.get("rating") ?? "").toLowerCase();
   const rating = library.enums.ratings.find((r) => r.short.toLowerCase() === ratingShort)?.code ?? -1;
   const completeRaw = params.get("complete");
   const complete = completeRaw === "1" ? 1 : completeRaw === "0" ? 0 : -1;
   const sortRaw = params.get("sort") as SortKey | null;
   const sort = sortRaw !== null && SORTS.includes(sortRaw) ? sortRaw : DEFAULT_QUERY.sort;
-  return { q, fandom, rating, complete, sort };
+  return { q, fandoms, rating, complete, sort };
 }
 
 /** Query → URL params, omitting defaults so clean views have clean URLs. */
 export function queryToParams(library: Library, query: Query): URLSearchParams {
   const params = new URLSearchParams();
   if (query.q !== "") params.set("q", query.q);
-  const fandomName = library.dict.fandoms[query.fandom];
-  if (query.fandom !== -1 && fandomName !== undefined) params.set("fandom", fandomName);
+  for (const fandom of query.fandoms) {
+    const name = library.dict.fandoms[fandom];
+    if (name !== undefined) params.append("fandom", name);
+  }
   const rating = library.enums.ratings.find((r) => r.code === query.rating);
   if (rating) params.set("rating", rating.short.toLowerCase());
   if (query.complete !== -1) params.set("complete", String(query.complete));

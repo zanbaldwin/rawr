@@ -10,7 +10,6 @@ use crate::error::{ErrorKind, WebError};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::{Multipart, State};
-use exn::ResultExt;
 use futures::TryStreamExt;
 use rawr_compress::Compression;
 use rawr_extract::models::Version;

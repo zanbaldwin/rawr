@@ -16,6 +16,7 @@
 
 use crate::error::{ErrorKind, Result};
 use exn::{OptionExt, ResultExt};
+use rawr_config::models::FandomConfig;
 use rawr_extract::models::{Author, Rating, SeriesPosition, TagKind, Version, Warning};
 use rawr_storage::file::{FileInfo, Processed};
 use serde::Serialize;
@@ -301,8 +302,18 @@ impl LibraryIndex {
     /// Build the index from [`Repository::list_works_for_target`] output:
     /// works most-recently-added first, versions best-first within each.
     ///
+    /// Fandom names pass through [`FandomConfig::display_name`] while
+    /// interning, so configured renames collapse alias variants into one
+    /// dictionary entry — the browse filter shows canonical names with
+    /// merged counts, mirroring the CLI's stats behaviour.
+    ///
     /// [`Repository::list_works_for_target`]: rawr_cache::Repository::list_works_for_target
-    pub fn build(target: &str, generated_at: UtcDateTime, works: &[(u64, Vec<(Version, Vec<File>)>)]) -> Result<Self> {
+    pub fn build(
+        target: &str,
+        generated_at: UtcDateTime,
+        works: &[(u64, Vec<(Version, Vec<File>)>)],
+        fandom_config: &FandomConfig,
+    ) -> Result<Self> {
         let mut authors: Interner<AuthorEntry> = Interner::new();
         let mut fandoms: Interner<String> = Interner::new();
         let mut languages: Interner<LanguageEntry> = Interner::new();
@@ -343,7 +354,17 @@ impl LibraryIndex {
             columns.cid.push(best.hash.clone());
             columns.title.push(m.title.clone());
             columns.authors.push(m.authors.iter().map(|a| authors.intern(&author_entry(a))).collect());
-            columns.fandoms.push(m.fandoms.iter().map(|f| fandoms.intern(&f.name)).collect());
+            // Canonicalise, then dedupe: a work tagged with two aliases of
+            // the same fandom must not reference the entry twice (facet
+            // counts would double).
+            let mut fandom_refs: Vec<u32> = Vec::with_capacity(m.fandoms.len());
+            for fandom in &m.fandoms {
+                let index = fandoms.intern(&fandom_config.display_name(&fandom.name).to_string());
+                if !fandom_refs.contains(&index) {
+                    fandom_refs.push(index);
+                }
+            }
+            columns.fandoms.push(fandom_refs);
             columns.series.push(m.series.iter().map(|s| series_ref(s, &mut series)).collect::<Result<Vec<_>>>()?);
             columns.tags.push(m.tags.iter().map(|t| tags.intern(&(t.name.clone(), tag_kind_code(t.kind)))).collect());
             columns.language.push(languages.intern(&LanguageEntry {
@@ -838,8 +859,13 @@ mod tests {
     fn index_build_encodes_and_interns() {
         let v = version(12345, "a".repeat(64).as_str(), "Work A");
         let works = vec![(12345u64, vec![(v, vec![])])];
-        let index = LibraryIndex::build("local", UtcDateTime::from_unix_timestamp(1_800_000_000).unwrap(), &works)
-            .expect("index builds");
+        let index = LibraryIndex::build(
+            "local",
+            UtcDateTime::from_unix_timestamp(1_800_000_000).unwrap(),
+            &works,
+            &FandomConfig::default(),
+        )
+        .expect("index builds");
         assert_eq!(index.format, INDEX_FORMAT);
         assert_eq!(index.count, 1);
         assert_eq!(index.works.id, vec![12345]);
@@ -862,6 +888,40 @@ mod tests {
         // Serialises without error and round-trips the sentinel.
         let json = serde_json::to_string(&index).unwrap();
         assert!(json.contains("\"chapters_total\":[-1]"));
+    }
+
+    #[test]
+    fn index_build_applies_fandom_renames() {
+        let mut a = version(100, &"a".repeat(64), "Work A");
+        a.metadata.fandoms = vec![
+            Fandom {
+                name: "Spider-Man - All Media Types".into(),
+            },
+            // Two aliases of the same canonical fandom on one work…
+            Fandom {
+                name: "Spider-Man (Marvel) - Fandom".into(),
+            },
+        ];
+        let mut b = version(200, &"b".repeat(64), "Work B");
+        b.metadata.fandoms = vec![Fandom { name: "Unrelated Fandom".into() }];
+        let works = vec![(100u64, vec![(a, vec![])]), (200u64, vec![(b, vec![])])];
+
+        let mut config = FandomConfig::default();
+        config.renames.insert(
+            "Spider-Man".to_string(),
+            vec![
+                "Spider-Man - All Media Types".to_string(),
+                "Spider-Man (Marvel) - Fandom".to_string(),
+            ],
+        );
+
+        let index =
+            LibraryIndex::build("local", UtcDateTime::from_unix_timestamp(1_800_000_000).unwrap(), &works, &config)
+                .expect("index builds");
+        // Aliases collapse into one canonical dictionary entry…
+        assert_eq!(index.dict.fandoms, vec!["Spider-Man", "Unrelated Fandom"]);
+        // …and the double-tagged work references it exactly once.
+        assert_eq!(index.works.fandoms, vec![vec![0], vec![1]]);
     }
 
     #[test]

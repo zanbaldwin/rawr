@@ -19,6 +19,7 @@ use axum::http::HeaderMap;
 use axum::http::header;
 use exn::ResultExt;
 use rawr_cache::{Repository, SnapshotToken};
+use rawr_config::models::FandomConfig;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -137,7 +138,13 @@ impl IndexCache {
     /// Return the current snapshot, rebuilding when the change token (or
     /// generation) moved. `force` skips tier 1 entirely — the manual
     /// refresh path (`Cache-Control: no-cache`).
-    pub async fn current(&self, cache: &Repository, target: &str, force: bool) -> Result<Arc<CachedIndex>> {
+    pub async fn current(
+        &self,
+        cache: &Repository,
+        target: &str,
+        fandoms: &FandomConfig,
+        force: bool,
+    ) -> Result<Arc<CachedIndex>> {
         let token = cache.snapshot_token(target).await.or_raise(|| ErrorKind::Cache)?;
         let generation = self.generation.load(Ordering::Relaxed);
         if !force && let Some(cached) = self.fresh(token, generation).await {
@@ -150,7 +157,7 @@ impl IndexCache {
         if !force && let Some(cached) = self.fresh(token, generation).await {
             return Ok(cached);
         }
-        let built = Arc::new(build(cache, target, token, generation).await?);
+        let built = Arc::new(build(cache, target, fandoms, token, generation).await?);
         *self.current.write().await = Some(Arc::clone(&built));
         Ok(built)
     }
@@ -161,14 +168,21 @@ impl IndexCache {
     }
 }
 
-async fn build(cache: &Repository, target: &str, token: SnapshotToken, generation: u64) -> Result<CachedIndex> {
+async fn build(
+    cache: &Repository,
+    target: &str,
+    fandoms: &FandomConfig,
+    token: SnapshotToken,
+    generation: u64,
+) -> Result<CachedIndex> {
     let works = cache.list_works_for_target(target).await.or_raise(|| ErrorKind::Cache)?;
     let target = target.to_string();
+    let fandoms = fandoms.clone();
     let generated_at = UtcDateTime::now();
     // Transform + serialise + hash + compress are all CPU-bound over
     // megabytes; keep them off the async threads.
     tokio::task::spawn_blocking(move || -> Result<CachedIndex> {
-        let mut index = LibraryIndex::build(&target, generated_at, &works)?;
+        let mut index = LibraryIndex::build(&target, generated_at, &works, &fandoms)?;
         // The snapshot hash covers the body serialised with an empty
         // `snapshot` field; serialising twice (~ms) buys a validator that
         // can never diverge from the content.

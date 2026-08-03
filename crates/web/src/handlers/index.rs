@@ -12,7 +12,7 @@ pub async fn index(State(state): State<AppState>, headers: HeaderMap) -> std::re
     // sends `Cache-Control: no-cache`; that is the tier-1 bypass.
     let force =
         headers.get(header::CACHE_CONTROL).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains("no-cache"));
-    let cached = state.index.current(&state.cache, &state.target, force).await?;
+    let cached = state.index.current(&state.cache, &state.target, &state.fandoms, force).await?;
     let encoding = Encoding::negotiate(&headers);
     let etag = cached.etag(encoding);
 

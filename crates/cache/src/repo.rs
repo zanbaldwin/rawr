@@ -422,6 +422,17 @@ impl Repository {
         })
     }
 
+    /// Storage totals for a target: `(decompressed content bytes,
+    /// on-disk compressed bytes)`.
+    pub async fn storage_sizes(&self, target: impl AsRef<str>) -> Result<(u64, u64)> {
+        let row: (i64, i64) = sqlx::query_as(include_str!("../queries/storage_sizes.sql"))
+            .bind(target.as_ref())
+            .fetch_one(&self.pool)
+            .await
+            .or_raise(|| ErrorKind::Database)?;
+        Ok((u64::try_from(row.0).unwrap_or(0), u64::try_from(row.1).unwrap_or(0)))
+    }
+
     /// List all files for a specific target.
     ///
     /// Returns a list of (file, version) tuples for files in the given target.

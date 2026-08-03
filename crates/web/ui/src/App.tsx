@@ -8,6 +8,7 @@ import { useLibrary, useSyncState } from "./hooks/useSync";
 import { routeStore } from "./router";
 import { AboutScreen } from "./screens/AboutScreen";
 import { ListScreen } from "./screens/ListScreen";
+import { StatsScreen } from "./screens/StatsScreen";
 import { UploadScreen } from "./screens/UploadScreen";
 import { WorkScreen } from "./screens/WorkScreen";
 
@@ -71,7 +72,7 @@ function Screen() {
     case "upload":
       return <UploadScreen />;
     case "stats":
-      return <p className="empty-state">Stats are on the way.</p>;
+      return <StatsScreen library={library} />;
     case "about":
       return <AboutScreen />;
     case "notfound":

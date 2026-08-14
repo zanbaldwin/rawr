@@ -104,7 +104,7 @@ miette = { workspace = true, features = ["fancy"] }
 rawr-cache = { workspace = true, features = ["stats"] }
 rawr-compress = { workspace = true, features = ["cli"] }
 rawr-config = { workspace = true }
-rawr-extract = { workspace = true }
+rawr-extract = { workspace = true, features = ["chapters"] }
 rawr-library = { workspace = true }
 rawr-output = { workspace = true, features = ["progress", "confirm"] }
 rawr-render = { workspace = true, optional = true }

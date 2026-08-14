@@ -49,6 +49,7 @@ async fn main() -> Result<ExitCode> {
         #[cfg(feature = "_render")]
         Commands::Export(command) => command.execute(&mut context).await?,
         Commands::Stats(command) => command.execute(&mut context).await?,
+        Commands::Duplicates(command) => command.execute(&mut context).await?,
     };
 
     context.shutdown().await;

@@ -1,3 +1,4 @@
+mod duplicates;
 #[cfg(feature = "_render")]
 mod export;
 mod import;
@@ -6,6 +7,7 @@ mod organize;
 mod scan;
 mod stats;
 
+pub(crate) use self::duplicates::DuplicatesCommand;
 #[cfg(feature = "_render")]
 pub(crate) use self::export::ExportCommand;
 pub(crate) use self::import::ImportCommand;

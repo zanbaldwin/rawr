@@ -1,0 +1,26 @@
+[package]
+name = "rawr-audiobook"
+description = "Audiobook construction: EPUB 3 with Media Overlays from narrated documents"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+crc32fast = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+rawr-source = { workspace = true }
+scraper = { workspace = true }
+unicode-normalization = { workspace = true }
+unicode-segmentation = { workspace = true }
+
+[dev-dependencies]
+crc32fast = { workspace = true }
+insta = { workspace = true }
+rawr-compress = { workspace = true }
+rawr-source = { workspace = true, features = ["ao3"] }
+rstest = { workspace = true }

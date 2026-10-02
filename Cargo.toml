@@ -30,6 +30,7 @@ flate2 = "^1.1"
 futures = { version = "^0.3.30", default-features = false }
 html5ever = "^0.39.0"
 indicatif = { version = "^0.18.4", default-features = false }
+insta = "^1"
 libbzip3-sys = { version = "^0.5", features = ["bundled"] }
 liblzma = "^0.4.6"
 memchr = "^2.8"
@@ -38,6 +39,7 @@ opendal = { version = "^0.59.0", default-features = false }
 pin-project-lite = "^0.2.17"
 rawr-app = { path = "crates/app", default-features = false }
 rawr-asyncutils = { path = "crates/asyncutils", default-features = false }
+rawr-audiobook = { path = "crates/audiobook", default-features = false }
 rawr-cache = { path = "crates/cache", default-features = false }
 rawr-compress = { path = "crates/compress", default-features = false }
 rawr-config = { path = "crates/config", default-features = false }
@@ -64,6 +66,8 @@ tokio = { version = "^1.52", default-features = false }
 tokio-util = { version = "^0.7", default-features = false }
 tracing = "^0.1.0"
 tracing-subscriber = { version = "^0.3.22", default-features = false }
+unicode-normalization = "^0.1.25"
+unicode-segmentation = "^1.12"
 upon = { version = "^0.10.0", default-features = false }
 which = "^8.0"
 zstd = "^0.14"

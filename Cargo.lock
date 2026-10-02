@@ -1728,6 +1728,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8fae54786f62fb2918dcfae3d568594e50eb9b5c25bf04371af6fe7516452fb"
 
 [[package]]
+name = "insta"
+version = "1.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
+dependencies = [
+ "console",
+ "once_cell",
+ "similar 2.7.0",
+ "tempfile",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2745,6 +2757,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawr-audiobook"
+version = "0.2.0-beta"
+dependencies = [
+ "crc32fast",
+ "derive_more",
+ "exn",
+ "insta",
+ "rawr-compress",
+ "rawr-source",
+ "rstest",
+ "scraper",
+ "unicode-normalization",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "rawr-cache"
 version = "0.2.0-beta"
 dependencies = [
@@ -2783,7 +2811,7 @@ dependencies = [
  "rawr-output",
  "rawr-render",
  "rawr-storage",
- "similar",
+ "similar 3.2.0",
  "tempfile",
  "time",
  "tokio",
@@ -3586,6 +3614,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "similar"

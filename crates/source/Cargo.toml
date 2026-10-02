@@ -16,5 +16,5 @@ exn = { workspace = true }
 rawr-extract = { workspace = true, optional = true }
 
 [dev-dependencies]
+rawr-compress = { workspace = true }
 rstest = { workspace = true }
-time = { workspace = true }

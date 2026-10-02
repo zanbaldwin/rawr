@@ -19,7 +19,12 @@ Content input for narration. A `Source` turns decompressed input bytes into a `D
 ## Pitfalls
 
 - **Summary format and feature unification.** rawr-extract converts the work summary to Markdown when its `markdown` feature is on. This crate does not turn that feature on. But if another crate in the same build turns it on, Cargo unifies the features, and `DocumentMeta.summary` becomes Markdown.
-- **No real fics in tests.** Test fixtures from AO3 are private and git-ignored. Use hand-built `Metadata` values, or the minimal synthetic AO3 HTML in `src/ao3.rs`.
+
+## Tests
+
+- Tests live in `tests/`, not in the source files. They use the AO3 fixtures in the workspace's `tests/fixtures/` (bzip2-compressed HTML downloads).
+- `tests/` and the fixtures are git-ignored, because the fixtures are real fics. They are kept in the separate `rawr-fixtures` repository.
+- Each fixture test is an `rstest` `#[files(...)]` case. The expected values come from `rawr-extract` itself, so the tests check the mapping, not the fic content.
 
 ## Checks
 

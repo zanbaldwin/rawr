@@ -97,6 +97,10 @@ ledgers/<blake3(identifier)>.json
 - **Narrator:** `narrator_credit(provider, fingerprint, voice_name)` gives "{voice name} ({provider} {model})", for example "Amelia - Enthusiastic and Expressive (ElevenLabs eleven_v4)". The voice name comes from the ledger.
 - **Escaping:** `epub3/xml.rs` uses the same rules as rawr-xhtml (`&`, `<`, `>`, the no-break space as `&#160;`, and `"` in attributes), so text written again comes out the same.
 
+## `export`
+
+`rawr_audiobook::export(document, plan, store, codec, styles)` builds the `Package` from stored recordings. It never pays. For each planned section it reads the recordings, calls `assemble`, encodes the audio, and drops the PCM before the next section. A batch with no recording gives `MissingRecording`. It does not use the plan's `BatchState`s, so a plan made before narration still works. The narrator credit uses the ledger's voice name, and `modified` is the current time (tests set it after the call). Decoding and encoding run on the caller's task.
+
 ## Invariants to keep
 
 - **`TextPosition::node` counts every text node in document order**, as `scraper::Html::parse_fragment(body_xhtml)` parses the body (whitespace-only nodes included). Anything that uses `sources` must walk the body the same way.

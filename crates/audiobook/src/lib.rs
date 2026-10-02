@@ -7,8 +7,11 @@
 pub mod audio;
 pub mod epub3;
 pub mod error;
+mod export;
 pub mod narrate;
 pub mod plan;
 pub mod script;
 pub mod store;
 pub mod timeline;
+
+pub use crate::export::export;

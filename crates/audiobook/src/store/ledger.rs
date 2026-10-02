@@ -14,6 +14,9 @@ pub struct Ledger {
     pub source_hash: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub planned_at: OffsetDateTime,
+    /// The voice's display name, for the narrator credit, when the provider knows it.
+    #[serde(default)]
+    pub voice_name: Option<String>,
     pub sections: Vec<LedgerSection>,
 }
 

@@ -5,6 +5,7 @@ use crate::error::{ErrorKind, Result};
 use crate::script::{Script, ScriptOptions};
 use crate::store::{BatchKey, KeyInputs, Ledger, LedgerSection, RecordingStatus, Store};
 use exn::ResultExt;
+use rawr_render::pages::chapter_heading;
 use rawr_source::Document;
 use rawr_tts::{Fingerprint, Synthesiser};
 use time::OffsetDateTime;
@@ -67,8 +68,10 @@ impl Plan {
         };
         let mut sections = Vec::new();
         let mut skipped = Vec::new();
+        let multi_chapter = document.sections.len() > 1;
         for section in &document.sections {
-            let script = match Script::new(section, section.title.as_deref(), &options) {
+            let heading = chapter_heading(section.number, section.title.as_deref(), multi_chapter);
+            let script = match Script::new(section, heading.as_deref(), &options) {
                 Ok(script) => script,
                 Err(error) if matches!(*error, ErrorKind::EmptySection(_)) => {
                     skipped.push(section.number);
@@ -145,6 +148,7 @@ impl Plan {
             title: self.title.clone(),
             source_hash: self.source_hash.clone(),
             planned_at,
+            voice_name: None,
             sections: self
                 .sections
                 .iter()

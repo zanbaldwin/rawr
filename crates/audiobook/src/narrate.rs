@@ -134,7 +134,12 @@ struct Run<'a> {
 
 impl Run<'_> {
     async fn run(self) {
-        if self.store.write_ledger(&self.plan.ledger(OffsetDateTime::now_utc())).await.is_err() {
+        let mut ledger = self.plan.ledger(OffsetDateTime::now_utc());
+        ledger.voice_name = match self.synthesiser.voice_name(self.plan.language.as_deref()).await {
+            Ok(Some(name)) => Some(name),
+            _ => self.store.ledger(&self.plan.identifier).await.ok().flatten().and_then(|previous| previous.voice_name),
+        };
+        if self.store.write_ledger(&ledger).await.is_err() {
             self.stop(StopReason::Storage);
         } else {
             let to_pay = self.plan.batches().filter(|batch| self.to_pay(batch));

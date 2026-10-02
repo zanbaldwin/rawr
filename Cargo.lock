@@ -2802,6 +2802,7 @@ dependencies = [
  "ogg",
  "opus",
  "rawr-compress",
+ "rawr-render",
  "rawr-source",
  "rawr-storage",
  "rawr-tts",

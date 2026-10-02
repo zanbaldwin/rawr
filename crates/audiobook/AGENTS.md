@@ -34,7 +34,7 @@ ledgers/<blake3(identifier)>.json
 - `Store::write` writes the audio, then the metadata to `recording.json.tmp`, then renames it into place. Audio without metadata counts as "not recorded". `Store::delete` removes the metadata first for the same reason.
 - `RecordingMeta` is this crate's own serde form. `rawr-tts` stays serde-free. Times are RFC 3339 (`time::OffsetDateTime`, UTC).
 - `RecordingStatus::AlignmentMismatch` keeps paid audio that cannot be used. It is never paid for again without an explicit flag.
-- A **ledger** lists the keys of a document's latest plan. Nothing reads it to resume. `delete_document` and `orphans` use it, and `delete_document` keeps keys that another ledger still uses.
+- A **ledger** lists the keys of a document's latest plan. It also keeps the voice's display name (`voice_name`) for the narrator credit. Nothing reads it to resume. `delete_document` and `orphans` use it, and `delete_document` keeps keys that another ledger still uses.
 
 ## `plan`
 
@@ -43,7 +43,7 @@ ledgers/<blake3(identifier)>.json
 - The fingerprint is checked first, so a missing voice fails the plan (`ErrorKind::Provider`, with the provider's `NoVoice` as the source) before anything else.
 - `BatchState`: `Missing` (to be paid for), `Recorded`, or `Mismatched` (paid for, but the alignment did not match; never paid for again without an explicit flag).
 - Sections with nothing to speak are listed in `skipped`.
-- The spoken heading is `section.title` until the EPUB writer fixes the heading rule.
+- The spoken heading is `rawr_render::pages::chapter_heading()`, the same rule as rawr's text EPUB, so the spoken heading always equals the displayed one: "Chapter N: Title" (an AO3 "Chapter N" prefix is not doubled) in a multi-section document, and **no heading** for a single section.
 - `Plan::ledger()` builds the ledger. Narration writes it before the first paid request, so `--estimate` stays read-only. `source_hash` is set by the caller (AO3: `Version::hash`).
 - `missing_chars()` is the narration budget's unit: characters, not cost, because provider prices change.
 
@@ -51,7 +51,7 @@ ledgers/<blake3(identifier)>.json
 
 `narrate(plan, synthesiser, store, options)` returns a `Stream` of `NarrationEvent`s. It pays for missing batches only. `Finished` is always the last event.
 
-- **Order:** the ledger is written first. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
+- **Order:** the ledger is written first, with the voice name from `Synthesiser::voice_name()`. If that free lookup fails, the name from an earlier run is kept and narration continues. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
 - **Write order:** a recording is stored before the section's next request is sent. A store failure stops the whole run, so nothing more is paid for while recordings cannot be kept.
 - **Re-check:** each batch is looked up in the store again just before it is paid for, so a stale plan never pays twice.
 - **Continuity:** the previous request IDs come from the section's earlier recordings, including recordings from earlier runs, within the provider's age and count limits. The next text is the next batch's prepared text.
@@ -82,14 +82,14 @@ ledgers/<blake3(identifier)>.json
 - **Trim** (from purr): keep from the first character's start − 50 ms to the last character's end + 100 ms, clamped to the decoded length. ElevenLabs' last timestamp can be up to 80 ms past the audio. A `TrailingSound` after the last letter or digit cuts the end at that silence + 50 ms.
 - **Fades:** 5 ms (240 samples) at each edge of each recording. No crossfades.
 - **Silence before a batch, by `Boundary`:** `SectionStart` 0.5 s (the chapter's lead-in), `Heading` 1.0 s, `Paragraph` 0.45 s, `SceneBreak` 1.75 s. There is 1.0 s of lead-out after the last batch.
-- **Trim report** (dev and test builds only, `cfg(debug_assertions)`): `ChapterAudio::trims` has one `TrimReport` per recording: its key, decoded length, kept range, `EndRule` (`LastTimestamp` or `TrailingSound`), the overshoot of the last timestamp past the audio, and where it starts in the chapter. It is purr's record of cuts (`end_rule`, `cut_seconds_before_file_end`). Use it to find and listen to bad joins. Release builds do not have the field.
+- **Trim report** (dev and test builds only, `cfg(debug_assertions)`; tests that read it are gated the same way, so `cargo test --release` still builds): `ChapterAudio::trims` has one `TrimReport` per recording: its key, decoded length, kept range, `EndRule` (`LastTimestamp` or `TrailingSound`), the overshoot of the last timestamp past the audio, and where it starts in the chapter. It is purr's record of cuts (`end_rule`, `cut_seconds_before_file_end`). Use it to find and listen to bad joins. Release builds do not have the field.
 - **Sync map:** one `SyncUnit` for the heading and one for each sentence, in samples. A unit begins at the output time of its first character (`ParagraphRef` offset + `Paragraph::sentence_chars()`). Units are back to back: the first begins at 0, so it covers the lead-in, and the last ends at the end of the audio, so it covers the lead-out. Begins are strictly increasing. Readers play only clip ranges, so gaps would remove the pauses.
 
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
 - **The script is provider-neutral.** Provider-specific cleaning (for example ElevenLabs and `[`/`]`) belongs to the provider. That cleaning must keep the character count. `ParagraphRef` offsets and `Paragraph::sentence_chars()` count characters, because provider alignment is per character.
-- **The caller gives the spoken heading.** It must match the displayed heading. AO3 chapter titles from rawr-extract already include the "Chapter N: " prefix.
+- **The caller gives the spoken heading.** `Plan::new` uses `chapter_heading()` so it matches the displayed heading. AO3 chapter titles from rawr-extract often already include the "Chapter N: " prefix.
 
 ## Tests
 

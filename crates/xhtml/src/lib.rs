@@ -42,6 +42,9 @@ pub fn to_offline_xhtml(element: &ElementRef<'_>) -> String {
 /// - Two or more `<br>` directly inside a `<p>`, with only whitespace between
 ///   them, split the paragraph in two: authors use `<br><br>` as a paragraph
 ///   break. A single `<br>` is kept.
+/// - `<br>` and ASCII whitespace at the very start or end of a paragraph,
+///   including inside inline elements there, are removed: some e-readers draw
+///   them as blank lines. No-break spaces are kept.
 #[must_use]
 pub fn to_ebook_xhtml(element: &ElementRef<'_>) -> String {
     serialize_inner(element, Some(offline_filter), true)
@@ -111,6 +114,66 @@ fn is_void(name: &QualName) -> bool {
                 | local_name!("track")
                 | local_name!("wbr")
         )
+}
+
+/// Remove `<br/>` elements and ASCII whitespace at the start of a serialised
+/// paragraph (after its opening tag and any opening inline tags) and at its
+/// end (before any closing tags). The input is this serialiser's own output,
+/// so every `<` starts a tag and every `<br` ends with `/>`.
+fn trim_paragraph_edges(paragraph: &[u8]) -> Vec<u8> {
+    let Some(open_end) = paragraph.iter().position(|&byte| byte == b'>').map(|index| index + 1) else {
+        return paragraph.to_vec();
+    };
+    let is_space = |byte: u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\r');
+    let is_break = |tag: &[u8]| tag.starts_with(b"<br") && matches!(tag.get(3), Some(b' ' | b'/' | b'>'));
+    let mut removed = vec![false; paragraph.len()];
+
+    let mut at = open_end;
+    while at < paragraph.len() {
+        if is_space(paragraph[at]) {
+            removed[at] = true;
+            at += 1;
+            continue;
+        }
+        if paragraph[at] != b'<' || paragraph.get(at + 1) == Some(&b'/') {
+            break;
+        }
+        let Some(end) = paragraph[at..].iter().position(|&byte| byte == b'>').map(|index| at + index + 1) else {
+            break;
+        };
+        if is_break(&paragraph[at..end]) {
+            removed[at..end].fill(true);
+        }
+        at = end;
+    }
+
+    let Some(close_start) = paragraph.iter().rposition(|&byte| byte == b'<') else {
+        return paragraph.to_vec();
+    };
+    let mut at = close_start;
+    while at > open_end {
+        let before = paragraph[at - 1];
+        if is_space(before) {
+            removed[at - 1] = true;
+            at -= 1;
+            continue;
+        }
+        if before != b'>' {
+            break;
+        }
+        let Some(start) = paragraph[..at].iter().rposition(|&byte| byte == b'<') else {
+            break;
+        };
+        let tag = &paragraph[start..at];
+        if is_break(tag) {
+            removed[start..at].fill(true);
+        } else if !tag.starts_with(b"</") {
+            break;
+        }
+        at = start;
+    }
+
+    paragraph.iter().zip(&removed).filter(|(_, removed)| !**removed).map(|(&byte, _)| byte).collect()
 }
 
 fn attrs_owned(attrs: &[AttrRef<'_>]) -> Vec<(QualName, String)> {
@@ -233,7 +296,7 @@ impl<W: Write> XhtmlSerializer<W> {
         if pending.has_printable {
             let parent = self.last_sibling.len() - 2;
             self.last_sibling[parent] = Some(local_name!("p"));
-            self.writer.write_all(&pending.buf)?;
+            self.writer.write_all(&trim_paragraph_edges(&pending.buf))?;
         }
         let mark_first = self.ebook_first_after(self.last_sibling.len() - 2);
         self.pending = Some(PendingParagraph {
@@ -400,7 +463,7 @@ impl<W: Write> Serializer for XhtmlSerializer<W> {
                 if let Some(entry) = self.last_sibling.last_mut() {
                     *entry = Some(local_name!("p"));
                 }
-                self.writer.write_all(&pending.buf)?;
+                self.writer.write_all(&trim_paragraph_edges(&pending.buf))?;
             }
         }
         Ok(())
@@ -767,7 +830,7 @@ mod tests {
     #[test]
     fn ebook_single_break_kept_with_its_whitespace() {
         assert_eq!(ebook("<div><p>One.<br>\nTwo.</p></div>"), "<p class=\"first\">One.<br/>\nTwo.</p>");
-        assert_eq!(ebook("<div><p>One.<br></p></div>"), r#"<p class="first">One.<br/></p>"#);
+        assert_eq!(ebook("<div><p>One.<br></p></div>"), r#"<p class="first">One.</p>"#, "a trailing break is trimmed");
         assert_eq!(ebook("<div><p>One.<br><em>Two.</em></p></div>"), r#"<p class="first">One.<br/><em>Two.</em></p>"#);
     }
 
@@ -799,5 +862,30 @@ mod tests {
     #[test]
     fn non_ebook_modes_keep_double_breaks() {
         assert_eq!(offline("<div><p>One.<br><br>Two.</p></div>"), "<p>One.<br/><br/>Two.</p>");
+    }
+
+    #[test]
+    fn ebook_breaks_and_whitespace_at_paragraph_edges_are_trimmed() {
+        assert_eq!(
+            ebook(r#"<div><p align="center"><u><strong>DAY 16<br></strong></u></p></div>"#),
+            r#"<p align="center" class="first"><u><strong>DAY 16</strong></u></p>"#
+        );
+        assert_eq!(ebook("<div><p> <br> <em> <br>One.</em> </p></div>"), r#"<p class="first"><em>One.</em></p>"#);
+        assert_eq!(ebook("<div><p>One. <br/>\n</p></div>"), r#"<p class="first">One.</p>"#);
+    }
+
+    #[test]
+    fn ebook_inner_breaks_and_no_break_spaces_are_kept() {
+        assert_eq!(ebook("<div><p>One.<br>Two.</p></div>"), r#"<p class="first">One.<br/>Two.</p>"#);
+        assert_eq!(ebook("<div><p>&nbsp;One.&nbsp;</p></div>"), r#"<p class="first">&#160;One.&#160;</p>"#);
+        assert_eq!(
+            ebook("<div><p><em>One.</em> <br><strong>Two.</strong></p></div>"),
+            r#"<p class="first"><em>One.</em> <br/><strong>Two.</strong></p>"#
+        );
+    }
+
+    #[test]
+    fn ebook_trims_both_halves_of_a_split_paragraph() {
+        assert_eq!(ebook("<div><p> One. <br><br> Two. </p></div>"), r#"<p class="first">One.</p><p>Two.</p>"#);
     }
 }

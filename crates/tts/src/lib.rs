@@ -5,6 +5,8 @@
 //! units), so each one describes itself with [`Capabilities`] and the
 //! narration pipeline adapts, instead of using only what all providers share.
 
+#[cfg(feature = "elevenlabs")]
+pub mod elevenlabs;
 pub mod error;
 #[cfg(feature = "fake")]
 mod fake;

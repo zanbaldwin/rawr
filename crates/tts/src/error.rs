@@ -38,6 +38,9 @@ pub enum ErrorKind {
     /// caller to store before it fails.
     #[display("alignment does not match the sent text")]
     AlignmentMismatch(#[error(not(source))] Box<Synthesis>),
+    /// The provider's HTTP client could not be set up.
+    #[display("failed to set up the provider client")]
+    Setup,
     /// No voice is configured for this language.
     #[display("no voice configured for language {}", _0.as_deref().unwrap_or("(none)"))]
     NoVoice(#[error(not(source))] Option<String>),

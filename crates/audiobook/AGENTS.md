@@ -49,7 +49,7 @@ ledgers/<blake3(identifier)>.json
 
 ## `narrate`
 
-`narrate(plan, synthesiser, store, options)` returns a `Stream` of `NarrationEvent`s. It pays for missing batches only. `Finished` is always the last event.
+`narrate(plan, synthesiser, store, options)` returns a boxed stream (`BoxStream`) of `NarrationEvent`s, so callers use `next()` without `pin!`. It pays for missing batches only. `Finished` is always the last event.
 
 - **Order:** the ledger is written first, with the voice name from `Synthesiser::voice_name()`. If that free lookup fails, the name from an earlier run is kept and narration continues. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
 - **Write order:** a recording is stored before the section's next request is sent. A store failure stops the whole run, so nothing more is paid for while recordings cannot be kept.

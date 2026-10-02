@@ -7,7 +7,8 @@
 
 use crate::plan::{BatchState, Plan, PlannedBatch, SectionPlan};
 use crate::store::{Recording, RecordingStatus, Store};
-use futures::{Stream, StreamExt, stream};
+use futures::stream::BoxStream;
+use futures::{StreamExt, stream};
 use rawr_tts::error::ErrorKind as TtsErrorKind;
 use rawr_tts::{Continuity, Cost, SynthesisRequest, SynthesiserHandle};
 use std::sync::Mutex;
@@ -98,13 +99,14 @@ pub enum StopReason {
 /// Narrate the missing batches of a plan.
 ///
 /// The ledger is written first. Each recording is stored before the next
-/// request of its section is sent.
+/// request of its section is sent. The stream is boxed, so callers can use
+/// `next()` on it without pinning it.
 pub fn narrate<'a>(
     plan: &'a Plan,
     synthesiser: SynthesiserHandle,
     store: &'a Store,
     options: NarrationOptions,
-) -> impl Stream<Item = NarrationEvent> + Send + 'a {
+) -> BoxStream<'a, NarrationEvent> {
     let (sender, receiver) = futures::channel::mpsc::unbounded();
     let run = Run {
         plan,
@@ -117,7 +119,7 @@ pub fn narrate<'a>(
         spent: Mutex::new(Vec::new()),
     };
     let driver = async move { run.run().await };
-    stream::select(receiver.map(Some), stream::once(driver).map(|()| None)).filter_map(std::future::ready)
+    stream::select(receiver.map(Some), stream::once(driver).map(|()| None)).filter_map(std::future::ready).boxed()
 }
 
 struct Run<'a> {

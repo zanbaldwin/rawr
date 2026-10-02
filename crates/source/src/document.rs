@@ -6,6 +6,17 @@ pub struct Document {
     pub origin: Origin,
 }
 
+impl Document {
+    /// BLAKE3 hash (hex) of the input the document was made from, when the source records one.
+    pub fn source_hash(&self) -> Option<&str> {
+        match &self.origin {
+            #[cfg(feature = "ao3")]
+            Origin::Ao3(version) => Some(&version.hash),
+            Origin::Generic => None,
+        }
+    }
+}
+
 /// The metadata every source can provide.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentMeta {

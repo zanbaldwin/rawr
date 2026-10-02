@@ -7,6 +7,7 @@ Content input for narration. A `Source` turns decompressed input bytes into a `D
 - `Document`: `meta`, `sections`, `origin`.
 - `Section` has the same shape as `rawr_extract::models::ChapterContent`. `body_xhtml`, `summary`, `notes` and `end_notes` are XHTML fragments, not whole documents.
 - `DocumentMeta.summary` is plain text, not XHTML.
+- `Document::source_hash()` gives the BLAKE3 hash (hex) of the input, for the narration ledger. AO3 gives `Version::hash`. `Generic` gives `None`.
 - `Origin` is `#[non_exhaustive]`. The pipeline must not match on it. Only the edges use it: the rating gate, path templates (`PathGenerator` needs a `Version`), and the AO3 title page.
 
 ## Sources

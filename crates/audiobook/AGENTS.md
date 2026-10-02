@@ -44,7 +44,7 @@ ledgers/<blake3(identifier)>.json
 - `BatchState`: `Missing` (to be paid for), `Recorded`, or `Mismatched` (paid for, but the alignment did not match; never paid for again without an explicit flag).
 - Sections with nothing to speak are listed in `skipped`.
 - The spoken heading is `rawr_render::pages::chapter_heading()`, the same rule as rawr's text EPUB, so the spoken heading always equals the displayed one: "Chapter N: Title" (an AO3 "Chapter N" prefix is not doubled) in a multi-section document, and **no heading** for a single section.
-- `Plan::ledger()` builds the ledger. Narration writes it before the first paid request, so `--estimate` stays read-only. `source_hash` is set by the caller (AO3: `Version::hash`).
+- `Plan::ledger()` builds the ledger. Narration writes it before the first paid request, so `--estimate` stays read-only. `source_hash` comes from `Document::source_hash()` (AO3: `Version::hash`, the BLAKE3 hash of the HTML).
 - `missing_chars()` is the narration budget's unit: characters, not cost, because provider prices change.
 
 ## `narrate`

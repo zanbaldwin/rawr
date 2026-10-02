@@ -16,7 +16,7 @@ pub struct Plan {
     /// [`DocumentMeta::identifier`](rawr_source::DocumentMeta::identifier).
     pub identifier: String,
     pub title: String,
-    /// Hash of the source the plan was made from, for the ledger. The caller sets it when known.
+    /// Hash of the source the plan was made from, for the ledger: [`Document::source_hash`].
     pub source_hash: Option<String>,
     pub provider: String,
     pub fingerprint: Fingerprint,
@@ -106,7 +106,7 @@ impl Plan {
         Ok(Self {
             identifier: document.meta.identifier.clone(),
             title: document.meta.title.clone(),
-            source_hash: None,
+            source_hash: document.source_hash().map(String::from),
             provider: synthesiser.name().to_string(),
             fingerprint,
             language,

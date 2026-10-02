@@ -13,6 +13,15 @@ pub enum ErrorKind {
     /// The section has nothing to speak: no paragraphs, only scene breaks or nothing at all.
     #[display("section {_0} has no spoken text")]
     EmptySection(#[error(not(source))] u32),
+    /// The recordings storage failed.
+    #[display("recordings storage failed")]
+    Storage,
+    /// A recording's metadata cannot be read.
+    #[display("recording {_0} is corrupt")]
+    CorruptRecording(#[error(not(source))] String),
+    /// A ledger cannot be read.
+    #[display("ledger {_0} is corrupt")]
+    CorruptLedger(#[error(not(source))] String),
 }
 
 impl ErrorKind {

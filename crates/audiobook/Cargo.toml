@@ -10,11 +10,17 @@ version.workspace = true
 default = []
 
 [dependencies]
+blake3 = { workspace = true }
 crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 rawr-source = { workspace = true }
+rawr-storage = { workspace = true }
+rawr-tts = { workspace = true }
 scraper = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+time = { workspace = true, features = ["formatting", "parsing", "serde"] }
 unicode-normalization = { workspace = true }
 unicode-segmentation = { workspace = true }
 
@@ -23,4 +29,9 @@ crc32fast = { workspace = true }
 insta = { workspace = true }
 rawr-compress = { workspace = true }
 rawr-source = { workspace = true, features = ["ao3"] }
+rawr-storage = { workspace = true, features = ["mock"] }
+rawr-tts = { workspace = true, features = ["fake"] }
 rstest = { workspace = true }
+tempfile = { workspace = true }
+time = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "rt"] }

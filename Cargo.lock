@@ -2764,10 +2764,12 @@ dependencies = [
 name = "rawr-audiobook"
 version = "0.2.0-beta"
 dependencies = [
+ "async-trait",
  "blake3",
  "crc32fast",
  "derive_more",
  "exn",
+ "futures",
  "insta",
  "rawr-compress",
  "rawr-source",

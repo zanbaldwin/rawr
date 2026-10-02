@@ -1,6 +1,6 @@
 # rawr-audiobook
 
-Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store` and `plan`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
+Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan` and `narrate`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
 
 ## `script`
 
@@ -47,6 +47,19 @@ ledgers/<blake3(identifier)>.json
 - `Plan::ledger()` builds the ledger. Narration writes it before the first paid request, so `--estimate` stays read-only. `source_hash` is set by the caller (AO3: `Version::hash`).
 - `missing_chars()` is the narration budget's unit: characters, not cost, because provider prices change.
 
+## `narrate`
+
+`narrate(plan, synthesiser, store, options)` returns a `Stream` of `NarrationEvent`s. It pays for missing batches only. `Finished` is always the last event.
+
+- **Order:** the ledger is written first. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
+- **Write order:** a recording is stored before the section's next request is sent. A store failure stops the whole run, so nothing more is paid for while recordings cannot be kept.
+- **Re-check:** each batch is looked up in the store again just before it is paid for, so a stale plan never pays twice.
+- **Continuity:** the previous request IDs come from the section's earlier recordings, including recordings from earlier runs, within the provider's age and count limits. The next text is the next batch's prepared text.
+- **Errors:** retryable errors are retried with doubling delays. `QuotaExceeded` and `Unauthorised` stop the run. Other errors fail only their section.
+- **Mismatch:** the recording is stored with status `alignment_mismatch`, a `Mismatched` event is sent, and the section stops. Later runs skip the batch. Only `retry_mismatched` pays for it again.
+- **Budget:** `max_chars` is a character limit for the run. Characters are reserved before each attempt and released when the attempt fails. Real costs from receipts are only reported (`spent`).
+- **Runtime:** the stream drives itself through a channel and needs no task spawning. Retry delays use `tokio::time::sleep`.
+
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
@@ -59,6 +72,7 @@ ledgers/<blake3(identifier)>.json
 - `fixture_snapshot` is an `insta` snapshot per fixture (`tests/snapshots/`). Each batch shows its boundary and character count. Sentences are split by ` ‖ `. A rule change shows up as a snapshot diff. Review the diff with `cargo insta review`, or accept it with `INSTA_UPDATE=always`.
 - `tests/store.rs` runs against `MockBackend`, plus one round trip on `LocalBackend` in a temporary directory (renames and directory creation on a real filesystem).
 - `tests/plan.rs` plans every fixture with the fake provider. It checks that a changed section gets new keys and the other sections keep theirs.
+- `tests/narrate.rs` uses a scripted wrapper around the fake provider (unique request IDs, injected errors and mismatches, a request log). It uses small synthetic documents, because the fake makes real PCM (about 5.8 KB for each character).
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 

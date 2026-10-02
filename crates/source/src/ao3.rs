@@ -1,9 +1,9 @@
-use crate::document::{Document, DocumentMeta, Origin, Section};
+use crate::document::{Document, DocumentMeta, Origin, Rating, Section};
 use crate::error::{ErrorKind, Result};
 use crate::source::Source;
 use exn::ResultExt;
 use rawr_extract::Extractor;
-use rawr_extract::models::{ChapterContent, Metadata};
+use rawr_extract::models::{ChapterContent, Metadata, Rating as Ao3Rating};
 
 const WORK_URL_PREFIX: &str = "https://archiveofourown.org/works/";
 
@@ -45,6 +45,13 @@ impl DocumentMeta {
             authors: metadata.authors.iter().map(ToString::to_string).collect(),
             language: metadata.language.iso_code.map(String::from),
             summary: metadata.summary.clone(),
+            rating: match metadata.rating {
+                Some(Ao3Rating::GeneralAudiences) => Rating::General,
+                Some(Ao3Rating::TeenAndUp) => Rating::Teen,
+                Some(Ao3Rating::Mature) => Rating::Mature,
+                Some(Ao3Rating::Explicit) => Rating::Explicit,
+                Some(Ao3Rating::NotRated) | None => Rating::Unrated,
+            },
         }
     }
 }

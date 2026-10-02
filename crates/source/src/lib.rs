@@ -16,5 +16,5 @@ mod source;
 
 #[cfg(feature = "ao3")]
 pub use crate::ao3::Ao3Html;
-pub use crate::document::{Document, DocumentMeta, Origin, Section};
+pub use crate::document::{Document, DocumentMeta, Origin, Rating, Section};
 pub use crate::source::Source;

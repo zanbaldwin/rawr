@@ -29,6 +29,21 @@ pub struct DocumentMeta {
     pub language: Option<String>,
     /// Plain-text summary.
     pub summary: Option<String>,
+    pub rating: Rating,
+}
+
+/// The audience a document is rated for.
+///
+/// Providers decide which ratings need explicit approval before the text is sent.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Rating {
+    General,
+    Teen,
+    Mature,
+    Explicit,
+    /// Not rated, or the source does not know the rating.
+    #[default]
+    Unrated,
 }
 
 /// One chapter-like unit of a document.

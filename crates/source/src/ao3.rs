@@ -24,35 +24,39 @@ impl Source for Ao3Html {
             exn::bail!(ErrorKind::Unsupported);
         }
         let version = rawr_extract::extract(input).or_raise(|| ErrorKind::Extract)?;
-        let sections: Vec<Section> = Extractor::from_html(input).chapters_xhtml().into_iter().map(section).collect();
+        let sections: Vec<Section> =
+            Extractor::from_html(input).chapters_xhtml().into_iter().map(Section::from_ao3_chapter).collect();
         if sections.is_empty() {
             exn::bail!(ErrorKind::NoSections);
         }
         Ok(Document {
-            meta: meta(&version.metadata),
+            meta: DocumentMeta::from_ao3_version(&version.metadata),
             sections,
             origin: Origin::Ao3(Box::new(version)),
         })
     }
 }
 
-fn meta(metadata: &Metadata) -> DocumentMeta {
-    DocumentMeta {
-        identifier: format!("{WORK_URL_PREFIX}{}", metadata.work_id),
-        title: metadata.title.clone(),
-        authors: metadata.authors.iter().map(ToString::to_string).collect(),
-        language: metadata.language.iso_code.map(String::from),
-        summary: metadata.summary.clone(),
+impl DocumentMeta {
+    fn from_ao3_version(metadata: &Metadata) -> Self {
+        Self {
+            identifier: format!("{WORK_URL_PREFIX}{}", metadata.work_id),
+            title: metadata.title.clone(),
+            authors: metadata.authors.iter().map(ToString::to_string).collect(),
+            language: metadata.language.iso_code.map(String::from),
+            summary: metadata.summary.clone(),
+        }
     }
 }
-
-fn section(chapter: ChapterContent) -> Section {
-    Section {
-        number: chapter.number,
-        title: chapter.title,
-        summary: chapter.summary,
-        body_xhtml: chapter.body_html,
-        notes: chapter.author_notes,
-        end_notes: chapter.end_notes,
+impl Section {
+    fn from_ao3_chapter(chapter: ChapterContent) -> Self {
+        Self {
+            number: chapter.number,
+            title: chapter.title,
+            summary: chapter.summary,
+            body_xhtml: chapter.body_html,
+            notes: chapter.author_notes,
+            end_notes: chapter.end_notes,
+        }
     }
 }

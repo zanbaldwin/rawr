@@ -39,6 +39,34 @@ pub struct ChapterAudio {
     /// Back to back: the first begins at 0, each ends where the next begins,
     /// and the last ends at the end of the audio.
     pub units: Vec<SyncUnit>,
+    /// How each recording was trimmed, in batch order. Dev and test builds only.
+    #[cfg(debug_assertions)]
+    pub trims: Vec<TrimReport>,
+}
+
+/// How one recording was trimmed, in samples of its own decoded audio.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrimReport {
+    /// The recording's batch key.
+    pub key: String,
+    /// Length of the decoded recording.
+    pub decoded: usize,
+    pub start: usize,
+    pub end: usize,
+    pub end_rule: EndRule,
+    /// How far the last timestamp lies past the end of the audio (ElevenLabs' 80 ms grid).
+    pub overshoot: usize,
+    /// Where the kept audio starts in the chapter.
+    pub output_start: usize,
+}
+
+/// Why a recording ends where it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EndRule {
+    /// The last character's end + 100 ms, clamped to the audio.
+    LastTimestamp,
+    /// The start of a silence after the last letter + 50 ms: a stray sound followed it.
+    TrailingSound,
 }
 
 /// One clip of the sync map, in samples.
@@ -87,6 +115,8 @@ impl Placement {
 pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Codec) -> Result<ChapterAudio> {
     let mut output: Vec<i16> = Vec::new();
     let mut units: Vec<SyncUnit> = Vec::new();
+    #[cfg(debug_assertions)]
+    let mut trims = Vec::new();
     for (index, (planned, batch)) in section.batches.iter().zip(&section.script.batches).enumerate() {
         let recording = recordings
             .get(index)
@@ -103,13 +133,24 @@ pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Cod
         if pcm.sample_rate != SAMPLE_RATE {
             exn::bail!(ErrorKind::UnsupportedAudio(format!("PCM at {} Hz", pcm.sample_rate)));
         }
-        let (trim_start, trim_end) = trim(&pcm, &alignment);
+        let trimmed = trim(&pcm, &alignment);
         output.extend(std::iter::repeat_n(0, samples(pause_ms(batch.boundary))));
+        let (trim_start, trim_end) = (trimmed.start, trimmed.end);
         let placement = Placement {
             trim_start,
             trim_end,
             output_start: output.len(),
         };
+        #[cfg(debug_assertions)]
+        trims.push(TrimReport {
+            key: planned.key.to_string(),
+            decoded: pcm.len(),
+            start: trimmed.start,
+            end: trimmed.end,
+            end_rule: trimmed.end_rule,
+            overshoot: trimmed.overshoot,
+            output_start: placement.output_start,
+        });
         output.extend(fade(&pcm.samples[trim_start..trim_end], FADE_SAMPLES));
         let at_character = |character: usize| {
             let timing = alignment.characters[character.min(alignment.characters.len() - 1)];
@@ -147,6 +188,8 @@ pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Cod
         section: section.script.section,
         pcm: Pcm::new(output, SAMPLE_RATE),
         units,
+        #[cfg(debug_assertions)]
+        trims,
     })
 }
 
@@ -158,13 +201,23 @@ fn samples(milliseconds: u32) -> usize {
     (u64::from(milliseconds) * u64::from(SAMPLE_RATE) / 1_000) as usize
 }
 
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+struct Trimmed {
+    start: usize,
+    end: usize,
+    end_rule: EndRule,
+    overshoot: usize,
+}
+
 /// The kept part of a recording: first character − 50 ms to last character + 100 ms,
 /// cut earlier at a trailing silence that is followed by a stray sound.
-fn trim(pcm: &Pcm, alignment: &Alignment) -> (usize, usize) {
+fn trim(pcm: &Pcm, alignment: &Alignment) -> Trimmed {
     let length = pcm.len();
     let characters = &alignment.characters;
     let first_start = samples(characters[0].start_ms);
-    let last_end = samples(characters[characters.len() - 1].end_ms).min(length);
+    let last_timestamp = samples(characters[characters.len() - 1].end_ms);
+    let overshoot = last_timestamp.saturating_sub(length);
+    let last_end = last_timestamp.min(length);
     let last_letter_end = characters
         .iter()
         .rposition(|timing| timing.character.is_alphanumeric())
@@ -172,8 +225,18 @@ fn trim(pcm: &Pcm, alignment: &Alignment) -> (usize, usize) {
         .min(length);
     let start = first_start.saturating_sub(samples(MARGIN_BEFORE_MS));
     let mut end = (last_end + samples(MARGIN_AFTER_MS)).min(length);
+    let mut end_rule = EndRule::LastTimestamp;
     if let Some(silence) = TrailingSound::default().find(&pcm.samples, pcm.sample_rate, last_letter_end) {
-        end = end.min(silence + samples(TRAILING_MARGIN_MS));
+        let cut = silence + samples(TRAILING_MARGIN_MS);
+        if cut < end {
+            end = cut;
+            end_rule = EndRule::TrailingSound;
+        }
     }
-    (start.min(end), end)
+    Trimmed {
+        start: start.min(end),
+        end,
+        end_rule,
+        overshoot,
+    }
 }

@@ -82,6 +82,7 @@ ledgers/<blake3(identifier)>.json
 - **Trim** (from purr): keep from the first character's start − 50 ms to the last character's end + 100 ms, clamped to the decoded length. ElevenLabs' last timestamp can be up to 80 ms past the audio. A `TrailingSound` after the last letter or digit cuts the end at that silence + 50 ms.
 - **Fades:** 5 ms (240 samples) at each edge of each recording. No crossfades.
 - **Silence before a batch, by `Boundary`:** `SectionStart` 0.5 s (the chapter's lead-in), `Heading` 1.0 s, `Paragraph` 0.45 s, `SceneBreak` 1.75 s. There is 1.0 s of lead-out after the last batch.
+- **Trim report** (dev and test builds only, `cfg(debug_assertions)`): `ChapterAudio::trims` has one `TrimReport` per recording: its key, decoded length, kept range, `EndRule` (`LastTimestamp` or `TrailingSound`), the overshoot of the last timestamp past the audio, and where it starts in the chapter. It is purr's record of cuts (`end_rule`, `cut_seconds_before_file_end`). Use it to find and listen to bad joins. Release builds do not have the field.
 - **Sync map:** one `SyncUnit` for the heading and one for each sentence, in samples. A unit begins at the output time of its first character (`ParagraphRef` offset + `Paragraph::sentence_chars()`). Units are back to back: the first begins at 0, so it covers the lead-in, and the last ends at the end of the audio, so it covers the lead-out. Begins are strictly increasing. Readers play only clip ranges, so gaps would remove the pauses.
 
 ## Invariants to keep
@@ -99,7 +100,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/narrate.rs` uses a scripted wrapper around the fake provider (unique request IDs, injected errors and mismatches, a request log). It uses small synthetic documents, because the fake makes real PCM (about 5.8 KB for each character).
 - `tests/audio.rs` uses synthetic tones and silences.
 - `tests/codec.rs` (`--features libopus`): decodes the ElevenLabs fixtures to ffmpeg's exact lengths. It parses our MP4 with `shiguredo_mp4` (dev-dependency) and checks every box against ffmpeg's layout. It decodes the packets again to check length, alignment and SNR. A last test reads the file with `ffprobe`, when installed.
-- `tests/timeline.rs` checks exact layouts from fake recordings (the fake gives 60 ms for each character). With `libopus`, it also joins real ElevenLabs audio from the fixtures and checks that only the margins are added and nothing spoken is cut.
+- `tests/timeline.rs` checks exact layouts from fake recordings (the fake gives 60 ms for each character), including the trim report. A stray sound appended after the speech is cut, a plain trailing silence keeps the 100 ms margin, and an overshooting last timestamp is clamped. With `libopus`, it also joins real ElevenLabs audio from the fixtures and checks that only the margins are added and nothing spoken is cut.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 

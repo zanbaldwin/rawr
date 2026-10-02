@@ -6,15 +6,15 @@ Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3
 
 `Script::new(section, heading, options)` builds the spoken form of one section:
 
-- `blocks`: the body in display order (`Block::Paragraph` or `Block::SceneBreak`). The EPUB text uses these.
+- `blocks`: the body in reading order (`Block::Paragraph` or `Block::SceneBreak`). Each paragraph has its spoken `text`, its `sentences`, and a `sources` entry per sentence: where the sentence is in the section's XHTML (`SourceRange` of two `TextPosition`s). The EPUB shows the XHTML as-is and uses `sources` to place the sync spans.
 - `batches`: the heading and body in narration order. One `NarrationBatch` is one text-to-speech request.
 - `seed`: the CRC32 of the heading and paragraph texts, joined by `\n`. It changes exactly when the spoken text changes.
 
 Rules (taken from purr, unchanged):
 
-- `p`, `div`, `blockquote`, `li` and `h1`–`h6` end a paragraph. `<hr>` is a scene break. `<br>` is a space.
+- `p`, `div`, `blockquote`, `li` and `h1`–`h6` end a paragraph. `<hr>` is a scene break. A `<br>`, with the whitespace around it, is one newline (`SCRIPT_RECIPE` 2; recipe 1 made it a space). Under UAX #29 a newline ends a sentence, so each line is its own sync unit unless the next line starts lowercase.
 - A scene break is a paragraph made only of break symbols (`*~-=_#•·◇◆○●+—–※`) and whitespace, or an `align="center"` paragraph with no letters (for example `2.`). Consecutive breaks collapse to one. Breaks at the start and end are removed.
-- The cleaning applies NFC, collapses whitespace and trims. scraper decodes all HTML entities.
+- The cleaning works per grapheme: NFC, whitespace runs to one space, trimmed. NFC never changes grapheme boundaries, so every cleaned character maps back to exactly one source grapheme. scraper decodes all HTML entities. Inline formatting is not kept: the display uses the XHTML itself.
 - Sentences follow UAX #29. A piece that starts with a lowercase letter joins the sentence before it (`“Why?” she asks.`).
 - Batches join paragraphs with one `\n`, because whitespace is billed. The heading is always its own batch. A scene break closes a batch. A paragraph longer than `max_batch_chars` is its own batch.
 - Summaries, notes and end notes are never spoken. Do not add an option for them, because they are addenda, not content.
@@ -87,6 +87,8 @@ ledgers/<blake3(identifier)>.json
 
 ## Invariants to keep
 
+- **`TextPosition::node` counts every text node in document order**, as `scraper::Html::parse_fragment(body_xhtml)` parses the body (whitespace-only nodes included). Anything that uses `sources` must walk the body the same way.
+
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
 - **The script is provider-neutral.** Provider-specific cleaning (for example ElevenLabs and `[`/`]`) belongs to the provider. That cleaning must keep the character count. `ParagraphRef` offsets and `Paragraph::sentence_chars()` count characters, because provider alignment is per character.
 - **The caller gives the spoken heading.** `Plan::new` uses `chapter_heading()` so it matches the displayed heading. AO3 chapter titles from rawr-extract often already include the "Chapter N: " prefix.
@@ -102,6 +104,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/codec.rs` (`--features libopus`): decodes the ElevenLabs fixtures to ffmpeg's exact lengths. It parses our MP4 with `shiguredo_mp4` (dev-dependency) and checks every box against ffmpeg's layout. It decodes the packets again to check length, alignment and SNR. A last test reads the file with `ffprobe`, when installed.
 - `tests/timeline.rs` checks exact layouts from fake recordings (the fake gives 60 ms for each character), including the trim report. A stray sound appended after the speech is cut, a plain trailing silence keeps the 100 ms margin, and an overshooting last timestamp is clamped. With `libopus`, it also joins real ElevenLabs audio from the fixtures and checks that only the margins are added and nothing spoken is cut.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
+- `fixture_sources_point_at_each_sentence` cuts each sentence's source range out of the real text nodes, normalises it, and compares it with the sentence.
 - Small rule cases build `Section` values in the test file.
 
 ## Checks

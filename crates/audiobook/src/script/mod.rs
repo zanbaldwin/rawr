@@ -21,7 +21,10 @@ use std::ops::Range;
 ///
 /// Bump it whenever a rule changes the output text, so that recordings made
 /// under older rules are not mistaken for current ones.
-pub const SCRIPT_RECIPE: u32 = 1;
+///
+/// - 1: the rules from purr (a `<br>` is a space).
+/// - 2: a `<br>`, with the whitespace around it, is a newline.
+pub const SCRIPT_RECIPE: u32 = 2;
 
 /// Joins paragraphs in a batch. One newline, not a blank line: whitespace is billed.
 pub const PARAGRAPH_SEPARATOR: &str = "\n";
@@ -58,37 +61,32 @@ pub enum Block {
 /// A cleaned paragraph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paragraph {
-    /// The concatenation of [`runs`](Self::runs).
+    /// The spoken text.
     pub text: String,
-    pub runs: Vec<Run>,
     /// Sync units (sentences): byte ranges in [`text`](Self::text), in order, not overlapping.
     pub sentences: Vec<Range<usize>>,
+    /// Where each sentence is in the section's XHTML, one per sentence. Empty
+    /// for the spoken heading, which is not part of the body.
+    pub sources: Vec<SourceRange>,
 }
 
-/// Text with the same inline formatting.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Run {
-    pub text: String,
-    /// Outermost first.
-    pub styles: Vec<InlineStyle>,
-}
-
-/// Inline formatting kept for the read-along text.
+/// A sentence's place in the section's XHTML body, from its first source
+/// grapheme to the end of its last.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum InlineStyle {
-    Em,
-    Strong,
-    I,
-    B,
-    U,
-    S,
-    Del,
-    Ins,
-    Sup,
-    Sub,
-    Small,
-    Code,
-    Cite,
+pub struct SourceRange {
+    pub start: TextPosition,
+    pub end: TextPosition,
+}
+
+/// A position in the section's XHTML body.
+///
+/// `node` counts every text node in document order, as
+/// `scraper::Html::parse_fragment(body_xhtml)` parses it; `offset` is a byte
+/// offset in that node's text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TextPosition {
+    pub node: usize,
+    pub offset: usize,
 }
 
 /// The text of one text-to-speech request.
@@ -131,15 +129,10 @@ impl Script {
     pub fn new(section: &Section, heading: Option<&str>, options: &ScriptOptions) -> Result<Self> {
         let heading = heading.map(blocks::clean).filter(|text| !text.is_empty()).map(|text| Paragraph {
             sentences: std::iter::once(0..text.len()).collect(),
-            runs: vec![Run { text: text.clone(), styles: Vec::new() }],
+            sources: Vec::new(),
             text,
         });
-        let mut blocks = blocks::blocks(&section.body_xhtml);
-        for block in &mut blocks {
-            if let Block::Paragraph(paragraph) = block {
-                paragraph.sentences = sentences::sentences(&paragraph.text);
-            }
-        }
+        let blocks = blocks::blocks(&section.body_xhtml);
         if !blocks.iter().any(|block| matches!(block, Block::Paragraph(_))) {
             exn::bail!(ErrorKind::EmptySection(section.number));
         }
@@ -175,28 +168,6 @@ impl Paragraph {
                 start..start + self.text[range.clone()].chars().count()
             })
             .collect()
-    }
-}
-
-impl InlineStyle {
-    /// The style for an XHTML element name, if it is kept.
-    pub fn from_element(name: &str) -> Option<Self> {
-        Some(match name {
-            "em" => Self::Em,
-            "strong" => Self::Strong,
-            "i" => Self::I,
-            "b" => Self::B,
-            "u" => Self::U,
-            "s" => Self::S,
-            "del" => Self::Del,
-            "ins" => Self::Ins,
-            "sup" => Self::Sup,
-            "sub" => Self::Sub,
-            "small" => Self::Small,
-            "code" => Self::Code,
-            "cite" => Self::Cite,
-            _ => return None,
-        })
     }
 }
 

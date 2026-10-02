@@ -1,15 +1,17 @@
-use super::{Block, InlineStyle, Paragraph, Run};
+use super::{Block, Paragraph, SourceRange, TextPosition, sentences};
 use scraper::{ElementRef, Html, Node};
 use unicode_normalization::UnicodeNormalization;
+use unicode_segmentation::UnicodeSegmentation;
 
 const BLOCK_ELEMENTS: &[&str] = &["p", "div", "blockquote", "li", "h1", "h2", "h3", "h4", "h5", "h6"];
 /// A paragraph made only of these (and whitespace) is a scene break.
 const BREAK_SYMBOLS: &str = "*~-=_#•·◇◆○●+—–※";
 
-/// Splits a section's XHTML body into cleaned paragraphs and scene breaks.
+/// Splits a section's XHTML body into cleaned paragraphs (with sentences and
+/// their source positions) and scene breaks.
 ///
 /// Consecutive scene breaks collapse to one, and scene breaks at the start
-/// and end are removed. Sentence ranges are left empty for the caller.
+/// and end are removed.
 pub(super) fn blocks(body_xhtml: &str) -> Vec<Block> {
     let fragment = Html::parse_fragment(body_xhtml);
     let mut collector = Collector::default();
@@ -32,19 +34,41 @@ pub(super) fn clean(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+enum Piece {
+    Text { node: usize, text: String },
+    LineBreak,
+}
+
+/// Where one character of cleaned text came from.
+#[derive(Clone, Copy)]
+struct CharSource {
+    start: TextPosition,
+    end: TextPosition,
+}
+
+#[derive(Clone, Copy)]
+enum Separator {
+    Space(CharSource),
+    LineBreak(CharSource),
+}
+
 #[derive(Default)]
 struct Collector {
     blocks: Vec<Block>,
-    buffer: Vec<Run>,
-    styles: Vec<InlineStyle>,
+    buffer: Vec<Piece>,
     centred: bool,
+    /// Text nodes seen so far, in document order.
+    nodes: usize,
 }
 
 impl Collector {
     fn walk(&mut self, element: ElementRef<'_>) {
         for child in element.children() {
             match child.value() {
-                Node::Text(text) => self.push(text),
+                Node::Text(text) => {
+                    self.buffer.push(Piece::Text { node: self.nodes, text: text.to_string() });
+                    self.nodes += 1;
+                },
                 Node::Element(value) => {
                     let Some(child) = ElementRef::wrap(child) else {
                         continue;
@@ -60,11 +84,7 @@ impl Collector {
                         self.flush();
                         self.blocks.push(Block::SceneBreak);
                     } else if name == "br" {
-                        self.push(" ");
-                    } else if let Some(style) = InlineStyle::from_element(name) {
-                        self.styles.push(style);
-                        self.walk(child);
-                        self.styles.pop();
+                        self.buffer.push(Piece::LineBreak);
                     } else {
                         self.walk(child);
                     }
@@ -74,20 +94,8 @@ impl Collector {
         }
     }
 
-    fn push(&mut self, text: &str) {
-        match self.buffer.last_mut() {
-            Some(run) if run.styles == self.styles => run.text.push_str(text),
-            _ => self.buffer.push(Run {
-                text: text.to_string(),
-                styles: self.styles.clone(),
-            }),
-        }
-    }
-
     fn flush(&mut self) {
-        let runs = clean_runs(&self.buffer);
-        self.buffer.clear();
-        let text: String = runs.iter().map(|run| run.text.as_str()).collect();
+        let (text, map) = clean_pieces(&std::mem::take(&mut self.buffer));
         if text.is_empty() {
             return;
         }
@@ -96,33 +104,73 @@ impl Collector {
         self.blocks.push(if only_symbols || centred_without_letters {
             Block::SceneBreak
         } else {
-            Block::Paragraph(Paragraph { text, runs, sentences: Vec::new() })
+            let sentences = sentences::sentences(&text);
+            let sources = sentences
+                .iter()
+                .map(|range| {
+                    let first = text[..range.start].chars().count();
+                    let last = first + text[range.clone()].chars().count() - 1;
+                    SourceRange {
+                        start: map[first].start,
+                        end: map[last].end,
+                    }
+                })
+                .collect();
+            Block::Paragraph(Paragraph { text, sentences, sources })
         });
     }
 }
 
-/// [`clean`] across runs: a space between two runs goes to the end of the earlier run.
-fn clean_runs(raw: &[Run]) -> Vec<Run> {
-    let mut runs: Vec<Run> = Vec::new();
-    let mut pending_space = false;
-    for run in raw {
-        for character in run.text.nfc() {
-            if character.is_whitespace() {
-                pending_space = !runs.is_empty();
-                continue;
-            }
-            if pending_space && let Some(last) = runs.last_mut() {
-                last.text.push(' ');
-            }
-            pending_space = false;
-            match runs.last_mut() {
-                Some(last) if last.styles == run.styles => last.text.push(character),
-                _ => runs.push(Run {
-                    text: character.to_string(),
-                    styles: run.styles.clone(),
-                }),
-            }
+/// Clean text from pieces, grapheme by grapheme, keeping each character's
+/// source: NFC, whitespace runs become one space, a line break (with the
+/// whitespace around it) becomes one newline, and the ends are trimmed.
+/// NFC never changes grapheme boundaries, so every character maps to the
+/// one source grapheme it came from.
+fn clean_pieces(pieces: &[Piece]) -> (String, Vec<CharSource>) {
+    let mut text = String::new();
+    let mut map: Vec<CharSource> = Vec::new();
+    let mut pending: Option<Separator> = None;
+    for piece in pieces {
+        match piece {
+            Piece::LineBreak => {
+                if let Some(last) = map.last() {
+                    let at = CharSource { start: last.end, end: last.end };
+                    pending = Some(Separator::LineBreak(at));
+                }
+            },
+            Piece::Text { node, text: raw } => {
+                for (offset, grapheme) in raw.grapheme_indices(true) {
+                    let source = CharSource {
+                        start: TextPosition { node: *node, offset },
+                        end: TextPosition {
+                            node: *node,
+                            offset: offset + grapheme.len(),
+                        },
+                    };
+                    if grapheme.chars().all(char::is_whitespace) {
+                        if !map.is_empty() && pending.is_none() {
+                            pending = Some(Separator::Space(source));
+                        }
+                        continue;
+                    }
+                    match pending.take() {
+                        Some(Separator::Space(at)) => {
+                            text.push(' ');
+                            map.push(at);
+                        },
+                        Some(Separator::LineBreak(at)) => {
+                            text.push('\n');
+                            map.push(at);
+                        },
+                        None => {},
+                    }
+                    for character in grapheme.nfc() {
+                        text.push(character);
+                        map.push(source);
+                    }
+                }
+            },
         }
     }
-    runs
+    (text, map)
 }

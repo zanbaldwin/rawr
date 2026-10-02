@@ -2957,6 +2957,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawr-tts"
+version = "0.2.0-beta"
+dependencies = [
+ "async-trait",
+ "derive_more",
+ "exn",
+ "tokio",
+]
+
+[[package]]
 name = "rawr-xhtml"
 version = "0.2.0-beta"
 dependencies = [

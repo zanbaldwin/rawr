@@ -49,6 +49,7 @@ rawr-output = { path = "crates/output", default-features = false }
 rawr-render = { path = "crates/render", default-features = false }
 rawr-source = { path = "crates/source", default-features = false }
 rawr-storage = { path = "crates/storage", default-features = false }
+rawr-tts = { path = "crates/tts", default-features = false }
 rawr-xhtml = { path = "crates/xhtml", default-features = false }
 regex = { version = "^1.12", default-features = false }
 rslug = "^0.3"

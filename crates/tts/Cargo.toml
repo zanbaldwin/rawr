@@ -1,0 +1,19 @@
+[package]
+name = "rawr-tts"
+description = "Text-to-speech: a provider-neutral synthesiser trait and its providers"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+fake = []
+
+[dependencies]
+async-trait = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

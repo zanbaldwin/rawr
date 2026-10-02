@@ -5,5 +5,6 @@
 //! grouped into narration batches.
 
 pub mod error;
+pub mod plan;
 pub mod script;
 pub mod store;

@@ -13,6 +13,9 @@ pub enum ErrorKind {
     /// The section has nothing to speak: no paragraphs, only scene breaks or nothing at all.
     #[display("section {_0} has no spoken text")]
     EmptySection(#[error(not(source))] u32),
+    /// The text-to-speech provider failed; the provider's error is the source.
+    #[display("text-to-speech provider failed")]
+    Provider,
     /// The recordings storage failed.
     #[display("recordings storage failed")]
     Storage,

@@ -1,6 +1,6 @@
 # rawr-audiobook
 
-Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script` and `store`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
+Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store` and `plan`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
 
 ## `script`
 
@@ -36,6 +36,17 @@ ledgers/<blake3(identifier)>.json
 - `RecordingStatus::AlignmentMismatch` keeps paid audio that cannot be used. It is never paid for again without an explicit flag.
 - A **ledger** lists the keys of a document's latest plan. Nothing reads it to resume. `delete_document` and `orphans` use it, and `delete_document` keeps keys that another ledger still uses.
 
+## `plan`
+
+`Plan::new(document, synthesiser, store)` scripts every section, prepares each batch's text with the provider, computes its batch key, and looks the key up in the store. It pays for nothing and writes nothing.
+
+- The fingerprint is checked first, so a missing voice fails the plan (`ErrorKind::Provider`, with the provider's `NoVoice` as the source) before anything else.
+- `BatchState`: `Missing` (to be paid for), `Recorded`, or `Mismatched` (paid for, but the alignment did not match; never paid for again without an explicit flag).
+- Sections with nothing to speak are listed in `skipped`.
+- The spoken heading is `section.title` until the EPUB writer fixes the heading rule.
+- `Plan::ledger()` builds the ledger. Narration writes it before the first paid request, so `--estimate` stays read-only. `source_hash` is set by the caller (AO3: `Version::hash`).
+- `missing_chars()` is the narration budget's unit: characters, not cost, because provider prices change.
+
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
@@ -47,6 +58,7 @@ ledgers/<blake3(identifier)>.json
 - Tests are in `tests/`, not in the source files. They are git-ignored, and they are kept with the fixtures in the `rawr-fixtures` repository.
 - `fixture_snapshot` is an `insta` snapshot per fixture (`tests/snapshots/`). Each batch shows its boundary and character count. Sentences are split by ` ‖ `. A rule change shows up as a snapshot diff. Review the diff with `cargo insta review`, or accept it with `INSTA_UPDATE=always`.
 - `tests/store.rs` runs against `MockBackend`, plus one round trip on `LocalBackend` in a temporary directory (renames and directory creation on a real filesystem).
+- `tests/plan.rs` plans every fixture with the fake provider. It checks that a changed section gets new keys and the other sections keep theirs.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 

@@ -41,7 +41,7 @@ pub struct MockBackend {
 }
 impl MockBackend {
     fn new_operator() -> Operator {
-        Operator::new(Memory::default()).expect("Memory operator construction is infallible").finish()
+        Operator::new(Memory::default()).expect("Memory operator construction is infallible")
     }
 
     /// Create a mock backend pre-populated with files.

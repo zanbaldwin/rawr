@@ -65,10 +65,8 @@ impl LocalBackend {
             exn::bail!(ErrorKind::PermissionDenied(root_str.to_string()));
         }
         let builder = Fs::default().root(root_str);
-        let operator = Operator::new(builder)
-            .map_err(|e| ErrorKind::BackendError(e.to_string()))?
-            .layer(RetryLayer::default())
-            .finish();
+        let operator =
+            Operator::new(builder).map_err(|e| ErrorKind::BackendError(e.to_string()))?.layer(RetryLayer::default());
 
         Ok(Self { name: name.into(), operator })
     }

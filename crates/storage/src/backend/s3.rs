@@ -83,8 +83,7 @@ impl S3Backend {
         let operator = Operator::new(builder)
             .map_err(|e| ErrorKind::BackendError(e.to_string()))?
             .layer(RetryLayer::default().with_max_times(4))
-            .layer(ConcurrentLimitLayer::new(100))
-            .finish();
+            .layer(ConcurrentLimitLayer::new(100));
 
         Ok(Self { name: name.into(), operator })
     }

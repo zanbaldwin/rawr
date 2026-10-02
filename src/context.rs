@@ -57,9 +57,7 @@ impl AppContext {
         &self,
         compression: impl Into<Option<Compression>>,
     ) -> Result<Arc<LibraryContext>> {
-        Ok(Arc::new(
-            rawr_app::library_context(&self.config, compression, self.dry_run).await?,
-        ))
+        Ok(Arc::new(rawr_app::library_context(&self.config, compression, self.dry_run).await?))
     }
 }
 

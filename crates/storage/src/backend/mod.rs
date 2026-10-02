@@ -385,9 +385,12 @@ pub trait StorageBackend: OperatorAware + Send + Sync {
     /// does not exist.
     async fn reader(&self, path: &ValidPath) -> Result<BoxedReader> {
         tracing::trace!(backend = self.name(), path = %path, "open reader to file in storage backend");
+        let meta = self.operator().stat(path.as_str()).await.map_err(|e| map_opendal_error(e, path.to_string()))?;
         let reader = self.operator().reader(path.as_str()).await.map_err(|e| map_opendal_error(e, path.to_string()))?;
-        let async_read =
-            reader.into_futures_async_read(..).await.map_err(|e| map_opendal_error(e, path.to_string()))?;
+        let async_read = reader
+            .into_futures_async_read(..meta.content_length())
+            .await
+            .map_err(|e| map_opendal_error(e, path.to_string()))?;
         Ok(Box::new(async_read))
     }
 

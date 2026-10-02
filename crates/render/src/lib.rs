@@ -32,6 +32,8 @@
 #[cfg(feature = "epub")]
 pub mod epub;
 pub mod error;
+#[cfg(feature = "metadata")]
+pub mod pages;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 mod style;

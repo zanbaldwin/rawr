@@ -8,7 +8,7 @@ version.workspace = true
 
 [features]
 default = ["epub", "pdf"]
-epub = ["dep:epub-builder", "dep:rawr-extract", "rawr-extract/chapters"]
+epub = ["metadata", "dep:epub-builder", "rawr-extract/chapters"]
 metadata = ["dep:rawr-extract"]
 pdf = ["dep:which"]
 

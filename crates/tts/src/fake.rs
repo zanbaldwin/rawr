@@ -89,6 +89,11 @@ impl Synthesiser for FakeSynthesiser {
         ]))
     }
 
+    async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
+        self.fingerprint(language)?;
+        Ok(Some(self.voice.clone()))
+    }
+
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis> {
         self.fingerprint(request.language.as_deref())?;
         let samples_per_character = (SAMPLE_RATE * MS_PER_CHARACTER / 1_000) as usize;

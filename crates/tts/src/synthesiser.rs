@@ -28,6 +28,18 @@ pub trait Synthesiser: Send + Sync {
 
     /// Send one request. The text must already be [`prepare`](Self::prepare)d.
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis>;
+
+    /// The display name of the voice for this language, for the narrator
+    /// credit. Never paid for. `None` when the provider cannot tell.
+    ///
+    /// # Errors
+    ///
+    /// [`NoVoice`](crate::error::ErrorKind::NoVoice) if no voice is configured
+    /// for the language, or the provider's errors for a failed lookup.
+    async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
+        self.fingerprint(language)?;
+        Ok(None)
+    }
 }
 
 /// A shared, dynamically-dispatched synthesiser.

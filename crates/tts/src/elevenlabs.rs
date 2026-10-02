@@ -143,6 +143,11 @@ struct AlignmentBody {
 }
 
 #[derive(Deserialize)]
+struct VoiceBody {
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct ErrorBody {
     detail: Option<ErrorDetail>,
 }
@@ -181,6 +186,29 @@ impl ElevenLabs {
             self.voice(language)?,
             self.settings.output_format.as_query()
         ))
+    }
+
+    /// The URL that describes the voice for a language (`GET`, free).
+    ///
+    /// # Errors
+    ///
+    /// [`NoVoice`](ErrorKind::NoVoice) if no voice is configured for the language.
+    pub fn voice_url(&self, language: Option<&str>) -> Result<String> {
+        Ok(format!("{BASE_URL}/v1/voices/{}", self.voice(language)?))
+    }
+
+    /// The voice name from a `GET /v1/voices/{voice_id}` response, without any network.
+    ///
+    /// # Errors
+    ///
+    /// The [`ErrorKind`] for the HTTP status, or
+    /// [`MalformedResponse`](ErrorKind::MalformedResponse) for a body that cannot be decoded.
+    pub fn parse_voice_name(&self, status: u16, body: &[u8]) -> Result<Option<String>> {
+        if !(200..300).contains(&status) {
+            exn::bail!(classify(status, body));
+        }
+        let voice: VoiceBody = serde_json::from_slice(body).or_raise(|| ErrorKind::MalformedResponse)?;
+        Ok(voice.name.map(|name| name.trim().to_string()).filter(|name| !name.is_empty()))
     }
 
     /// The JSON request body. Continuity is cut to the provider's limits:
@@ -300,6 +328,20 @@ impl Synthesiser for ElevenLabs {
             ("similarity_boost", self.settings.similarity_boost.to_string()),
             ("output_format", self.settings.output_format.as_query()),
         ]))
+    }
+
+    async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
+        let response = self
+            .client
+            .get(self.voice_url(language)?)
+            .header("xi-api-key", &self.settings.api_key.0)
+            .send()
+            .await
+            .or_raise(|| ErrorKind::Unavailable)?;
+        let status = response.status().as_u16();
+        let body = response.bytes().await.or_raise(|| ErrorKind::Unavailable)?;
+        tracing::trace!(status, body = %String::from_utf8_lossy(&body), "elevenlabs voice");
+        self.parse_voice_name(status, &body)
     }
 
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis> {

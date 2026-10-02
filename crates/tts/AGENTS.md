@@ -8,6 +8,7 @@ Text to speech. `Synthesiser` is the one interface every provider implements. Us
 - `prepare(text)` is the provider's own text cleaning. It must keep the character count, because alignment indices are matched against `rawr-audiobook` script offsets. Implementations `debug_assert` this.
 - `fingerprint(language)` describes everything provider-specific that changes the audio (model, voice, settings, output format). `Fingerprint::new` sorts the keys. The store puts the fingerprint in the batch key, so recordings from different voices never mix. It gives `NoVoice` for a language with no voice, before anything is paid for.
 - `synthesise(request)` sends one request. The text must already be prepared.
+- `voice_name(language)` gives the voice's display name for the narrator credit. It is never paid for. The default returns `None` after checking that a voice exists. The fake returns its voice name. ElevenLabs uses `GET /v1/voices/{voice_id}` (`voice_url`, `parse_voice_name`).
 - Providers classify errors. Only `RateLimited` and `Unavailable` are retryable. The caller owns retries and back-off.
 - `AlignmentMismatch` carries the paid `Synthesis`. The caller must store it before it fails.
 

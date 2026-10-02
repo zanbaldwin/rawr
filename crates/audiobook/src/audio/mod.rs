@@ -1,8 +1,18 @@
 //! Audio: PCM, signal processing, and (with a codec feature) encoding and decoding.
 
+mod codec;
 mod dsp;
+#[cfg(feature = "libopus")]
+mod libopus;
+#[cfg(feature = "_opus")]
+mod mp4;
+#[cfg(feature = "_opus")]
+mod ogg;
 
+pub use self::codec::{Codec, EncodedAudio};
 pub use self::dsp::{TrailingSound, fade};
+#[cfg(feature = "libopus")]
+pub use self::libopus::LibOpus;
 
 /// The one sample rate the pipeline works at.
 pub const SAMPLE_RATE: u32 = 48_000;

@@ -66,6 +66,15 @@ ledgers/<blake3(identifier)>.json
 - `fade` applies a linear fade at each edge (the timeline uses 240 samples, 5 ms). The first and last samples become 0.
 - `TrailingSound::default()` uses purr's values: at least 100 ms below −60 dBFS, then a 10 ms window above −50 dBFS. `find` returns the start of that silence, searching from the end of the last letter or digit. It cuts the stray sound that long Korean ElevenLabs batches can end with.
 
+### Codec (feature `libopus`)
+
+- `Codec::decode` turns provider audio into 48 kHz mono PCM. For Ogg Opus it drops the OpusHead pre-skip and trims to the last granule position. The result has the same length as ffmpeg's decode. `Pcm` audio passes through at 48 kHz only.
+- `Codec::encode` writes Opus in MP4 (`audio/mp4`, `.mp4`): mono, `Application::Audio`, 20 ms frames, `LibOpus::new(bitrate_kbps)` (default 32). The input is padded with zeros to whole frames after the encoder delay (pre-skip = `get_lookahead()`).
+- `audio/mp4.rs` is our own writer for this one fixed shape: `ftyp`, `moov` (faststart), `mdat`. It follows ffmpeg's boxes: `Opus` + `dOps`, an `elst` with media time = pre-skip and duration = real length, the last `stts` delta shortened so the media ends at pre-skip + length, and a `roll` group (−4, 80 ms). Offsets and durations are 32-bit. Longer audio gives `UnsupportedAudio`.
+- Opus output is about 2 samples (0.04 ms) early against the input, a normal codec phase shift. It is far below the 1 ms sync precision.
+- libopus 1.6.1 is built from source (`opusic-sys`, cmake + a C compiler), like `libbzip3-sys`. It builds for `x86_64-unknown-linux-musl`.
+- **To do:** add `opus-pure` as a second `Codec`, and test that its decode and encode are effectively the same as libopus (exact length, ±1 LSB decode, similar size and SNR).
+
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
@@ -80,6 +89,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/plan.rs` plans every fixture with the fake provider. It checks that a changed section gets new keys and the other sections keep theirs.
 - `tests/narrate.rs` uses a scripted wrapper around the fake provider (unique request IDs, injected errors and mismatches, a request log). It uses small synthetic documents, because the fake makes real PCM (about 5.8 KB for each character).
 - `tests/audio.rs` uses synthetic tones and silences.
+- `tests/codec.rs` (`--features libopus`): decodes the ElevenLabs fixtures to ffmpeg's exact lengths. It parses our MP4 with `shiguredo_mp4` (dev-dependency) and checks every box against ffmpeg's layout. It decodes the packets again to check length, alignment and SNR. A last test reads the file with `ffprobe`, when installed.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 
@@ -88,7 +98,9 @@ ledgers/<blake3(identifier)>.json
 Run in the `rawr` toolbox:
 
 ```sh
+cargo test -p rawr-audiobook --features libopus
 cargo test -p rawr-audiobook
+cargo clippy -p rawr-audiobook --features libopus --all-targets
 cargo clippy -p rawr-audiobook --all-targets
 cargo fmt -p rawr-audiobook --check
 ```

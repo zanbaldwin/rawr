@@ -36,6 +36,8 @@ libbzip3-sys = { version = "^0.5", features = ["bundled"] }
 liblzma = "^0.4.6"
 memchr = "^2.8"
 miette = "^7.6"
+ogg = "^0.9.2"
+opus = "^0.4"
 opendal = { version = "^0.59.0", default-features = false }
 pin-project-lite = "^0.2.17"
 rawr-app = { path = "crates/app", default-features = false }
@@ -59,6 +61,7 @@ rust-embed = "^8.11"
 scraper = { version = "^0.27.0", default-features = false }
 serde = "^1.0"
 serde_json = "^1.0"
+shiguredo_mp4 = "=2026.5.0"
 similar = "^3.1"
 sqlx = { version = "^0.9.0", default-features = false }
 tempfile = "^3.25"

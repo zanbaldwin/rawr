@@ -8,6 +8,8 @@ version.workspace = true
 
 [features]
 default = []
+libopus = ["_opus", "dep:opus"]
+_opus = ["dep:ogg"]
 
 [dependencies]
 blake3 = { workspace = true }
@@ -15,6 +17,8 @@ crc32fast = { workspace = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 futures = { workspace = true, features = ["std"] }
+ogg = { workspace = true, optional = true }
+opus = { workspace = true, optional = true }
 rawr-source = { workspace = true }
 rawr-storage = { workspace = true }
 rawr-tts = { workspace = true }
@@ -28,6 +32,7 @@ unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+base64 = { workspace = true }
 crc32fast = { workspace = true }
 futures = { workspace = true, features = ["std"] }
 insta = { workspace = true }
@@ -36,6 +41,8 @@ rawr-source = { workspace = true, features = ["ao3"] }
 rawr-storage = { workspace = true, features = ["mock"] }
 rawr-tts = { workspace = true, features = ["fake"] }
 rstest = { workspace = true }
+serde_json = { workspace = true }
+shiguredo_mp4 = { workspace = true }
 tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["macros", "rt"] }

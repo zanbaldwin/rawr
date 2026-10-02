@@ -16,6 +16,15 @@ pub enum ErrorKind {
     /// The text-to-speech provider failed; the provider's error is the source.
     #[display("text-to-speech provider failed")]
     Provider,
+    /// Audio in a form the codec does not handle (sample rate, channels, length).
+    #[display("unsupported audio: {_0}")]
+    UnsupportedAudio(#[error(not(source))] String),
+    /// Audio that cannot be read.
+    #[display("malformed audio")]
+    MalformedAudio,
+    /// The audio encoder or decoder failed.
+    #[display("audio codec failed")]
+    Codec,
     /// The recordings storage failed.
     #[display("recordings storage failed")]
     Storage,

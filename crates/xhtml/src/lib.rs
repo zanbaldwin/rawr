@@ -39,6 +39,9 @@ pub fn to_offline_xhtml(element: &ElementRef<'_>) -> String {
 /// - Paragraphs containing no printable characters (whitespace and no-break
 ///   spaces only, e.g. `<p>&#160;</p>` spacers) are removed — authors use them
 ///   for vertical spacing, which wastes screen space on small e-readers.
+/// - Two or more `<br>` directly inside a `<p>`, with only whitespace between
+///   them, split the paragraph in two: authors use `<br><br>` as a paragraph
+///   break. A single `<br>` is kept.
 #[must_use]
 pub fn to_ebook_xhtml(element: &ElementRef<'_>) -> String {
     serialize_inner(element, Some(offline_filter), true)
@@ -110,6 +113,10 @@ fn is_void(name: &QualName) -> bool {
         )
 }
 
+fn attrs_owned(attrs: &[AttrRef<'_>]) -> Vec<(QualName, String)> {
+    attrs.iter().map(|(name, value)| ((*name).clone(), (*value).to_string())).collect()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ElemAction {
     Write,
@@ -125,6 +132,12 @@ struct PendingParagraph {
     /// `stack` depth when the paragraph started; used to detect its end tag.
     depth: usize,
     has_printable: bool,
+    /// The paragraph's attributes, for a paragraph split at `<br><br>`.
+    attrs: Vec<(QualName, String)>,
+    /// A `<br/>` (and the whitespace after it) held back, in case a second one follows.
+    held_break: Option<Vec<u8>>,
+    /// The paragraph was just split: further `<br>` and whitespace are dropped.
+    after_split: bool,
 }
 
 struct XhtmlSerializer<W: Write> {
@@ -166,23 +179,86 @@ impl<W: Write> XhtmlSerializer<W> {
         if !self.ebook || name.ns != ns!(html) || name.local != local_name!("p") {
             return false;
         }
-        match self.last_sibling.last() {
-            Some(None) | None => true,
-            Some(Some(prev)) => matches!(
-                *prev,
-                local_name!("hr")
-                    | local_name!("h1")
-                    | local_name!("h2")
-                    | local_name!("h3")
-                    | local_name!("h4")
-                    | local_name!("h5")
-                    | local_name!("h6")
-                    | local_name!("blockquote")
-                    | local_name!("ul")
-                    | local_name!("ol")
-                    | local_name!("div")
-            ),
+        resets_indent(self.last_sibling.last().and_then(Option::as_ref))
+    }
+
+    /// Whether the next paragraph should be marked as such: nothing written
+    /// before it in its container, or a block break element just before it.
+    fn ebook_first_after(&self, depth: usize) -> bool {
+        resets_indent(self.last_sibling.get(depth).and_then(Option::as_ref))
+    }
+}
+
+fn resets_indent(previous: Option<&html5ever::LocalName>) -> bool {
+    match previous {
+        None => true,
+        Some(prev) => matches!(
+            *prev,
+            local_name!("hr")
+                | local_name!("h1")
+                | local_name!("h2")
+                | local_name!("h3")
+                | local_name!("h4")
+                | local_name!("h5")
+                | local_name!("h6")
+                | local_name!("blockquote")
+                | local_name!("ul")
+                | local_name!("ol")
+                | local_name!("div")
+        ),
+    }
+}
+
+impl<W: Write> XhtmlSerializer<W> {
+    /// Whether the next node is a direct child of the paragraph being held back.
+    fn at_paragraph_level(&self) -> bool {
+        self.ebook
+            && !self.is_skipping()
+            && self.pending.as_ref().is_some_and(|pending| pending.depth + 1 == self.stack.len())
+    }
+
+    /// A `<br>` directly inside the held-back paragraph: hold it, or split the
+    /// paragraph if one is already held.
+    fn paragraph_break(&mut self) -> IoResult<()> {
+        let pending = self.pending.as_mut().expect("paragraph level checked by the caller");
+        if pending.after_split {
+            return Ok(());
         }
+        if pending.held_break.is_none() {
+            pending.held_break = Some(b"<br/>".to_vec());
+            return Ok(());
+        }
+        let mut pending = self.pending.take().expect("checked above");
+        pending.buf.extend_from_slice(b"</p>");
+        if pending.has_printable {
+            let parent = self.last_sibling.len() - 2;
+            self.last_sibling[parent] = Some(local_name!("p"));
+            self.writer.write_all(&pending.buf)?;
+        }
+        let mark_first = self.ebook_first_after(self.last_sibling.len() - 2);
+        self.pending = Some(PendingParagraph {
+            buf: Vec::new(),
+            depth: pending.depth,
+            has_printable: false,
+            attrs: pending.attrs,
+            held_break: None,
+            after_split: true,
+        });
+        let attrs = self.pending.as_ref().expect("just set").attrs.clone();
+        let refs: Vec<AttrRef<'_>> = attrs.iter().map(|(name, value)| (name, value.as_str())).collect();
+        self.out().write_all(b"<p")?;
+        self.write_attrs(&refs, mark_first)?;
+        self.out().write_all(b">")
+    }
+
+    /// Write a held-back `<br/>` and its whitespace: no second `<br>` followed.
+    fn release_break(&mut self) -> IoResult<()> {
+        if let Some(pending) = &mut self.pending
+            && let Some(held) = pending.held_break.take()
+        {
+            pending.buf.extend_from_slice(&held);
+        }
+        Ok(())
     }
 
     fn is_skipping(&self) -> bool {
@@ -262,22 +338,35 @@ impl<W: Write> Serializer for XhtmlSerializer<W> {
             self.last_sibling.push(None);
             return Ok(());
         }
+        let attrs: Vec<_> = attrs.collect();
         let mark_first = self.marks_first(&name);
         // In ebook mode, hold paragraphs back until their content proves
         // printable; a dropped paragraph must not count as a sibling either,
         // so recording it in `last_sibling` is deferred to `end_elem`.
         let starts_pending =
             self.ebook && self.pending.is_none() && name.ns == ns!(html) && name.local == local_name!("p");
+        if self.at_paragraph_level() && name.ns == ns!(html) && name.local == local_name!("br") {
+            self.paragraph_break()?;
+            self.stack.push(ElemAction::Skip);
+            self.last_sibling.push(None);
+            return Ok(());
+        }
+        self.release_break()?;
+        if let Some(pending) = &mut self.pending {
+            pending.after_split = false;
+        }
         if starts_pending {
             self.pending = Some(PendingParagraph {
                 buf: Vec::new(),
                 depth: self.stack.len(),
                 has_printable: false,
+                attrs: attrs_owned(&attrs),
+                held_break: None,
+                after_split: false,
             });
         } else if let Some(entry) = self.last_sibling.last_mut() {
             *entry = Some(name.local.clone());
         }
-        let attrs: Vec<_> = attrs.collect();
         self.out().write_all(b"<")?;
         self.out().write_all(name.local.as_bytes())?;
         self.write_attrs(&attrs, mark_first)?;
@@ -293,6 +382,9 @@ impl<W: Write> Serializer for XhtmlSerializer<W> {
     }
 
     fn end_elem(&mut self, name: QualName) -> IoResult<()> {
+        if self.pending.as_ref().is_some_and(|pending| pending.depth + 1 == self.stack.len()) {
+            self.release_break()?;
+        }
         self.last_sibling.pop();
         match self.stack.pop() {
             Some(ElemAction::Write) => {
@@ -318,10 +410,25 @@ impl<W: Write> Serializer for XhtmlSerializer<W> {
         if self.is_skipping() {
             return Ok(());
         }
-        if let Some(pending) = &mut self.pending {
-            if text.chars().any(|c| !c.is_whitespace()) {
-                pending.has_printable = true;
+        let printable = text.chars().any(|c| !c.is_whitespace());
+        if self.at_paragraph_level()
+            && !printable
+            && let Some(pending) = &mut self.pending
+        {
+            if pending.after_split {
+                return Ok(());
             }
+            if let Some(held) = &mut pending.held_break {
+                held.extend_from_slice(text.as_bytes());
+                return Ok(());
+            }
+        }
+        if printable {
+            self.release_break()?;
+        }
+        if printable && let Some(pending) = &mut self.pending {
+            pending.has_printable = true;
+            pending.after_split = false;
         }
         self.write_escaped(text, false)
     }
@@ -645,5 +752,52 @@ mod tests {
 </p></div>
         "#;
         assert_eq!(offline(html5).trim(), expected.trim());
+    }
+
+    #[test]
+    fn ebook_double_break_splits_paragraph() {
+        assert_eq!(ebook("<div><p>One.<br><br>Two.</p></div>"), r#"<p class="first">One.</p><p>Two.</p>"#);
+    }
+
+    #[test]
+    fn ebook_break_run_with_whitespace_splits_once() {
+        assert_eq!(ebook("<div><p>One.<br/>\n  <br />\n<br>Two.</p></div>"), r#"<p class="first">One.</p><p>Two.</p>"#);
+    }
+
+    #[test]
+    fn ebook_single_break_kept_with_its_whitespace() {
+        assert_eq!(ebook("<div><p>One.<br>\nTwo.</p></div>"), "<p class=\"first\">One.<br/>\nTwo.</p>");
+        assert_eq!(ebook("<div><p>One.<br></p></div>"), r#"<p class="first">One.<br/></p>"#);
+        assert_eq!(ebook("<div><p>One.<br><em>Two.</em></p></div>"), r#"<p class="first">One.<br/><em>Two.</em></p>"#);
+    }
+
+    #[test]
+    fn ebook_split_keeps_attributes_and_drops_empty_halves() {
+        assert_eq!(
+            ebook(r#"<div><p align="center">One.<br><br>Two.<br><br></p></div>"#),
+            r#"<p align="center" class="first">One.</p><p align="center">Two.</p>"#
+        );
+        assert_eq!(ebook("<div><p><br><br>Two.</p></div>"), r#"<p class="first">Two.</p>"#);
+    }
+
+    #[test]
+    fn ebook_split_paragraph_follows_indent_rules() {
+        assert_eq!(
+            ebook("<div><p>Zero.</p><p>One.<br><br>Two.<br><br>Three.</p></div>"),
+            r#"<p class="first">Zero.</p><p>One.</p><p>Two.</p><p>Three.</p>"#
+        );
+    }
+
+    #[test]
+    fn ebook_breaks_inside_inline_elements_are_kept() {
+        assert_eq!(
+            ebook("<div><p><em>One.<br><br>Two.</em></p></div>"),
+            r#"<p class="first"><em>One.<br/><br/>Two.</em></p>"#
+        );
+    }
+
+    #[test]
+    fn non_ebook_modes_keep_double_breaks() {
+        assert_eq!(offline("<div><p>One.<br><br>Two.</p></div>"), "<p>One.<br/><br/>Two.</p>");
     }
 }

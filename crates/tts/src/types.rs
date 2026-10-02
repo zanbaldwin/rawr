@@ -1,3 +1,4 @@
+use rawr_source::Rating;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::time::Duration;
 
@@ -12,6 +13,8 @@ pub struct Capabilities {
     /// Limits for request stitching, if the provider supports it.
     pub continuity: Option<ContinuityLimits>,
     pub cost_unit: CostUnit,
+    /// Document ratings that need explicit approval before their text is sent.
+    pub needs_approval: &'static [Rating],
 }
 
 /// How detailed a provider's timing information is.

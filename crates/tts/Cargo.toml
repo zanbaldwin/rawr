@@ -16,6 +16,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
+rawr-source = { workspace = true }
 reqwest = { version = "^0.12", default-features = false, features = ["rustls-tls"], optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }

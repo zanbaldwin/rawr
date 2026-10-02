@@ -3021,6 +3021,7 @@ dependencies = [
  "base64 0.22.1",
  "derive_more",
  "exn",
+ "rawr-source",
  "reqwest 0.12.28",
  "rstest",
  "serde",

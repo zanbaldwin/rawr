@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use exn::{OptionExt, ResultExt};
+use rawr_source::Rating;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
@@ -18,6 +19,8 @@ use std::time::Duration;
 const BASE_URL: &str = "https://api.elevenlabs.io";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const DEFAULT_CONCURRENCY: usize = 3;
+/// Ratings that need approval under ElevenLabs' usage policy: explicit works, and works with no rating.
+const NEEDS_APPROVAL: &[Rating] = &[Rating::Explicit, Rating::Unrated];
 const PRIVATE_HEADERS: &[&str] = &["authorization", "cookie", "set-cookie", "xi-api-key"];
 const CONTINUITY: ContinuityLimits = ContinuityLimits {
     max_previous: 3,
@@ -171,6 +174,7 @@ impl ElevenLabs {
             concurrency: settings.concurrency.unwrap_or(DEFAULT_CONCURRENCY),
             continuity: Some(CONTINUITY),
             cost_unit: CostUnit::Credits,
+            needs_approval: NEEDS_APPROVAL,
         };
         Ok(Self { settings, capabilities, client })
     }

@@ -5,6 +5,7 @@ use crate::types::{
     Fingerprint, Receipt, Synthesis, SynthesisRequest,
 };
 use async_trait::async_trait;
+use rawr_source::Rating;
 use std::f32::consts::TAU;
 use std::time::Duration;
 
@@ -42,6 +43,7 @@ impl FakeSynthesiser {
                     max_next_chars: 300,
                 }),
                 cost_unit: CostUnit::Characters,
+                needs_approval: &[Rating::Explicit, Rating::Unrated],
             },
         }
     }

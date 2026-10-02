@@ -2901,6 +2901,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawr-source"
+version = "0.2.0-beta"
+dependencies = [
+ "derive_more",
+ "exn",
+ "rawr-extract",
+ "rstest",
+ "time",
+]
+
+[[package]]
 name = "rawr-storage"
 version = "0.2.0-beta"
 dependencies = [

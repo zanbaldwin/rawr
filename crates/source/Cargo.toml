@@ -1,0 +1,20 @@
+[package]
+name = "rawr-source"
+description = "Content input for narration: a source-neutral document model and its sources"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+default = []
+ao3 = ["dep:rawr-extract", "rawr-extract/chapters"]
+
+[dependencies]
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+rawr-extract = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+time = { workspace = true }

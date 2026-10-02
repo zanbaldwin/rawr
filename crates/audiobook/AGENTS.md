@@ -1,6 +1,6 @@
 # rawr-audiobook
 
-Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan` and `narrate`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
+Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan`, `narrate` and `audio`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
 
 ## `script`
 
@@ -60,6 +60,12 @@ ledgers/<blake3(identifier)>.json
 - **Budget:** `max_chars` is a character limit for the run. Characters are reserved before each attempt and released when the attempt fails. Real costs from receipts are only reported (`spent`).
 - **Runtime:** the stream drives itself through a channel and needs no task spawning. Retry delays use `tokio::time::sleep`.
 
+## `audio`
+
+- `Pcm` is mono `i16`. The pipeline works at `SAMPLE_RATE` (48 kHz) only.
+- `fade` applies a linear fade at each edge (the timeline uses 240 samples, 5 ms). The first and last samples become 0.
+- `TrailingSound::default()` uses purr's values: at least 100 ms below −60 dBFS, then a 10 ms window above −50 dBFS. `find` returns the start of that silence, searching from the end of the last letter or digit. It cuts the stray sound that long Korean ElevenLabs batches can end with.
+
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
@@ -73,6 +79,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/store.rs` runs against `MockBackend`, plus one round trip on `LocalBackend` in a temporary directory (renames and directory creation on a real filesystem).
 - `tests/plan.rs` plans every fixture with the fake provider. It checks that a changed section gets new keys and the other sections keep theirs.
 - `tests/narrate.rs` uses a scripted wrapper around the fake provider (unique request IDs, injected errors and mismatches, a request log). It uses small synthetic documents, because the fake makes real PCM (about 5.8 KB for each character).
+- `tests/audio.rs` uses synthetic tones and silences.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 

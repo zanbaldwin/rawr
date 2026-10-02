@@ -4,6 +4,7 @@
 //! Overlays. The [`script`] module decides what is spoken and how the text is
 //! grouped into narration batches.
 
+pub mod audio;
 pub mod error;
 pub mod narrate;
 pub mod plan;

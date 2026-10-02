@@ -51,6 +51,8 @@ ledgers/<blake3(identifier)>.json
 
 `narrate(plan, synthesiser, store, options)` returns a boxed stream (`BoxStream`) of `NarrationEvent`s, so callers use `next()` without `pin!`. It pays for missing batches only. `Finished` is always the last event.
 
+- **Approval gate:** `Plan::new` sets `plan.rating` (from `DocumentMeta.rating`) and `plan.needs_approval` (the rating is in the provider's `Capabilities::needs_approval`). If approval is needed and `NarrationOptions::approved` is not set, `narrate()` sends `Stopped(NeedsApproval(rating))` and `Finished` only. It sends no request, not even the free voice-name lookup, and writes no ledger. The gate is in this crate, so every caller gets it. The CLI maps `--allow-explicit` to `approved`. `export()` has no gate, because it sends nothing.
+
 - **Order:** the ledger is written first, with the voice name from `Synthesiser::voice_name()`. If that free lookup fails, the name from an earlier run is kept and narration continues. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
 - **Write order:** a recording is stored before the section's next request is sent. A store failure stops the whole run, so nothing more is paid for while recordings cannot be kept.
 - **Re-check:** each batch is looked up in the store again just before it is paid for, so a stale plan never pays twice.

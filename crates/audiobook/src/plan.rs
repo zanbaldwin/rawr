@@ -6,7 +6,7 @@ use crate::script::{Script, ScriptOptions};
 use crate::store::{BatchKey, KeyInputs, Ledger, LedgerSection, RecordingStatus, Store};
 use exn::ResultExt;
 use rawr_render::pages::chapter_heading;
-use rawr_source::Document;
+use rawr_source::{Document, Rating};
 use rawr_tts::{Fingerprint, Synthesiser};
 use time::OffsetDateTime;
 
@@ -21,6 +21,11 @@ pub struct Plan {
     pub provider: String,
     pub fingerprint: Fingerprint,
     pub language: Option<String>,
+    /// [`DocumentMeta::rating`](rawr_source::DocumentMeta::rating).
+    pub rating: Rating,
+    /// The provider needs explicit approval for this rating before the text is sent
+    /// ([`Capabilities::needs_approval`](rawr_tts::Capabilities::needs_approval)).
+    pub needs_approval: bool,
     pub sections: Vec<SectionPlan>,
     /// Sections with nothing to speak.
     pub skipped: Vec<u32>,
@@ -110,6 +115,8 @@ impl Plan {
             provider: synthesiser.name().to_string(),
             fingerprint,
             language,
+            rating: document.meta.rating,
+            needs_approval: synthesiser.capabilities().needs_approval.contains(&document.meta.rating),
             sections,
             skipped,
         })

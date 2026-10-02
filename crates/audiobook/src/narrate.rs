@@ -9,6 +9,7 @@ use crate::plan::{BatchState, Plan, PlannedBatch, SectionPlan};
 use crate::store::{Recording, RecordingStatus, Store};
 use futures::stream::BoxStream;
 use futures::{StreamExt, stream};
+use rawr_source::Rating;
 use rawr_tts::error::ErrorKind as TtsErrorKind;
 use rawr_tts::{Continuity, Cost, SynthesisRequest, SynthesiserHandle};
 use std::sync::Mutex;
@@ -25,6 +26,8 @@ pub struct NarrationOptions {
     pub max_chars: Option<usize>,
     /// Pay again for batches whose earlier recording had an alignment mismatch.
     pub retry_mismatched: bool,
+    /// Explicit approval to send a document whose rating needs it ([`Plan::needs_approval`]).
+    pub approved: bool,
     /// Attempts for one batch, when the error is retryable.
     pub max_attempts: u32,
     /// Delay before the first retry; it doubles for each further retry.
@@ -37,6 +40,7 @@ impl Default for NarrationOptions {
             concurrency: None,
             max_chars: None,
             retry_mismatched: false,
+            approved: false,
             max_attempts: 4,
             base_delay: Duration::from_secs(5),
         }
@@ -87,6 +91,9 @@ pub enum NarrationEvent {
 /// Why a run stopped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopReason {
+    /// The document's rating needs approval ([`Plan::needs_approval`]), and
+    /// [`NarrationOptions::approved`] is not set. Nothing was sent or written.
+    NeedsApproval(Rating),
     /// The next batch would go over [`NarrationOptions::max_chars`].
     Budget,
     /// The provider refused the account or key (quota, credentials).
@@ -98,7 +105,9 @@ pub enum StopReason {
 
 /// Narrate the missing batches of a plan.
 ///
-/// The ledger is written first. Each recording is stored before the next
+/// A document that needs approval, without [`NarrationOptions::approved`],
+/// stops before anything is sent or written. Otherwise the ledger is written
+/// first. Each recording is stored before the next
 /// request of its section is sent. The stream is boxed, so callers can use
 /// `next()` on it without pinning it.
 pub fn narrate<'a>(
@@ -136,6 +145,19 @@ struct Run<'a> {
 
 impl Run<'_> {
     async fn run(self) {
+        if self.plan.needs_approval && !self.options.approved {
+            self.stop(StopReason::NeedsApproval(self.plan.rating));
+        } else {
+            self.pay().await;
+        }
+        let spent = self.spent.lock().expect("spent lock").clone();
+        self.emit(NarrationEvent::Finished {
+            chars: self.sent.load(Ordering::SeqCst),
+            spent,
+        });
+    }
+
+    async fn pay(&self) {
         let mut ledger = self.plan.ledger(OffsetDateTime::now_utc());
         ledger.voice_name = match self.synthesiser.voice_name(self.plan.language.as_deref()).await {
             Ok(Some(name)) => Some(name),
@@ -151,11 +173,6 @@ impl Run<'_> {
             let sections: Vec<_> = self.plan.sections.iter().map(|section| self.section(section)).collect();
             stream::iter(sections).buffer_unordered(concurrency).collect::<Vec<()>>().await;
         }
-        let spent = self.spent.lock().expect("spent lock").clone();
-        self.emit(NarrationEvent::Finished {
-            chars: self.sent.load(Ordering::SeqCst),
-            spent,
-        });
     }
 
     fn to_pay(&self, batch: &PlannedBatch) -> bool {

@@ -8,6 +8,7 @@ version.workspace = true
 
 [features]
 default = []
+ao3 = ["rawr-source/ao3"]
 libopus = ["_opus", "dep:opus"]
 _opus = ["dep:ogg"]
 
@@ -30,6 +31,7 @@ time = { workspace = true, features = ["formatting", "parsing", "serde"] }
 tokio = { workspace = true, features = ["time"] }
 unicode-normalization = { workspace = true }
 unicode-segmentation = { workspace = true }
+zip = { workspace = true, features = ["deflate"] }
 
 [dev-dependencies]
 async-trait = { workspace = true }
@@ -37,7 +39,9 @@ base64 = { workspace = true }
 crc32fast = { workspace = true }
 futures = { workspace = true, features = ["std"] }
 insta = { workspace = true }
+quick-xml = { workspace = true }
 rawr-compress = { workspace = true }
+rawr-render = { workspace = true, features = ["metadata"] }
 rawr-source = { workspace = true, features = ["ao3"] }
 rawr-storage = { workspace = true, features = ["mock"] }
 rawr-tts = { workspace = true, features = ["fake", "elevenlabs"] }

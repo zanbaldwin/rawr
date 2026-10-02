@@ -5,6 +5,7 @@
 //! grouped into narration batches.
 
 pub mod audio;
+pub mod epub3;
 pub mod error;
 pub mod narrate;
 pub mod plan;

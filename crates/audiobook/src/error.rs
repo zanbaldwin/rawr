@@ -31,6 +31,9 @@ pub enum ErrorKind {
     /// A recording has no alignment, so its sentences cannot be timed.
     #[display("recording {_0} has no alignment")]
     MissingAlignment(#[error(not(source))] String),
+    /// The EPUB package could not be written.
+    #[display("failed to write the EPUB package")]
+    Package,
     /// The recordings storage failed.
     #[display("recordings storage failed")]
     Storage,

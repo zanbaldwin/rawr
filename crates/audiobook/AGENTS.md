@@ -1,6 +1,6 @@
 # rawr-audiobook
 
-Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan`, `narrate`, `audio` and `timeline`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
+Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules are `script`, `store`, `plan`, `narrate`, `audio`, `timeline` and `epub3`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
 
 ## `script`
 
@@ -85,6 +85,18 @@ ledgers/<blake3(identifier)>.json
 - **Trim report** (dev and test builds only, `cfg(debug_assertions)`; tests that read it are gated the same way, so `cargo test --release` still builds): `ChapterAudio::trims` has one `TrimReport` per recording: its key, decoded length, kept range, `EndRule` (`LastTimestamp` or `TrailingSound`), the overshoot of the last timestamp past the audio, and where it starts in the chapter. It is purr's record of cuts (`end_rule`, `cut_seconds_before_file_end`). Use it to find and listen to bad joins. Release builds do not have the field.
 - **Sync map:** one `SyncUnit` for the heading and one for each sentence, in samples. A unit begins at the output time of its first character (`ParagraphRef` offset + `Paragraph::sentence_chars()`). Units are back to back: the first begins at 0, so it covers the lead-in, and the last ends at the end of the audio, so it covers the lead-out. Begins are strictly increasing. Readers play only clip ranges, so gaps would remove the pauses.
 
+## `epub3`
+
+`Package { document, chapters, styles, narrator, modified }.write(writer)` writes an EPUB 3.3 with Media Overlays (reflowable). The crate has its own `zip` dependency (6.0, `deflate`, the same as epub-builder's), because the audiobook can be built without rawr's `epub` feature.
+
+- **Layout:** `mimetype` (first, stored, no extra field), `META-INF/container.xml`, and `OEBPS/` with `content.opf`, `nav.xhtml`, `stylesheet.css` (the `StyleConfig`), `title.xhtml`, then `cNNN.xhtml`, `cNNN.smil` and `audio/cNNN.mp4` for each narrated section. A section with nothing to speak is a text-only page, with no overlay.
+- **Text:** `chapter_body()` writes the section's rawr-xhtml output again with a `<span id="cNNN-sNNNN">` around each sentence. Each span sits under the deepest element that holds both ends of its sentence. Inline elements are split only where a sentence crosses them, and they are reopened without their `id`. Start tags are written lazily, so a split never leaves an empty element. The text and the block elements are exactly those of the source. Attributes come out in the parser's order. The spoken heading is `<h2 class="chapter-title"><span id="cNNN-h">`.
+- **Overlays:** one `<par>` per `SyncUnit`. Clip times are whole milliseconds, rounded down, written as `12.340s`. Clips are back to back, and the last one ends at the audio's length. `media:duration` (`h:mm:ss.fff`) is given per overlay and in total, and the total is their exact sum.
+- **No highlight colour:** `media:active-class` (`-epub-media-overlay-active`) is declared, but the book has no rule for it. Reading apps such as Readest, and user stylesheets, choose the highlight.
+- **Title page:** with the `ao3` feature, an AO3 work gets `rawr_render::pages::title_page_body()`, as in rawr's text EPUB. Otherwise a minimal page is built from `DocumentMeta`. Both add "Narrated by …".
+- **Narrator:** `narrator_credit(provider, fingerprint, voice_name)` gives "{voice name} ({provider} {model})", for example "Amelia - Enthusiastic and Expressive (ElevenLabs eleven_v4)". The voice name comes from the ledger.
+- **Escaping:** `epub3/xml.rs` uses the same rules as rawr-xhtml (`&`, `<`, `>`, the no-break space as `&#160;`, and `"` in attributes), so text written again comes out the same.
+
 ## Invariants to keep
 
 - **`TextPosition::node` counts every text node in document order**, as `scraper::Html::parse_fragment(body_xhtml)` parses the body (whitespace-only nodes included). Anything that uses `sources` must walk the body the same way.
@@ -103,6 +115,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/audio.rs` uses synthetic tones and silences.
 - `tests/codec.rs` (`--features libopus`): decodes the ElevenLabs fixtures to ffmpeg's exact lengths. It parses our MP4 with `shiguredo_mp4` (dev-dependency) and checks every box against ffmpeg's layout. It decodes the packets again to check length, alignment and SNR. A last test reads the file with `ffprobe`, when installed.
 - `tests/timeline.rs` checks exact layouts from fake recordings (the fake gives 60 ms for each character), including the trim report. A stray sound appended after the speech is cut, a plain trailing silence keeps the 100 ms margin, and an overshooting last timestamp is clamped. With `libopus`, it also joins real ElevenLabs audio from the fixtures and checks that only the margins are added and nothing spoken is cut.
+- `tests/epub3.rs` checks every fixture section's `chapter_body`: well-formed XML, the same text and block elements as the source, one span per sentence with the right id and text, and no repeated id. A small document narrated by the fake is written as a full package. Its zip layout, links, clip ranges and durations are checked, and its files are `insta` snapshots. With `--features ao3`, the AO3 title page is checked too.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - `fixture_sources_point_at_each_sentence` cuts each sentence's source range out of the real text nodes, normalises it, and compares it with the sentence.
 - Small rule cases build `Section` values in the test file.
@@ -112,7 +125,7 @@ ledgers/<blake3(identifier)>.json
 Run in the `rawr` toolbox:
 
 ```sh
-cargo test -p rawr-audiobook --features libopus
+cargo test -p rawr-audiobook --features libopus,ao3
 cargo test -p rawr-audiobook
 cargo clippy -p rawr-audiobook --features libopus --all-targets
 cargo clippy -p rawr-audiobook --all-targets

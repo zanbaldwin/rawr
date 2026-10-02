@@ -87,7 +87,7 @@ ledgers/<blake3(identifier)>.json
 
 ## `epub3`
 
-`Package { document, chapters, styles, narrator, modified }.write(writer)` writes an EPUB 3.3 with Media Overlays (reflowable). The crate has its own `zip` dependency (6.0, `deflate`, the same as epub-builder's), because the audiobook can be built without rawr's `epub` feature.
+`Package { document, chapters, styles, narrator, modified }.write(writer)` writes an EPUB 3.3 with Media Overlays (reflowable). A `Chapter` owns its sync units and encoded audio, but not the PCM. Drop each `ChapterAudio` after its audio is encoded, so only one chapter's PCM is in memory at a time. The crate has its own `zip` dependency (6.0, `deflate`, the same as epub-builder's), because the audiobook can be built without rawr's `epub` feature.
 
 - **Layout:** `mimetype` (first, stored, no extra field), `META-INF/container.xml`, and `OEBPS/` with `content.opf`, `nav.xhtml`, `stylesheet.css` (the `StyleConfig`), `title.xhtml`, then `cNNN.xhtml`, `cNNN.smil` and `audio/cNNN.mp4` for each narrated section. A section with nothing to speak is a text-only page, with no overlay.
 - **Text:** `chapter_body()` writes the section's rawr-xhtml output again with a `<span id="cNNN-sNNNN">` around each sentence. Each span sits under the deepest element that holds both ends of its sentence. Inline elements are split only where a sentence crosses them, and they are reopened without their `id`. Start tags are written lazily, so a split never leaves an empty element. The text and the block elements are exactly those of the source. Attributes come out in the parser's order. The spoken heading is `<h2 class="chapter-title"><span id="cNNN-h">`.

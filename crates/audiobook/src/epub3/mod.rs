@@ -11,7 +11,7 @@ use crate::audio::{EncodedAudio, SAMPLE_RATE};
 use crate::error::{ErrorKind, Result};
 use crate::plan::SectionPlan;
 use crate::script::Script;
-use crate::timeline::{ChapterAudio, UnitRef};
+use crate::timeline::{SyncUnit, UnitRef};
 use exn::ResultExt;
 use rawr_render::StyleConfig;
 use rawr_render::pages::chapter_heading;
@@ -30,11 +30,15 @@ use zip::write::{SimpleFileOptions, ZipWriter};
 /// no rule for it: reading apps (and user stylesheets) choose the highlight.
 pub const ACTIVE_CLASS: &str = "-epub-media-overlay-active";
 
-/// One narrated section: its plan, its joined audio, and that audio encoded.
+/// One narrated section: its plan, its sync map, and its encoded audio.
+///
+/// It holds no PCM: drop the [`ChapterAudio`](crate::timeline::ChapterAudio)
+/// once its audio is encoded.
 pub struct Chapter<'a> {
     pub section: &'a SectionPlan,
-    pub audio: &'a ChapterAudio,
-    pub encoded: &'a EncodedAudio,
+    /// [`ChapterAudio::units`](crate::timeline::ChapterAudio::units).
+    pub units: Vec<SyncUnit>,
+    pub encoded: EncodedAudio,
 }
 
 /// Everything in one audiobook.
@@ -318,7 +322,7 @@ fn overlay(id: &str, chapter: &Chapter<'_>) -> Overlay {
     let audio_href = format!("audio/{id}.{}", chapter.encoded.extension);
     let milliseconds = milliseconds_of(chapter.encoded.samples);
     let mut pars = String::new();
-    for (index, unit) in chapter.audio.units.iter().enumerate() {
+    for (index, unit) in chapter.units.iter().enumerate() {
         let target = match unit.target {
             UnitRef::Heading => format!("{id}-h"),
             UnitRef::Sentence { block, sentence } => ids[&(block, sentence)].clone(),

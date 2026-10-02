@@ -1,6 +1,6 @@
 # rawr-audiobook
 
-Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan`, `narrate` and `audio`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
+Audiobook construction. The crate turns a `rawr_source::Document` into an EPUB 3 with Media Overlays. The modules so far are `script`, `store`, `plan`, `narrate`, `audio` and `timeline`. The plan is in `EPUB3-PLAN.md` at the workspace root (untracked).
 
 ## `script`
 
@@ -75,6 +75,15 @@ ledgers/<blake3(identifier)>.json
 - libopus 1.6.1 is built from source (`opusic-sys`, cmake + a C compiler), like `libbzip3-sys`. It builds for `x86_64-unknown-linux-musl`.
 - **To do:** add `opus-pure` as a second `Codec`, and test that its decode and encode are effectively the same as libopus (exact length, ±1 LSB decode, similar size and SNR).
 
+## `timeline`
+
+`assemble(section, recordings, codec)` joins one section's recordings (one for each planned batch, in order) into a `ChapterAudio`: the chapter's PCM and its sync map. Export never pays: a missing or mismatched recording gives `MissingRecording`, and a recording without alignment gives `MissingAlignment`.
+
+- **Trim** (from purr): keep from the first character's start − 50 ms to the last character's end + 100 ms, clamped to the decoded length. ElevenLabs' last timestamp can be up to 80 ms past the audio. A `TrailingSound` after the last letter or digit cuts the end at that silence + 50 ms.
+- **Fades:** 5 ms (240 samples) at each edge of each recording. No crossfades.
+- **Silence before a batch, by `Boundary`:** `SectionStart` 0.5 s (the chapter's lead-in), `Heading` 1.0 s, `Paragraph` 0.45 s, `SceneBreak` 1.75 s. There is 1.0 s of lead-out after the last batch.
+- **Sync map:** one `SyncUnit` for the heading and one for each sentence, in samples. A unit begins at the output time of its first character (`ParagraphRef` offset + `Paragraph::sentence_chars()`). Units are back to back: the first begins at 0, so it covers the lead-in, and the last ends at the end of the audio, so it covers the lead-out. Begins are strictly increasing. Readers play only clip ranges, so gaps would remove the pauses.
+
 ## Invariants to keep
 
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
@@ -90,6 +99,7 @@ ledgers/<blake3(identifier)>.json
 - `tests/narrate.rs` uses a scripted wrapper around the fake provider (unique request IDs, injected errors and mismatches, a request log). It uses small synthetic documents, because the fake makes real PCM (about 5.8 KB for each character).
 - `tests/audio.rs` uses synthetic tones and silences.
 - `tests/codec.rs` (`--features libopus`): decodes the ElevenLabs fixtures to ffmpeg's exact lengths. It parses our MP4 with `shiguredo_mp4` (dev-dependency) and checks every box against ffmpeg's layout. It decodes the packets again to check length, alignment and SNR. A last test reads the file with `ffprobe`, when installed.
+- `tests/timeline.rs` checks exact layouts from fake recordings (the fake gives 60 ms for each character). With `libopus`, it also joins real ElevenLabs audio from the fixtures and checks that only the margins are added and nothing spoken is cut.
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - Small rule cases build `Section` values in the test file.
 

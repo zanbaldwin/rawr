@@ -39,7 +39,7 @@ insta = { workspace = true }
 rawr-compress = { workspace = true }
 rawr-source = { workspace = true, features = ["ao3"] }
 rawr-storage = { workspace = true, features = ["mock"] }
-rawr-tts = { workspace = true, features = ["fake"] }
+rawr-tts = { workspace = true, features = ["fake", "elevenlabs"] }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 shiguredo_mp4 = { workspace = true }

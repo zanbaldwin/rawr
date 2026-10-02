@@ -25,6 +25,12 @@ pub enum ErrorKind {
     /// The audio encoder or decoder failed.
     #[display("audio codec failed")]
     Codec,
+    /// A batch has no usable recording (missing, or with an alignment mismatch).
+    #[display("no usable recording for batch {_0}")]
+    MissingRecording(#[error(not(source))] String),
+    /// A recording has no alignment, so its sentences cannot be timed.
+    #[display("recording {_0} has no alignment")]
+    MissingAlignment(#[error(not(source))] String),
     /// The recordings storage failed.
     #[display("recordings storage failed")]
     Storage,

@@ -33,6 +33,11 @@ pub fn export_path_generator(config: &Config) -> Result<PathGenerator> {
     path_generator(&config.library.path_templates.export, &config.fandoms)
 }
 
+/// `config.library.path_templates.audio` with the fandom selector.
+pub fn audio_path_generator(config: &Config) -> Result<PathGenerator> {
+    path_generator(&config.library.path_templates.audio, &config.fandoms)
+}
+
 /// Build a [`LibraryContext`]: import path generator, target compression,
 /// optional trash backend, and the read-only flag.
 pub async fn library_context(

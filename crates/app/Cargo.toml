@@ -10,17 +10,30 @@ version.workspace = true
 default = []
 s3 = ["rawr-storage/s3"]
 render = ["dep:rawr-render"]
+audiobook = [
+    "dep:rawr-audiobook",
+    "rawr-audiobook/libopus",
+    "rawr-audiobook/ao3",
+    "dep:rawr-source",
+    "rawr-source/ao3",
+    "dep:rawr-tts",
+    "rawr-tts/elevenlabs",
+]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
+rawr-audiobook = { workspace = true, optional = true }
 rawr-cache = { workspace = true }
 rawr-compress = { workspace = true }
 rawr-config = { workspace = true }
 rawr-extract = { workspace = true }
 rawr-library = { workspace = true }
 rawr-render = { workspace = true, optional = true }
+rawr-source = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
+rawr-tts = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -2778,14 +2778,18 @@ version = "0.2.0-beta"
 dependencies = [
  "derive_more",
  "exn",
+ "rawr-audiobook",
  "rawr-cache",
  "rawr-compress",
  "rawr-config",
  "rawr-extract",
  "rawr-library",
  "rawr-render",
+ "rawr-source",
  "rawr-storage",
+ "rawr-tts",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

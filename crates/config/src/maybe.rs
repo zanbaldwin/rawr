@@ -31,6 +31,11 @@ impl MaybeFile {
         }
     }
 
+    /// The file the value was read from, if it came from a `file://` value.
+    pub fn file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+
     /// Consume and return the inner string value.
     pub fn into_inner(self) -> String {
         self.value

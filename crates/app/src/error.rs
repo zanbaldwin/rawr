@@ -44,6 +44,30 @@ pub enum ErrorKind {
     /// A library file exists but could not be read or decompressed.
     #[display("library file `{_0}` could not be read")]
     Read(#[error(not(source))] String),
+    /// The command needs an `[audio]` table with a provider.
+    #[cfg(feature = "audiobook")]
+    #[display("narration needs an `[audio]` table with a provider in your config")]
+    AudioNotConfigured,
+    /// `audio.provider` names a provider this build does not have.
+    #[cfg(feature = "audiobook")]
+    #[display("unknown audio provider `{_0}`")]
+    UnknownProvider(#[error(not(source))] String),
+    /// Narration needs the provider's API key.
+    #[cfg(feature = "audiobook")]
+    #[display("no API key for `{_0}`: set `audio.providers.{_0}.api_key` in your config, or ELEVENLABS_API_KEY")]
+    MissingApiKey(#[error(not(source))] &'static str),
+    /// The text-to-speech provider could not be set up.
+    #[cfg(feature = "audiobook")]
+    #[display("the text-to-speech provider could not be set up")]
+    Synthesiser,
+    /// The recordings directory could not be opened.
+    #[cfg(feature = "audiobook")]
+    #[display("the recordings directory `{_0}` could not be opened")]
+    Recordings(#[error(not(source))] String),
+    /// The work's HTML could not be turned into a document.
+    #[cfg(feature = "audiobook")]
+    #[display("the work could not be read for narration")]
+    Document,
     /// A `library.path_templates` entry failed to compile.
     #[display("`library.path_templates` could not be compiled")]
     Template,

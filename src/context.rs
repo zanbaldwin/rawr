@@ -27,8 +27,7 @@ impl AppContext {
             std::env::set_current_dir(cwd)?;
         }
         let (loaded_from, config, warnings) = Config::load::<PathBuf>(cli.config.clone())?;
-        let database = Database::connect(config.library.cache.relative()).await?;
-        let cache = Repository::new(database.pool().clone(), cli.dry_run);
+        let (database, cache) = rawr_app::cache(&config, cli.dry_run).await?;
         let ctx = Self {
             config,
             loaded_from,

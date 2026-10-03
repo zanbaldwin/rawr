@@ -4,7 +4,7 @@ mod epub;
 #[cfg(feature = "pdf")]
 mod pdf;
 
-use self::context::{ExportContext, WorkRef};
+use self::context::ExportContext;
 #[cfg(feature = "epub")]
 use self::epub::export as export_epub;
 #[cfg(feature = "pdf")]
@@ -17,11 +17,10 @@ use clap::Args;
 use rawr_config::models::StyleFormat;
 use rawr_extract::models::Version;
 use rawr_output::{Line, Loudness, PALETTE, Pipe};
-use rawr_storage::file::{FileInfo, Processed};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-type File = FileInfo<Processed>;
+use rawr_app::works::{File, WorkRef};
 
 const DEFAULT_LIMIT: usize = 25;
 
@@ -96,29 +95,5 @@ async fn resolve_work_refs(ctx: &ExportContext<'_>, works: &[WorkRef]) -> Vec<(V
 }
 
 async fn resolve_one(ctx: &ExportContext<'_>, work_ref: &WorkRef) -> std::result::Result<(Version, Vec<File>), String> {
-    match work_ref {
-        WorkRef::BestWork(id) => ctx
-            .cache
-            .get_best_for_work_id(*id)
-            .await
-            .map_err(|e| format!("Work {id}: {e}"))?
-            .ok_or_else(|| format!("Work {id} not found in library")),
-        WorkRef::WorkVersion(id, crc) => ctx
-            .cache
-            .get_by_work_id(*id)
-            .await
-            .map_err(|e| format!("Work {id}: {e}"))?
-            .into_iter()
-            .find(|(version, _)| version.crc32 == *crc)
-            .ok_or_else(|| format!("Work {id} has no version with CRC32 {crc:08x}")),
-        WorkRef::FilePath(path) => {
-            let target = ctx.load.name();
-            ctx.cache
-                .get_by_target_path(target, path.as_str())
-                .await
-                .map_err(|e| format!("\"{path}\": {e}"))?
-                .map(|(file, version)| (version, vec![file]))
-                .ok_or_else(|| format!("\"{path}\" not found in target \"{target}\""))
-        },
-    }
+    rawr_app::works::resolve(&ctx.cache, ctx.load.name(), work_ref).await.map_err(|error| error.to_string())
 }

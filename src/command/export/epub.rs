@@ -19,24 +19,13 @@ pub(crate) async fn export(mut ctx: ExportContext<'_>, works: Vec<(Version, Vec<
     let mut error_count: u64 = 0;
 
     'work: for (version, files) in works {
-        let mut selected = None;
-        'find: for f in files {
-            if ctx.load.exists(&f.path).await.is_ok_and(|b| b) {
-                selected = Some(f);
-                break 'find;
-            }
-        }
-
-        let Some(file) = selected else {
+        let Some((file, html)) = rawr_app::works::read_html(&ctx.load, files).await? else {
             error_count += 1;
             let line = format_pair_line(Reason::Failed, None::<&File>, &version, ctx.fandoms);
             ctx.output.print_to(Pipe::Err, &line);
             bar.inc(1);
             continue 'work;
         };
-
-        let compressed = ctx.load.read(&file.path).await?;
-        let html = file.compression.decompress(&compressed)?;
         let metadata = version.metadata.clone();
         let export_path = ctx.path_generator.generate(&version, "epub", None)?;
         let renderer = Arc::clone(&renderer);

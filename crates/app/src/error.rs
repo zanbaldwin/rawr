@@ -29,6 +29,21 @@ pub enum ErrorKind {
     /// The backend exists in config but could not be opened.
     #[display("storage backend `{_0}` could not be opened")]
     Backend(#[error(not(source))] String),
+    /// The cache database could not be opened or queried.
+    #[display("the cache database could not be used")]
+    Cache,
+    /// No version of the work is in the library.
+    #[display("work {_0} not found in library")]
+    WorkNotFound(#[error(not(source))] u64),
+    /// The work has no version with this CRC32.
+    #[display("work {work} has no version with CRC32 {crc32:08x}")]
+    VersionNotFound { work: u64, crc32: u32 },
+    /// No file is recorded at this path in the target.
+    #[display("\"{path}\" not found in target \"{target}\"")]
+    FileNotFound { target: String, path: String },
+    /// A library file exists but could not be read or decompressed.
+    #[display("library file `{_0}` could not be read")]
+    Read(#[error(not(source))] String),
     /// A `library.path_templates` entry failed to compile.
     #[display("`library.path_templates` could not be compiled")]
     Template,

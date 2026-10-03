@@ -2867,6 +2867,7 @@ dependencies = [
  "indicatif",
  "miette",
  "rawr-app",
+ "rawr-audiobook",
  "rawr-cache",
  "rawr-compress",
  "rawr-config",

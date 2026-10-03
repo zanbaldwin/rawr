@@ -79,6 +79,13 @@ impl From<OutputError> for Error {
     }
 }
 
+#[cfg(feature = "audiobook")]
+impl From<rawr_audiobook::error::Error> for Error {
+    fn from(e: rawr_audiobook::error::Error) -> Self {
+        Self(miette::Report::new(ExnDiagnostic::from_frame(e.frame())))
+    }
+}
+
 #[cfg(feature = "_render")]
 impl From<rawr_render::error::Error> for Error {
     fn from(e: rawr_render::error::Error) -> Self {

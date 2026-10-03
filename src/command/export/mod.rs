@@ -1,9 +1,13 @@
+#[cfg(feature = "audiobook")]
+mod audiobook;
 mod context;
 #[cfg(feature = "epub")]
 mod epub;
 #[cfg(feature = "pdf")]
 mod pdf;
 
+#[cfg(feature = "audiobook")]
+use self::audiobook::export as export_audiobook;
 use self::context::ExportContext;
 #[cfg(feature = "epub")]
 use self::epub::export as export_epub;
@@ -32,6 +36,9 @@ enum ExportFormat {
     /// Render works to EPUB
     #[cfg(feature = "epub")]
     Epub,
+    /// Build narrated EPUB 3 audiobooks from existing recordings (offline, no cost)
+    #[cfg(feature = "audiobook")]
+    Audiobook,
 }
 
 impl ExportFormat {
@@ -42,6 +49,8 @@ impl ExportFormat {
             Self::Pdf => StyleFormat::Pdf,
             #[cfg(feature = "epub")]
             Self::Epub => StyleFormat::Epub,
+            #[cfg(feature = "audiobook")]
+            Self::Audiobook => StyleFormat::Audiobook,
         }
     }
 }
@@ -59,7 +68,8 @@ pub(crate) struct ExportCommand {
 }
 impl Command for ExportCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {
-        let ctx = ExportContext::try_from_app(ctx, self.format.styles()).await?;
+        let app: &AppContext = ctx;
+        let ctx = ExportContext::try_from_app(app, self.format.styles()).await?;
         let limit = self.show.unwrap_or(DEFAULT_LIMIT);
 
         let selections = if self.works.is_empty() {
@@ -74,6 +84,8 @@ impl Command for ExportCommand {
             ExportFormat::Pdf => export_pdf(ctx, selections).await,
             #[cfg(feature = "epub")]
             ExportFormat::Epub => export_epub(ctx, selections).await,
+            #[cfg(feature = "audiobook")]
+            ExportFormat::Audiobook => export_audiobook(app, ctx, selections).await,
         }
     }
 }

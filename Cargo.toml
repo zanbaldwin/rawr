@@ -103,6 +103,7 @@ s3 = ["_sync", "rawr-storage/s3", "rawr-app/s3"]
 _render = ["dep:rawr-render", "rawr-app/render"]
 pdf = ["_render", "rawr-render/pdf", "rawr-render/metadata"]
 epub = ["_render", "rawr-render/epub"]
+audiobook = ["_render", "rawr-render/metadata", "rawr-app/audiobook", "dep:rawr-audiobook"]
 
 [dependencies]
 async-stream = { workspace = true }
@@ -115,6 +116,7 @@ futures = { workspace = true, features = ["std"] }
 indicatif = { workspace = true, features = ["unicode-width"] }
 miette = { workspace = true, features = ["fancy"] }
 rawr-app = { workspace = true }
+rawr-audiobook = { workspace = true, optional = true }
 rawr-cache = { workspace = true, features = ["stats"] }
 rawr-compress = { workspace = true, features = ["cli"] }
 rawr-config = { workspace = true }

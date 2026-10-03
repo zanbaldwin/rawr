@@ -2830,6 +2830,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "tokio-util",
  "unicode-normalization",
  "unicode-segmentation",
  "zip",

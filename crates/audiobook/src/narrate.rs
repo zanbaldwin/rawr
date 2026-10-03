@@ -16,9 +16,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use time::OffsetDateTime;
+use tokio_util::sync::CancellationToken;
 
 /// How to narrate.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct NarrationOptions {
     /// Requests at the same time. `None` uses the provider's default.
     pub concurrency: Option<usize>,
@@ -32,6 +33,10 @@ pub struct NarrationOptions {
     pub max_attempts: u32,
     /// Delay before the first retry; it doubles for each further retry.
     pub base_delay: Duration,
+    /// Cancel to stop the run gracefully (for example on Ctrl-C). No new
+    /// request starts. Requests in flight finish and are stored, because
+    /// they are paid for.
+    pub stop: Option<CancellationToken>,
 }
 
 impl Default for NarrationOptions {
@@ -43,6 +48,7 @@ impl Default for NarrationOptions {
             approved: false,
             max_attempts: 4,
             base_delay: Duration::from_secs(5),
+            stop: None,
         }
     }
 }
@@ -98,6 +104,8 @@ pub enum StopReason {
     Budget,
     /// The provider refused the account or key (quota, credentials).
     Provider(TtsErrorKind),
+    /// [`NarrationOptions::stop`] was cancelled.
+    Cancelled,
     /// A recording or the ledger could not be stored. Nothing more is paid
     /// for while recordings cannot be kept.
     Storage,
@@ -262,6 +270,10 @@ impl Run<'_> {
             if self.stopped.load(Ordering::SeqCst) {
                 return None;
             }
+            if self.options.stop.as_ref().is_some_and(CancellationToken::is_cancelled) {
+                self.stop(StopReason::Cancelled);
+                return None;
+            }
             if !self.reserve(planned.chars) {
                 self.stop(StopReason::Budget);
                 return None;
@@ -282,7 +294,14 @@ impl Run<'_> {
                 error if error.is_retryable() && attempt < self.options.max_attempts => {
                     let delay = self.options.base_delay * 2u32.pow(attempt - 1);
                     self.emit(NarrationEvent::Retrying { section, batch, attempt, delay, error });
-                    tokio::time::sleep(delay).await;
+                    match &self.options.stop {
+                        Some(stop) => {
+                            let sleep = std::pin::pin!(tokio::time::sleep(delay));
+                            let cancelled = std::pin::pin!(stop.cancelled());
+                            futures::future::select(sleep, cancelled).await;
+                        },
+                        None => tokio::time::sleep(delay).await,
+                    }
                     attempt += 1;
                 },
                 error => {

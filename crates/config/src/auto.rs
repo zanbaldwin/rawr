@@ -12,10 +12,16 @@
 //!    When multiple targets exist the choice is ambiguous, so nothing is inferred.
 //! 2. **Export target** — if `library.targets.export` is unset, it mirrors the
 //!    resolved import target (whether user-specified or auto-configured above).
-//! 3. **Cache database** — if `library.cache` is unset, it defaults to the
+//! 3. **Audio target** — if `library.targets.audio` is unset, it mirrors the
+//!    resolved export target.
+//! 4. **Audio template** — if `library.path_templates.audio` is unset, it is
+//!    the export template, with `.audio` added when the audio target is the
+//!    export target (so audiobooks never overwrite text exports).
+//! 5. **Cache database** — if `library.cache` is unset, it defaults to the
 //!    platform-specific data directory (via [`directories::ProjectDirs`]).
 
 use crate::APP_NAME;
+use crate::models::{DEFAULT_TEMPLATE_EXPORT, audio_template};
 use directories::ProjectDirs;
 use figment::value::{Dict, Map, Tag, Value};
 use figment::{Error, Figment, Metadata, Profile, Provider};
@@ -48,7 +54,9 @@ impl Configurator {
         let source = figment.data().unwrap_or_default();
         let mut defaults: ProviderData = Map::new();
         let auto_import = Self::autoconfigure_library_target_import(&source, &mut defaults);
-        Self::autoconfigure_library_target_export(&source, auto_import.as_deref(), &mut defaults);
+        let export = Self::autoconfigure_library_target_export(&source, auto_import.as_deref(), &mut defaults);
+        let audio = Self::autoconfigure_library_target_audio(&source, export.as_deref(), &mut defaults);
+        Self::autoconfigure_path_template_audio(&source, export.as_deref(), audio.as_deref(), &mut defaults);
         Self::autoconfigure_cache_database(&source, &mut defaults);
         Self { data: defaults }
     }
@@ -98,19 +106,15 @@ impl Configurator {
     /// the export target is not already specified. The import target is resolved
     /// from the source data first, falling back to `auto_import` if the import
     /// target was itself auto-configured in the previous step.
+    ///
+    /// Returns the resolved export target name (specified or auto-configured).
     fn autoconfigure_library_target_export(
         source: &ProviderData,
         auto_import: Option<&str>,
         defaults: &mut ProviderData,
-    ) {
-        let is_export_target_specified = source.values().any(|dict| {
-            get_dict(dict, "library")
-                .and_then(|(_, library)| get_dict(library, "targets"))
-                .map(|(_, targets)| is_value_set(targets, "export"))
-                .unwrap_or(false)
-        });
-        if is_export_target_specified {
-            return;
+    ) -> Option<String> {
+        if let Some(export) = library_value(source, "targets", "export") {
+            return Some(export);
         }
         let import_from_source = source.values().fold(None, |carry, dict| {
             get_dict(dict, "library").and_then(|(_, library)| get_dict(library, "targets")).and_then(|(_, targets)| {
@@ -128,6 +132,55 @@ impl Configurator {
         {
             tracing::debug!(setting = "library.targets.export", value = import_value, "Auto-configuring");
             targets.insert("export".into(), Value::String(targets_tag, import_value.to_owned()));
+        }
+        import_value.map(str::to_owned)
+    }
+
+    /// Sets `library.targets.audio` to the resolved export target when the
+    /// audio target is not already specified.
+    ///
+    /// Returns the resolved audio target name (specified or auto-configured).
+    fn autoconfigure_library_target_audio(
+        source: &ProviderData,
+        export: Option<&str>,
+        defaults: &mut ProviderData,
+    ) -> Option<String> {
+        if let Some(audio) = library_value(source, "targets", "audio") {
+            return Some(audio);
+        }
+        let export = export?;
+        let default_profile = defaults.entry(Profile::Default).or_default();
+        if let Some((_, library)) = get_or_insert_dict(default_profile, "library")
+            && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
+        {
+            tracing::debug!(setting = "library.targets.audio", value = export, "Auto-configuring");
+            targets.insert("audio".into(), Value::String(targets_tag, export.to_owned()));
+        }
+        Some(export.to_owned())
+    }
+
+    /// Sets `library.path_templates.audio` from the export template when it is
+    /// not already specified: the export template plus `.audio` when the audio
+    /// target is the export target, or the export template unchanged when the
+    /// audio target is separate.
+    fn autoconfigure_path_template_audio(
+        source: &ProviderData,
+        export: Option<&str>,
+        audio: Option<&str>,
+        defaults: &mut ProviderData,
+    ) {
+        if library_value(source, "path_templates", "audio").is_some() {
+            return;
+        }
+        let export_template = library_value(source, "path_templates", "export");
+        let export_template = export_template.as_deref().unwrap_or(DEFAULT_TEMPLATE_EXPORT);
+        let template = audio_template(export_template, export == audio);
+        let default_profile = defaults.entry(Profile::Default).or_default();
+        if let Some((_, library)) = get_or_insert_dict(default_profile, "library")
+            && let Some((templates_tag, templates)) = get_or_insert_dict(library, "path_templates")
+        {
+            tracing::debug!(setting = "library.path_templates.audio", value = &template, "Auto-configuring");
+            templates.insert("audio".into(), Value::String(templates_tag, template));
         }
     }
 
@@ -151,6 +204,19 @@ impl Configurator {
             library.insert("cache".into(), Value::String(library_tag, database));
         }
     }
+}
+
+/// The last non-empty string at `library.{table}.{key}` across profiles.
+fn library_value(source: &ProviderData, table: &str, key: &str) -> Option<String> {
+    source.values().fold(None, |carry, dict| {
+        get_dict(dict, "library")
+            .and_then(|(_, library)| get_dict(library, table))
+            .and_then(|(_, table)| match table.get(key) {
+                Some(Value::String(_, s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            })
+            .or(carry)
+    })
 }
 
 /// Navigates into a nested [`Dict`] by `key`, inserting an empty dict if absent.

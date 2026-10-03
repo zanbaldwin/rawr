@@ -5,13 +5,19 @@
 //! [`TargetConfig`] storage backends, and optional [`FandomConfig`] for
 //! fandom-name normalization.
 
+mod audio;
 mod fandom;
 mod library;
 mod styles;
 mod target;
 
+pub use self::audio::{
+    AUDIO_PROVIDERS, AudioConfig, AudioProviders, DEFAULT_BITRATE_KBPS, ELEVENLABS_API_KEY_ENV, ElevenLabsConfig,
+};
 pub use self::fandom::FandomConfig;
-pub use self::library::{LibraryConfig, LibraryTargets, PathTemplates};
+pub use self::library::{
+    AUDIO_TEMPLATE_SUFFIX, DEFAULT_TEMPLATE_EXPORT, LibraryConfig, LibraryTargets, PathTemplates, audio_template,
+};
 pub use self::styles::{StyleFormat, Styles};
 pub use self::target::TargetConfig;
 use serde::Deserialize;
@@ -28,4 +34,6 @@ pub struct Config {
     /// Optional fandom-name normalization and preference rules.
     #[serde(default)]
     pub fandoms: FandomConfig,
+    /// Narration and audiobook settings. Configs without `[audio]` load unchanged.
+    pub audio: Option<AudioConfig>,
 }

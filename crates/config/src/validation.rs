@@ -12,7 +12,7 @@
 //! warnings are returned alongside the valid [`Config`].
 
 use crate::error::ConstraintViolation;
-use crate::models::{Config, TargetConfig};
+use crate::models::{AUDIO_PROVIDERS, AudioConfig, Config, ELEVENLABS_API_KEY_ENV, TargetConfig};
 use figment::value::magic::RelativePathBuf;
 
 /// Validates a deserialized configuration, producing any
@@ -32,6 +32,10 @@ impl Validator for Config {
         validate_library_targets(self, &mut errors);
         validate_targets(self, &mut errors);
         validate_database(self, &mut errors);
+        validate_audio_paths(self, &mut errors);
+        if let Some(audio) = &self.audio {
+            validate_audio(audio, &mut errors);
+        }
         check_duplicate_fandom_renames(self, &mut errors);
         check_prefs_not_in_renames(self, &mut errors);
         errors
@@ -42,6 +46,7 @@ fn validate_library_targets(config: &Config, errors: &mut Vec<ConstraintViolatio
     let library_targets = [
         ("import", Some(&config.library.targets.import)),
         ("export", Some(&config.library.targets.export)),
+        ("audio", Some(&config.library.targets.audio)),
         ("trash", config.library.targets.trash.as_ref()),
     ];
     for (key, target_name) in library_targets {
@@ -142,6 +147,96 @@ fn validate_database(config: &Config, errors: &mut Vec<ConstraintViolation>) {
     }
 }
 
+/// Audiobooks must never overwrite text exports.
+fn validate_audio_paths(config: &Config, errors: &mut Vec<ConstraintViolation>) {
+    let targets = &config.library.targets;
+    let templates = &config.library.path_templates;
+    if templates.audio.trim() != templates.export.trim() {
+        return;
+    }
+    if targets.audio == targets.export {
+        errors.push(ConstraintViolation::error(
+            "library.path_templates.audio",
+            "is the same as the export template, and audiobooks go to the export target: audiobooks would overwrite text exports. Remove it to use the default, or use a separate `library.targets.audio`",
+        ));
+        return;
+    }
+    let (Some(TargetConfig::Local { directory: audio, .. }), Some(TargetConfig::Local { directory: export, .. })) =
+        (config.targets.get(&targets.audio), config.targets.get(&targets.export))
+    else {
+        return;
+    };
+    let resolve = |path: &RelativePathBuf| {
+        let path = path.relative();
+        path.canonicalize().unwrap_or(path)
+    };
+    if resolve(audio) == resolve(export) {
+        errors.push(ConstraintViolation::warning(
+            "library.targets.audio",
+            format!(
+                "target '{}' has the same directory as the export target '{}', with the same path template: audiobooks would overwrite text exports",
+                targets.audio, targets.export
+            ),
+        ));
+    }
+}
+
+fn validate_audio(audio: &AudioConfig, errors: &mut Vec<ConstraintViolation>) {
+    match (&audio.provider, audio.provider_name()) {
+        (Some(provider), _) if !AUDIO_PROVIDERS.contains(&provider.as_str()) => {
+            errors.push(ConstraintViolation::error(
+                "audio.provider",
+                format!("unknown provider '{provider}'. Known providers: {}", AUDIO_PROVIDERS.join(", ")),
+            ));
+        },
+        (Some(provider), _) if !audio.configured_providers().any(|configured| configured == provider) => {
+            errors.push(ConstraintViolation::error(
+                "audio.providers",
+                format!("provider '{provider}' has no `[audio.providers.{provider}]` table"),
+            ));
+        },
+        (None, None) => errors.push(ConstraintViolation::error(
+            "audio.provider",
+            "is not set, and there is not exactly one `[audio.providers.*]` table to use instead",
+        )),
+        _ => {},
+    }
+    if !(6..=510).contains(&audio.bitrate_kbps) {
+        errors.push(ConstraintViolation::error("audio.bitrate_kbps", "must be from 6 to 510 (Opus limits)"));
+    }
+    if audio.max_chars == Some(0) {
+        errors.push(ConstraintViolation::error("audio.max_chars", "must be more than 0"));
+    }
+    if let Some(elevenlabs) = &audio.providers.elevenlabs {
+        let path = "audio.providers.elevenlabs";
+        for (key, value) in [
+            ("stability", elevenlabs.stability),
+            ("similarity_boost", elevenlabs.similarity_boost),
+        ] {
+            if value.is_some_and(|value| !(0.0..=1.0).contains(&value)) {
+                errors.push(ConstraintViolation::error(format!("{path}.{key}"), "must be from 0 to 1"));
+            }
+        }
+        if elevenlabs.concurrency == Some(0) {
+            errors.push(ConstraintViolation::error(format!("{path}.concurrency"), "must be more than 0"));
+        }
+        if elevenlabs.voices.is_empty() {
+            errors.push(ConstraintViolation::error(
+                format!("{path}.voices"),
+                "needs at least one voice: a language code and an ElevenLabs voice ID",
+            ));
+        }
+        let has_key = elevenlabs.api_key.as_ref().is_some_and(|key| !key.is_empty())
+            || std::env::var(ELEVENLABS_API_KEY_ENV).is_ok_and(|key| !key.is_empty());
+        if !has_key {
+            errors.push(ConstraintViolation::warning(
+                format!("{path}.api_key"),
+                format!("is not set, and neither is {ELEVENLABS_API_KEY_ENV}: narration cannot run (audiobook export still works)"),
+            ));
+        }
+    }
+}
+
 fn check_duplicate_fandom_renames(config: &Config, warnings: &mut Vec<ConstraintViolation>) {
     let mut seen_aliases: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
     for (display_name, aliases) in &config.fandoms.renames {
@@ -184,6 +279,7 @@ mod tests {
                 targets: LibraryTargets {
                     import: "local".to_string(),
                     export: "local".to_string(),
+                    audio: "local".to_string(),
                     trash: None,
                 },
                 cache: RelativePathBuf::from("/tmp/.rawr-test.db"),
@@ -191,6 +287,7 @@ mod tests {
                 path_templates: PathTemplates {
                     import: "{{ fandom }}/{{ title }}.html".to_string(),
                     export: "".to_string(),
+                    audio: ".audio".to_string(),
                 },
                 styles: Default::default(),
             },
@@ -202,6 +299,7 @@ mod tests {
                 },
             )]),
             fandoms: FandomConfig::default(),
+            audio: None,
         }
     }
 

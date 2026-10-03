@@ -14,6 +14,10 @@ pub const DEFAULT_TEMPLATE_IMPORT: &str = r#"
     {{ work }}-{{ hash }}-{{ title|truncate: 220|slug }}
 "#;
 
+/// Added to the export template to make the default audiobook template
+/// when audiobooks and text exports share a target.
+pub const AUDIO_TEMPLATE_SUFFIX: &str = ".audio";
+
 /// Default Tera template for exported PDFs.
 ///
 /// Omits `{{ hash }}` since exports overwrite previous versions.
@@ -57,6 +61,9 @@ pub struct LibraryTargets {
     /// Storage target for exported PDFs. Defaults to the import target
     /// via auto-configuration.
     pub export: String,
+    /// Storage target for audiobooks. Defaults to the export target via
+    /// auto-configuration.
+    pub audio: String,
     /// Optional "recycle bin" target for files overwritten during
     /// organize. `None` means overwritten files are discarded.
     pub trash: Option<String>,
@@ -74,12 +81,18 @@ pub struct PathTemplates {
     /// [`DEFAULT_TEMPLATE_EXPORT`].
     #[serde(default = "default_template_export")]
     pub export: String,
+    /// Template for audiobooks. Auto-configured from the export template:
+    /// with [`AUDIO_TEMPLATE_SUFFIX`] added when the audio target is the
+    /// export target, unchanged when it is a separate target.
+    #[serde(default = "default_template_audio")]
+    pub audio: String,
 }
 impl Default for PathTemplates {
     fn default() -> Self {
         Self {
             import: DEFAULT_TEMPLATE_IMPORT.to_string(),
             export: DEFAULT_TEMPLATE_EXPORT.to_string(),
+            audio: default_template_audio(),
         }
     }
 }
@@ -102,4 +115,19 @@ fn default_template_import() -> String {
 
 fn default_template_export() -> String {
     DEFAULT_TEMPLATE_EXPORT.to_string()
+}
+
+fn default_template_audio() -> String {
+    audio_template(DEFAULT_TEMPLATE_EXPORT, true)
+}
+
+/// The audiobook template made from an export template.
+///
+/// The export template is trimmed first: path segments are trimmed after
+/// rendering, so whitespace before the suffix would stay in the file name.
+pub fn audio_template(export: &str, shared_target: bool) -> String {
+    match shared_target {
+        true => format!("{}{AUDIO_TEMPLATE_SUFFIX}", export.trim()),
+        false => export.to_string(),
+    }
 }

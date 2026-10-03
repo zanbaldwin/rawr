@@ -83,6 +83,8 @@ ThoseDarnNuns](https://archiveofourown.org/works/81555506)!)
 | `rawr stats` (`s`)  | See your library at a glance                                                  |
 | `rawr export pdf`   | Render works to PDF                                                           |
 | `rawr export epub`  | Render works to ebook _(coming soon)_                                         |
+| `rawr narrate`      | Narrate works with text-to-speech and export audiobooks _(optional feature)_  |
+| `rawr recordings`   | List or delete paid narration recordings _(optional feature)_                 |
 | `rawr push`         | Sync to S3-compatible cloud storage _(coming soon)_                           |
 | `rawr pull`         | Help! I dropped my laptop in the bath! Gimme my library back! _(coming soon)_ |
 
@@ -111,12 +113,65 @@ cargo build --release
 
 > If on Linux, use `cargo deploy` alias to enable super muscle builds 💪
 
+## Audiobooks (optional)
+
+rawr can narrate works with ElevenLabs and build EPUB 3 audiobooks with read-along
+(Media Overlays). The feature is off by default. To build it, you need cmake and a C
+compiler, because rawr builds libopus from source.
+
+```shell
+cargo build --release --features audiobook
+```
+
+Add an `[audio]` table to your config:
+
+```toml
+[audio]
+# recordings = "~/.local/share/rawr/recordings"  # paid audio (the default)
+# bitrate_kbps = 32
+# max_chars = 50000                             # a limit for each run
+
+[audio.providers.elevenlabs]
+api_key = "file:///run/secrets/elevenlabs"      # or set ELEVENLABS_API_KEY
+# model = "eleven_v4"
+# stability = 0.35
+# similarity_boost = 0.75
+
+[audio.providers.elevenlabs.voices]
+en = "<voice ID>"
+ko = "<voice ID>"
+
+# Optional: a separate target for audiobooks. Without it, audiobooks go to the
+# export target, with `.audio.epub` at the end of the file name.
+# [library.targets]
+# audio = "audiobooks"
+```
+
+Narration costs money, so rawr is careful:
+
+- `rawr narrate <work> --dry-run` shows the estimate and sends nothing.
+- `rawr narrate <work>` shows the estimate and asks before it pays. Without a
+  terminal, it pays only with `--yes`.
+- Each paid recording is kept. If a run stops, run it again: it pays only for
+  what is still missing.
+- Ctrl-C stops new requests, and keeps the requests that are already paid for.
+- ElevenLabs needs your approval to send works rated Explicit or Not Rated. Add
+  `--approve` to give it.
+- `rawr export audiobook <work>` builds the audiobook again from the recordings.
+  It is free and needs no API key.
+- `rawr recordings list` shows the recordings and the credits spent.
+  `rawr recordings clear` deletes them, and asks first.
+
+Settings that change the audio (the voices, the model, stability and similarity
+boost) are in the config only. If you change them, rawr records the work again.
+
 ## Roadmap
 - [x] Library management (`scan`, `import`, `organize`)
 - [x] Library statistics
 - [x] Render works to PDF `export pdf` (basic)
 - [x] Render works to epub `export epub` (basic; _needs more testing_)
 - [ ] Render works to mobi and/or azw3 (basic)
+- [x] Narrated audiobooks `narrate` (optional feature; ElevenLabs only)
 - [x] Config initialization `init`
 - [ ] Syncing `push`/`pull` to S3
 - [ ] Non-technical documentation

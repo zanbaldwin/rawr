@@ -1,6 +1,6 @@
+use serde::Deserialize;
 use serde::de::value::MapAccessDeserializer;
 use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
-use serde::Deserialize;
 use std::fmt::{Formatter, Result as FmtResult};
 
 /// The output formats that can have their own stylesheet list.
@@ -42,10 +42,7 @@ pub struct Styles {
 impl Styles {
     /// One list for every format (the older `styles = [...]` shape).
     pub fn all(styles: Vec<String>) -> Self {
-        Self {
-            default: Some(styles),
-            ..Self::default()
-        }
+        Self { default: Some(styles), ..Self::default() }
     }
 
     /// The configured list for a format, or `None` when nothing applies.

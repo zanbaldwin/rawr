@@ -1,6 +1,6 @@
+use super::styles::{Styles, deserialize_styles};
 use figment::value::magic::RelativePathBuf;
 use rawr_compress::Compression;
-use super::styles::{Styles, deserialize_styles};
 use serde::Deserialize;
 
 /// Default Tera template for organizing imported works into the library.

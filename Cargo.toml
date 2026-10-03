@@ -103,7 +103,15 @@ s3 = ["_sync", "rawr-storage/s3", "rawr-app/s3"]
 _render = ["dep:rawr-render", "rawr-app/render"]
 pdf = ["_render", "rawr-render/pdf", "rawr-render/metadata"]
 epub = ["_render", "rawr-render/epub"]
-audiobook = ["_render", "rawr-render/metadata", "rawr-app/audiobook", "dep:rawr-audiobook"]
+audiobook = [
+    "_render",
+    "rawr-render/metadata",
+    "rawr-app/audiobook",
+    "dep:rawr-audiobook",
+    "dep:rawr-source",
+    "dep:rawr-tts",
+    "tokio/signal",
+]
 
 [dependencies]
 async-stream = { workspace = true }
@@ -124,7 +132,9 @@ rawr-extract = { workspace = true }
 rawr-library = { workspace = true }
 rawr-output = { workspace = true, features = ["progress", "confirm"] }
 rawr-render = { workspace = true, optional = true }
+rawr-source = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
+rawr-tts = { workspace = true, optional = true }
 similar = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }

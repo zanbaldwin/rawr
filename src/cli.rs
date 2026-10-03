@@ -2,6 +2,8 @@
 use crate::command::ExportCommand;
 use crate::command::ImportCommand;
 use crate::command::InitCommand;
+#[cfg(feature = "audiobook")]
+use crate::command::NarrateCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
 use crate::command::StatsCommand;
@@ -50,6 +52,9 @@ pub enum Commands {
     /// Render works to PDF or EPUB
     #[cfg(feature = "_render")]
     Export(ExportCommand),
+    /// Narrate works with text-to-speech, then export them as audiobooks
+    #[cfg(feature = "audiobook")]
+    Narrate(NarrateCommand),
     /// Show library statistics
     #[command(alias = "s")]
     Stats(StatsCommand),

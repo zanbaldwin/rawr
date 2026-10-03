@@ -1,5 +1,5 @@
 #[cfg(feature = "audiobook")]
-mod audiobook;
+pub(crate) mod audiobook;
 mod context;
 #[cfg(feature = "epub")]
 mod epub;
@@ -8,7 +8,7 @@ mod pdf;
 
 #[cfg(feature = "audiobook")]
 use self::audiobook::export as export_audiobook;
-use self::context::ExportContext;
+pub(crate) use self::context::ExportContext;
 #[cfg(feature = "epub")]
 use self::epub::export as export_epub;
 #[cfg(feature = "pdf")]
@@ -70,14 +70,7 @@ impl Command for ExportCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {
         let app: &AppContext = ctx;
         let ctx = ExportContext::try_from_app(app, self.format.styles()).await?;
-        let limit = self.show.unwrap_or(DEFAULT_LIMIT);
-
-        let selections = if self.works.is_empty() {
-            Picker::interact(ctx.load.name(), Arc::clone(&ctx.cache), Arc::clone(&ctx.output), ctx.fandoms, limit)
-                .await?
-        } else {
-            resolve_work_refs(&ctx, &self.works).await
-        };
+        let selections = select_works(&ctx, &self.works, self.show).await?;
 
         match self.format {
             #[cfg(feature = "pdf")]
@@ -88,6 +81,20 @@ impl Command for ExportCommand {
             ExportFormat::Audiobook => export_audiobook(app, ctx, selections).await,
         }
     }
+}
+
+/// The works named on the command line, or picked interactively when none are named.
+pub(crate) async fn select_works(
+    ctx: &ExportContext<'_>,
+    works: &[WorkRef],
+    show: Option<usize>,
+) -> Result<Vec<(Version, Vec<File>)>> {
+    if works.is_empty() {
+        let limit = show.unwrap_or(DEFAULT_LIMIT);
+        return Picker::interact(ctx.load.name(), Arc::clone(&ctx.cache), Arc::clone(&ctx.output), ctx.fandoms, limit)
+            .await;
+    }
+    Ok(resolve_work_refs(ctx, works).await)
 }
 
 async fn resolve_work_refs(ctx: &ExportContext<'_>, works: &[WorkRef]) -> Vec<(Version, Vec<File>)> {

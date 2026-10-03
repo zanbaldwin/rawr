@@ -4,9 +4,12 @@ use crate::context::AppContext;
 use crate::error::Result;
 use crate::output::{Reason, format_pair_line};
 use rawr_app::audio::{Need, codec, document, recordings, synthesiser};
+use rawr_audiobook::audio::Codec;
 use rawr_audiobook::plan::{BatchState, Plan};
+use rawr_audiobook::store::Store;
 use rawr_extract::models::Version;
 use rawr_output::{Line, Loudness, PALETTE, Pipe};
+use rawr_source::Document;
 use std::io::Cursor;
 use std::process::ExitCode;
 
@@ -68,10 +71,7 @@ pub(crate) async fn export(
             bar.inc(1);
             continue 'work;
         }
-        let package = rawr_audiobook::export(&document, &plan, &store, &codec, &ctx.styles).await?;
-        let bytes = package.write(Cursor::new(Vec::new()))?.into_inner();
-        let path = ctx.path_generator.generate(&version, "epub", None)?;
-        ctx.save.write(&path, &bytes).await?;
+        save(&ctx, &store, &codec, &version, &document, &plan).await?;
         let line = format_pair_line(Reason::Added, &file, &version, ctx.fandoms);
         ctx.output.print_to(Pipe::Out, &line);
         bar.inc(1);
@@ -93,8 +93,24 @@ pub(crate) async fn export(
     Ok(ExitCode::SUCCESS)
 }
 
+/// Build one audiobook whose batches are all recorded, and write it to the audio target.
+pub(crate) async fn save(
+    ctx: &ExportContext<'_>,
+    store: &Store,
+    codec: &dyn Codec,
+    version: &Version,
+    document: &Document,
+    plan: &Plan,
+) -> Result<()> {
+    let package = rawr_audiobook::export(document, plan, store, codec, &ctx.styles).await?;
+    let bytes = package.write(Cursor::new(Vec::new()))?.into_inner();
+    let path = ctx.path_generator.generate(version, "epub", None)?;
+    ctx.save.write(&path, &bytes).await?;
+    Ok(())
+}
+
 /// An error and its first cause, and theirs, as one line.
-fn describe(frame: &exn::Frame) -> String {
+pub(crate) fn describe(frame: &exn::Frame) -> String {
     match frame.children().first() {
         Some(child) => format!("{}: {}", frame.error(), describe(child)),
         None => frame.error().to_string(),

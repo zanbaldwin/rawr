@@ -2,6 +2,8 @@
 mod export;
 mod import;
 mod init;
+#[cfg(feature = "audiobook")]
+mod narrate;
 mod organize;
 mod scan;
 mod stats;
@@ -10,6 +12,8 @@ mod stats;
 pub(crate) use self::export::ExportCommand;
 pub(crate) use self::import::ImportCommand;
 pub(crate) use self::init::InitCommand;
+#[cfg(feature = "audiobook")]
+pub(crate) use self::narrate::NarrateCommand;
 pub(crate) use self::organize::OrganizeCommand;
 pub(crate) use self::scan::ScanCommand;
 pub(crate) use self::stats::StatsCommand;

@@ -48,6 +48,8 @@ async fn main() -> Result<ExitCode> {
         Commands::Organize(command) => command.execute(&mut context).await?,
         #[cfg(feature = "_render")]
         Commands::Export(command) => command.execute(&mut context).await?,
+        #[cfg(feature = "audiobook")]
+        Commands::Narrate(command) => command.execute(&mut context).await?,
         Commands::Stats(command) => command.execute(&mut context).await?,
     };
 

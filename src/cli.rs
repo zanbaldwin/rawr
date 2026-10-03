@@ -4,6 +4,8 @@ use crate::command::ImportCommand;
 use crate::command::InitCommand;
 #[cfg(feature = "audiobook")]
 use crate::command::NarrateCommand;
+#[cfg(feature = "audiobook")]
+use crate::command::RecordingsCommand;
 use crate::command::OrganizeCommand;
 use crate::command::ScanCommand;
 use crate::command::StatsCommand;
@@ -55,6 +57,9 @@ pub enum Commands {
     /// Narrate works with text-to-speech, then export them as audiobooks
     #[cfg(feature = "audiobook")]
     Narrate(NarrateCommand),
+    /// Show or delete paid narration recordings
+    #[cfg(feature = "audiobook")]
+    Recordings(RecordingsCommand),
     /// Show library statistics
     #[command(alias = "s")]
     Stats(StatsCommand),

@@ -394,7 +394,7 @@ fn cost_text(cost: &Cost) -> String {
 }
 
 /// `31240` → `31,240`.
-fn number(value: usize) -> String {
+pub(crate) fn number(value: usize) -> String {
     let digits = value.to_string();
     let mut out = String::new();
     for (index, digit) in digits.chars().enumerate() {
@@ -410,18 +410,18 @@ fn exit(problems: usize) -> ExitCode {
     if problems == 0 { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }
 
-fn print(output: &dyn Output, pipe: Pipe, line: Line<'_>) {
+pub(crate) fn print(output: &dyn Output, pipe: Pipe, line: Line<'_>) {
     output.print_to(pipe, &line);
 }
 
-fn muted(text: String) -> Line<'static> {
+pub(crate) fn muted(text: String) -> Line<'static> {
     Line::new([(text, &PALETTE.muted).into()])
 }
 
-fn warning(text: String) -> Line<'static> {
+pub(crate) fn warning(text: String) -> Line<'static> {
     Line::new([("WARN: ", &PALETTE.warning).into(), (text,).into()]).with_volume(Loudness::Shout)
 }
 
-fn danger(text: String) -> Line<'static> {
+pub(crate) fn danger(text: String) -> Line<'static> {
     Line::new([("\u{2717} ", &PALETTE.danger).into(), (text,).into()]).with_volume(Loudness::Shout)
 }

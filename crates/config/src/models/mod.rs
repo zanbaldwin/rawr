@@ -7,10 +7,12 @@
 
 mod fandom;
 mod library;
+mod styles;
 mod target;
 
 pub use self::fandom::FandomConfig;
 pub use self::library::{LibraryConfig, LibraryTargets, PathTemplates};
+pub use self::styles::{StyleFormat, Styles};
 pub use self::target::TargetConfig;
 use serde::Deserialize;
 use std::collections::HashMap;

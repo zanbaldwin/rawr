@@ -1,5 +1,6 @@
 use figment::value::magic::RelativePathBuf;
 use rawr_compress::Compression;
+use super::styles::{Styles, deserialize_styles};
 use serde::Deserialize;
 
 /// Default Tera template for organizing imported works into the library.
@@ -40,10 +41,10 @@ pub struct LibraryConfig {
     /// Tera templates controlling file layout within storage targets.
     #[serde(default)]
     pub path_templates: PathTemplates,
-    /// CSS stylesheet references applied during export. Supports
-    /// `builtin:` prefixed names for bundled stylesheets.
-    #[serde(default)]
-    pub styles: Vec<String>,
+    /// CSS stylesheets applied during export: one list for every format, or
+    /// a list for each format. See [`Styles`].
+    #[serde(default, deserialize_with = "deserialize_styles")]
+    pub styles: Styles,
 }
 
 /// Maps logical operations (import, export, trash) to named

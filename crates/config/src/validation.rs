@@ -192,7 +192,7 @@ mod tests {
                     import: "{{ fandom }}/{{ title }}.html".to_string(),
                     export: "".to_string(),
                 },
-                styles: vec![],
+                styles: Default::default(),
             },
             targets: HashMap::from([(
                 "local".to_string(),

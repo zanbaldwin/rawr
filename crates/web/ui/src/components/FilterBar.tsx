@@ -36,14 +36,14 @@ export function FilterBar({ library, query, text, counts }: Props) {
         onChange={(fandoms) => apply({ ...query, fandoms })}
       />
       <select
-        value={query.rating}
-        onChange={(e) => apply({ ...query, rating: Number(e.target.value) })}
-        aria-label="Rating"
+        value={query.language}
+        onChange={(e) => apply({ ...query, language: Number(e.target.value) })}
+        aria-label="Language"
       >
-        <option value={-1}>Any rating</option>
-        {library.enums.ratings.map((rating) => (
-          <option key={rating.code} value={rating.code}>
-            {rating.label}
+        <option value={-1}>Any language</option>
+        {library.dict.languages.map((language, index) => (
+          <option key={index} value={index}>
+            {language.name}
           </option>
         ))}
       </select>

@@ -26,16 +26,16 @@ describe("runQuery", () => {
     expect(Array.from(runQuery(lib, query({ q: "bee" })))).toEqual([1, 2]);
   });
 
-  it("filters by fandom, rating, and completion", () => {
+  it("filters by fandom, language, and completion", () => {
     expect(Array.from(runQuery(lib, query({ fandoms: [1] })))).toEqual([1, 2]);
     // Multi-select is OR: works in fandom 0 OR fandom 1 = everything here.
     expect(Array.from(runQuery(lib, query({ fandoms: [0, 1] })))).toEqual([0, 1, 2, 3]);
-    expect(Array.from(runQuery(lib, query({ rating: 0 })))).toEqual([0, 2]);
+    expect(Array.from(runQuery(lib, query({ language: 1 })))).toEqual([1]);
     expect(Array.from(runQuery(lib, query({ complete: 0 })))).toEqual([1, 3]);
   });
 
   it("combines filters", () => {
-    expect(Array.from(runQuery(lib, query({ fandoms: [0], rating: 0, complete: 1 })))).toEqual([0, 2]);
+    expect(Array.from(runQuery(lib, query({ fandoms: [0], language: 0, complete: 1 })))).toEqual([0, 2]);
     expect(Array.from(runQuery(lib, query({ fandoms: [0], q: "charlie" })))).toEqual([2]);
   });
 
@@ -66,7 +66,7 @@ describe("runQuery", () => {
       fandoms: repeat((i) => [i % 2]),
       series: repeat(() => []),
       tags: repeat(() => []),
-      language: repeat(() => 0),
+      language: repeat((i) => i % 2),
       rating: repeat((i) => (i % 2 === 0 ? 0 : 3)),
       warnings: repeat(() => 0),
       words: repeat((i) => (i * 997) % 100_000),
@@ -82,7 +82,7 @@ describe("runQuery", () => {
     };
     const bigLib = decode(big);
     const start = performance.now();
-    const result = runQuery(bigLib, query({ q: "number 99", rating: 3, sort: "words" }));
+    const result = runQuery(bigLib, query({ q: "number 99", language: 1, sort: "words" }));
     const elapsed = performance.now() - start;
     expect(result.length).toBeGreaterThan(0);
     // Generous CI-safe bound; typically ~1–3 ms.

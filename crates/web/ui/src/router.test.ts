@@ -12,7 +12,7 @@ describe("parseHash", () => {
   });
 
   it("keeps filter params attached to the list route", () => {
-    const state = parseHash("#/?q=coffee&fandom=Naruto&rating=g&complete=1&sort=words");
+    const state = parseHash("#/?q=coffee&fandom=Naruto&lang=en&complete=1&sort=words");
     expect(state.route).toEqual({ name: "list" });
     expect(state.params.get("q")).toBe("coffee");
     expect(state.params.get("fandom")).toBe("Naruto");
@@ -24,7 +24,7 @@ describe("parseHash", () => {
       expect(parseHash(junk).route.name).toBe("notfound");
     }
     // Junk QUERY is preserved but harmless.
-    expect(parseHash("#/?rating=zzz&sort=&complete=maybe").route.name).toBe("list");
+    expect(parseHash("#/?lang=zzz&sort=&complete=maybe").route.name).toBe("list");
   });
 
   it("round-trips route → hash → route", () => {

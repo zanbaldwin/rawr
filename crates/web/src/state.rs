@@ -6,7 +6,7 @@ use exn::{OptionExt, ResultExt};
 use rawr_app::BackendPurpose;
 use rawr_cache::Repository;
 use rawr_config::Config;
-use rawr_config::models::FandomConfig;
+use rawr_config::models::{FandomConfig, StyleFormat};
 use rawr_library::{Context as LibraryContext, PathGenerator};
 use rawr_render::EpubRenderer;
 use rawr_storage::BackendHandle;
@@ -59,9 +59,7 @@ impl AppState {
         let library_ctx = rawr_app::library_context(config, config.library.compression, dry_run)
             .await
             .or_raise(|| ErrorKind::Storage)?;
-        // An unconfigured style list still produces sane EPUBs.
-        let styles =
-            rawr_app::style_config(&config.library.styles, ["builtin:epub.css"]).or_raise(|| ErrorKind::Render)?;
+        let styles = rawr_app::styles_for(config, StyleFormat::Epub).or_raise(|| ErrorKind::Render)?;
         let export_paths = rawr_app::export_path_generator(config).or_raise(|| ErrorKind::Index)?;
         Ok(Self(Arc::new(Inner {
             cache,

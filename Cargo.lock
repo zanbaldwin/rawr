@@ -3024,6 +3024,7 @@ dependencies = [
  "derive_more",
  "exn",
  "flate2",
+ "futures",
  "rawr-app",
  "rawr-cache",
  "rawr-compress",

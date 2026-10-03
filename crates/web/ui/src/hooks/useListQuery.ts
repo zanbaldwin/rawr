@@ -5,8 +5,14 @@ import { useDeferredValue, useMemo } from "react";
 import { fandomCounts, runQuery } from "../data/query";
 import { DEFAULT_QUERY } from "../types";
 import type { Library, Query, SortKey } from "../types";
+import type { LanguageEntry } from "../types/generated/LanguageEntry";
 
 const SORTS: SortKey[] = ["recent", "title", "words", "updated"];
+
+/** The ISO code, or the name when the work never had one. */
+function languageCode(language: LanguageEntry): string {
+  return (language.iso ?? language.name).toLowerCase();
+}
 
 /** URL → Query. Unknown values fall back to defaults; a hand-typed URL
  * must never 400 the library. The fandom travels by NAME (stable across
@@ -18,13 +24,13 @@ export function paramsToQuery(library: Library, params: URLSearchParams, qOverri
     .getAll("fandom")
     .map((name) => library.dict.fandoms.indexOf(name))
     .filter((index) => index !== -1);
-  const ratingShort = (params.get("rating") ?? "").toLowerCase();
-  const rating = library.enums.ratings.find((r) => r.short.toLowerCase() === ratingShort)?.code ?? -1;
+  const langCode = (params.get("lang") ?? "").toLowerCase();
+  const language = library.dict.languages.findIndex((l) => languageCode(l) === langCode);
   const completeRaw = params.get("complete");
   const complete = completeRaw === "1" ? 1 : completeRaw === "0" ? 0 : -1;
   const sortRaw = params.get("sort") as SortKey | null;
   const sort = sortRaw !== null && SORTS.includes(sortRaw) ? sortRaw : DEFAULT_QUERY.sort;
-  return { q, fandoms, rating, complete, sort };
+  return { q, fandoms, language, complete, sort };
 }
 
 /** Query → URL params, omitting defaults so clean views have clean URLs. */
@@ -35,8 +41,8 @@ export function queryToParams(library: Library, query: Query): URLSearchParams {
     const name = library.dict.fandoms[fandom];
     if (name !== undefined) params.append("fandom", name);
   }
-  const rating = library.enums.ratings.find((r) => r.code === query.rating);
-  if (rating) params.set("rating", rating.short.toLowerCase());
+  const language = library.dict.languages[query.language];
+  if (language) params.set("lang", languageCode(language));
   if (query.complete !== -1) params.set("complete", String(query.complete));
   if (query.sort !== DEFAULT_QUERY.sort) params.set("sort", query.sort);
   return params;

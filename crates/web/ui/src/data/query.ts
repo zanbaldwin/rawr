@@ -56,7 +56,7 @@ export function runQuery(library: Library, query: Query): Uint32Array {
   for (let p = 0; p < perm.length; p++) {
     const i = perm[p]!;
     // Cheapest predicates first.
-    if (query.rating !== -1 && library.rating[i] !== query.rating) continue;
+    if (query.language !== -1 && library.language[i] !== query.language) continue;
     if (query.complete !== -1 && library.complete[i] !== query.complete) continue;
     if (query.fandoms.length > 0 && !csrContainsAny(library.fandoms, i, query.fandoms)) continue;
     if (needle !== "" && !matchesText(library, i, needle, authors!)) continue;
@@ -81,7 +81,7 @@ export function fandomCounts(library: Library, query: Query): Uint32Array {
   const needle = query.q;
   const authors = needle !== "" ? authorMask(library, needle) : null;
   for (let i = 0; i < library.count; i++) {
-    if (query.rating !== -1 && library.rating[i] !== query.rating) continue;
+    if (query.language !== -1 && library.language[i] !== query.language) continue;
     if (query.complete !== -1 && library.complete[i] !== query.complete) continue;
     if (needle !== "" && !matchesText(library, i, needle, authors!)) continue;
     const end = library.fandoms.offsets[i + 1]!;

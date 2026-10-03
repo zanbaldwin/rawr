@@ -90,11 +90,11 @@ export interface Query {
   /** Indices into `dict.fandoms`; empty = any. A work matches when it
    * belongs to ANY selected fandom (OR semantics). */
   fandoms: number[];
-  /** Rating code. */
-  rating: number;
+  /** Index into `dict.languages`. */
+  language: number;
   /** 1 = complete only, 0 = incomplete only. */
   complete: number;
   sort: SortKey;
 }
 
-export const DEFAULT_QUERY: Query = { q: "", fandoms: [], rating: -1, complete: -1, sort: "recent" };
+export const DEFAULT_QUERY: Query = { q: "", fandoms: [], language: -1, complete: -1, sort: "recent" };

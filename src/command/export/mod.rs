@@ -14,6 +14,7 @@ use crate::context::AppContext;
 use crate::error::Result;
 use crate::output::Picker;
 use clap::Args;
+use rawr_config::models::StyleFormat;
 use rawr_extract::models::Version;
 use rawr_output::{Line, Loudness, PALETTE, Pipe};
 use rawr_storage::file::{FileInfo, Processed};
@@ -34,6 +35,18 @@ enum ExportFormat {
     Epub,
 }
 
+impl ExportFormat {
+    /// Which `library.styles` list the format uses.
+    fn styles(&self) -> StyleFormat {
+        match self {
+            #[cfg(feature = "pdf")]
+            Self::Pdf => StyleFormat::Pdf,
+            #[cfg(feature = "epub")]
+            Self::Epub => StyleFormat::Epub,
+        }
+    }
+}
+
 /// Render works to PDF or EPUB.
 #[derive(Debug, Args)]
 pub(crate) struct ExportCommand {
@@ -47,7 +60,7 @@ pub(crate) struct ExportCommand {
 }
 impl Command for ExportCommand {
     async fn execute(&self, ctx: &mut AppContext) -> Result<ExitCode> {
-        let ctx = ExportContext::try_from_app(ctx).await?;
+        let ctx = ExportContext::try_from_app(ctx, self.format.styles()).await?;
         let limit = self.show.unwrap_or(DEFAULT_LIMIT);
 
         let selections = if self.works.is_empty() {

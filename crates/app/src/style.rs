@@ -7,7 +7,16 @@
 
 use crate::error::{ErrorKind, Result};
 use exn::ResultExt;
+use rawr_config::Config;
+use rawr_config::models::StyleFormat;
 use rawr_render::StyleConfig;
+
+/// The stylesheets for an output format: its `library.styles` list (see
+/// [`Styles::for_format`](rawr_config::models::Styles::for_format)). There
+/// are no default stylesheets: with no list, the format gets none.
+pub fn styles_for(config: &Config, format: StyleFormat) -> Result<StyleConfig> {
+    style_config(config.library.styles.for_format(format).unwrap_or_default(), [])
+}
 
 /// Fold a raw `library.styles` list into a [`StyleConfig`].
 ///

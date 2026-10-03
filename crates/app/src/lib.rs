@@ -14,5 +14,5 @@ pub mod template;
 
 pub use crate::backend::{BackendPurpose, backend_by_name, backend_by_purpose};
 #[cfg(feature = "render")]
-pub use crate::style::style_config;
+pub use crate::style::{style_config, styles_for};
 pub use crate::template::{export_path_generator, import_path_generator, library_context, path_generator};

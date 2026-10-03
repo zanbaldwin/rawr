@@ -2731,6 +2731,7 @@ dependencies = [
  "rawr-library",
  "rawr-render",
  "rawr-storage",
+ "tempfile",
 ]
 
 [[package]]

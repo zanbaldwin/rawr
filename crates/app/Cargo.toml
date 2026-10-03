@@ -19,3 +19,6 @@ rawr-config = { workspace = true }
 rawr-library = { workspace = true }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

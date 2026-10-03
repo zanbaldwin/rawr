@@ -1,7 +1,7 @@
 use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
 use rawr_cache::Repository;
-use rawr_config::models::FandomConfig;
+use rawr_config::models::{FandomConfig, StyleFormat};
 use rawr_library::PathGenerator;
 use rawr_output::Output;
 use rawr_render::StyleConfig;
@@ -47,7 +47,8 @@ pub(crate) struct ExportContext<'a> {
     pub(crate) fandoms: &'a FandomConfig,
 }
 impl<'a> ExportContext<'a> {
-    pub(crate) async fn try_from_app(ctx: &'a AppContext) -> Result<Self> {
+    /// `format` chooses the stylesheets (`library.styles`).
+    pub(crate) async fn try_from_app(ctx: &'a AppContext, format: StyleFormat) -> Result<Self> {
         let path_generator = rawr_app::export_path_generator(&ctx.config)?;
 
         Ok(Self {
@@ -62,7 +63,7 @@ impl<'a> ExportContext<'a> {
                 )
             })?,
             cache: Arc::new(ctx.cache.clone()),
-            styles: rawr_app::style_config(&ctx.config.library.styles, [])?,
+            styles: rawr_app::styles_for(&ctx.config, format)?,
             path_generator,
             output: Arc::clone(&ctx.output),
             fandoms: &ctx.config.fandoms,

@@ -94,7 +94,9 @@ export interface Query {
   language: number;
   /** 1 = complete only, 0 = incomplete only. */
   complete: number;
+  /** 1 = read only, 0 = unread only. */
+  read: number;
   sort: SortKey;
 }
 
-export const DEFAULT_QUERY: Query = { q: "", fandoms: [], language: -1, complete: -1, sort: "recent" };
+export const DEFAULT_QUERY: Query = { q: "", fandoms: [], language: -1, complete: -1, read: -1, sort: "recent" };

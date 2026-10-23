@@ -2,10 +2,11 @@
 // memoised query execution with deferred search-as-you-type.
 
 import { useDeferredValue, useMemo } from "react";
-import { fandomCounts, runQuery } from "../data/query";
+import { fandomCounts, readMask, runQuery } from "../data/query";
 import { DEFAULT_QUERY } from "../types";
 import type { Library, Query, SortKey } from "../types";
 import type { LanguageEntry } from "../types/generated/LanguageEntry";
+import { useReads } from "./useSync";
 
 const SORTS: SortKey[] = ["recent", "title", "words", "updated"];
 
@@ -28,9 +29,11 @@ export function paramsToQuery(library: Library, params: URLSearchParams, qOverri
   const language = library.dict.languages.findIndex((l) => languageCode(l) === langCode);
   const completeRaw = params.get("complete");
   const complete = completeRaw === "1" ? 1 : completeRaw === "0" ? 0 : -1;
+  const readRaw = params.get("read");
+  const read = readRaw === "1" ? 1 : readRaw === "0" ? 0 : -1;
   const sortRaw = params.get("sort") as SortKey | null;
   const sort = sortRaw !== null && SORTS.includes(sortRaw) ? sortRaw : DEFAULT_QUERY.sort;
-  return { q, fandoms, language, complete, sort };
+  return { q, fandoms, language, complete, read, sort };
 }
 
 /** Query → URL params, omitting defaults so clean views have clean URLs. */
@@ -44,6 +47,7 @@ export function queryToParams(library: Library, query: Query): URLSearchParams {
   const language = library.dict.languages[query.language];
   if (language) params.set("lang", languageCode(language));
   if (query.complete !== -1) params.set("complete", String(query.complete));
+  if (query.read !== -1) params.set("read", String(query.read));
   if (query.sort !== DEFAULT_QUERY.sort) params.set("sort", query.sort);
   return params;
 }
@@ -67,7 +71,9 @@ export function useListQuery(library: Library, params: URLSearchParams): ListQue
     () => paramsToQuery(library, new URLSearchParams(paramsKey), deferredQ),
     [library, paramsKey, deferredQ],
   );
-  const rows = useMemo(() => runQuery(library, query), [library, query]);
-  const counts = useMemo(() => fandomCounts(library, query), [library, query]);
+  const { byWork } = useReads();
+  const read = useMemo(() => readMask(library, byWork), [library, byWork]);
+  const rows = useMemo(() => runQuery(library, query, read), [library, query, read]);
+  const counts = useMemo(() => fandomCounts(library, query, read), [library, query, read]);
   return { query, rows, counts, stale: rawQ.trim().toLowerCase() !== deferredQ.trim().toLowerCase() };
 }

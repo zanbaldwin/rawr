@@ -19,6 +19,14 @@ describe("params ↔ query", () => {
     expect(back.get("lang")).toBe("de");
   });
 
+  it("round-trips the read filter", () => {
+    for (const read of [0, 1]) {
+      const query = paramsToQuery(lib, new URLSearchParams(`read=${read}`));
+      expect(query.read).toBe(read);
+      expect(queryToParams(lib, query).get("read")).toBe(String(read));
+    }
+  });
+
   it("drops fandom names that no longer resolve", () => {
     const params = new URLSearchParams();
     params.append("fandom", "Fandom One");
@@ -27,9 +35,9 @@ describe("params ↔ query", () => {
   });
 
   it("tolerates junk everywhere", () => {
-    const params = new URLSearchParams("lang=zzz&complete=maybe&sort=sideways&q=%20%20");
+    const params = new URLSearchParams("lang=zzz&complete=maybe&read=yes&sort=sideways&q=%20%20");
     const query = paramsToQuery(lib, params);
-    expect(query).toEqual({ q: "", fandoms: [], language: -1, complete: -1, sort: "recent" });
+    expect(query).toEqual({ q: "", fandoms: [], language: -1, complete: -1, read: -1, sort: "recent" });
     // Defaults produce a clean URL.
     expect(queryToParams(lib, query).toString()).toBe("");
   });

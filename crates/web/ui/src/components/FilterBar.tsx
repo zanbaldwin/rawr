@@ -57,6 +57,15 @@ export function FilterBar({ library, query, text, counts }: Props) {
         <option value={0}>In progress</option>
       </select>
       <select
+        value={query.read}
+        onChange={(e) => apply({ ...query, read: Number(e.target.value) })}
+        aria-label="Read status"
+      >
+        <option value={-1}>Read or unread</option>
+        <option value={1}>Read</option>
+        <option value={0}>Unread</option>
+      </select>
+      <select
         value={query.sort}
         onChange={(e) => apply({ ...query, sort: e.target.value as SortKey })}
         aria-label="Sort"

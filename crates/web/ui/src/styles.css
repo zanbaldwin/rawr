@@ -392,6 +392,11 @@ main {
   gap: 0.1rem;
 }
 
+.read-badge {
+  color: var(--ok-fg);
+  white-space: nowrap;
+}
+
 /* ---------- detail ---------- */
 
 .work-detail,

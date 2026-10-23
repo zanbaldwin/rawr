@@ -1,4 +1,5 @@
 import { formatChapters, formatWords } from "../format";
+import { useReads } from "../hooks/useSync";
 import type { Library } from "../types";
 
 interface Props {
@@ -28,6 +29,7 @@ function fandomLine(library: Library, row: number): string {
 export function WorkRow({ library, row }: Props) {
   const rating = library.enums.ratings.find((r) => r.code === library.rating[row])?.short ?? "?";
   const complete = library.complete[row] === 1;
+  const read = useReads().byWork.get(library.id[row]!);
   return (
     <a className="work-row" href={`#/works/${library.id[row]}`}>
       <span className={`rating-badge rating-${rating.toLowerCase()}`}>{rating}</span>
@@ -42,6 +44,12 @@ export function WorkRow({ library, row }: Props) {
           {formatChapters(library.chapters[row]!, library.chaptersTotal[row]!)}
           {complete ? " ✓" : ""}
         </span>
+        {read && (
+          <span className="read-badge" title={`Read ${read.full}× · ${read.updates} chapter updates`}>
+            read {read.full > 0 ? `${read.full}×` : ""}
+            {read.updates > 0 ? ` +${read.updates}` : ""}
+          </span>
+        )}
       </span>
     </a>
   );

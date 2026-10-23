@@ -26,6 +26,16 @@ function authorMask(library: Library, needle: string): Uint8Array {
   return mask;
 }
 
+/** 1 for each row whose work has any read in the log. */
+export function readMask(library: Library, byWork: ReadonlyMap<number, unknown>): Uint8Array {
+  const mask = new Uint8Array(library.count);
+  if (byWork.size === 0) return mask;
+  for (let i = 0; i < library.count; i++) {
+    if (byWork.has(library.id[i]!)) mask[i] = 1;
+  }
+  return mask;
+}
+
 function permutation(library: Library, sort: Query["sort"]): Uint32Array {
   switch (sort) {
     case "recent":
@@ -47,7 +57,7 @@ let scratch = new Uint32Array(0);
 /** Run a query; returns matching row indices already in `query.sort`
  * order (the walk follows a precomputed permutation, so there is no
  * comparator work at query time). */
-export function runQuery(library: Library, query: Query): Uint32Array {
+export function runQuery(library: Library, query: Query, read?: Uint8Array): Uint32Array {
   if (scratch.length < library.count) scratch = new Uint32Array(library.count);
   const needle = query.q;
   const authors = needle !== "" ? authorMask(library, needle) : null;
@@ -58,6 +68,7 @@ export function runQuery(library: Library, query: Query): Uint32Array {
     // Cheapest predicates first.
     if (query.language !== -1 && library.language[i] !== query.language) continue;
     if (query.complete !== -1 && library.complete[i] !== query.complete) continue;
+    if (query.read !== -1 && (read?.[i] ?? 0) !== query.read) continue;
     if (query.fandoms.length > 0 && !csrContainsAny(library.fandoms, i, query.fandoms)) continue;
     if (needle !== "" && !matchesText(library, i, needle, authors!)) continue;
     scratch[n++] = i;
@@ -76,13 +87,14 @@ function matchesText(library: Library, i: number, needle: string, authors: Uint8
 
 /** Facet counts for the fandom dropdown, computed with the fandom filter
  * itself excluded (each option shows what choosing it *would* give). */
-export function fandomCounts(library: Library, query: Query): Uint32Array {
+export function fandomCounts(library: Library, query: Query, read?: Uint8Array): Uint32Array {
   const counts = new Uint32Array(library.dict.fandoms.length);
   const needle = query.q;
   const authors = needle !== "" ? authorMask(library, needle) : null;
   for (let i = 0; i < library.count; i++) {
     if (query.language !== -1 && library.language[i] !== query.language) continue;
     if (query.complete !== -1 && library.complete[i] !== query.complete) continue;
+    if (query.read !== -1 && (read?.[i] ?? 0) !== query.read) continue;
     if (needle !== "" && !matchesText(library, i, needle, authors!)) continue;
     const end = library.fandoms.offsets[i + 1]!;
     for (let cursor = library.fandoms.offsets[i]!; cursor < end; cursor++) {

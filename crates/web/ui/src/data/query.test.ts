@@ -3,10 +3,12 @@ import { DEFAULT_QUERY } from "../types";
 import type { Query } from "../types";
 import { decode } from "./decode";
 import { syntheticIndex } from "./fixture";
-import { fandomCounts, runQuery } from "./query";
+import { fandomCounts, readMask, runQuery } from "./query";
 
 const lib = decode(syntheticIndex());
 const query = (overrides: Partial<Query>): Query => ({ ...DEFAULT_QUERY, ...overrides });
+// Works 200 and 300 (rows 1 and 2) have been read; 999 is not in the library.
+const read = readMask(lib, new Map([[200, {}], [300, {}], [999, {}]]));
 
 describe("runQuery", () => {
   it("returns everything, recent-first, with no filters", () => {
@@ -32,6 +34,18 @@ describe("runQuery", () => {
     expect(Array.from(runQuery(lib, query({ fandoms: [0, 1] })))).toEqual([0, 1, 2, 3]);
     expect(Array.from(runQuery(lib, query({ language: 1 })))).toEqual([1]);
     expect(Array.from(runQuery(lib, query({ complete: 0 })))).toEqual([1, 3]);
+  });
+
+  it("filters by read status", () => {
+    expect(Array.from(read)).toEqual([0, 1, 1, 0]);
+    expect(Array.from(runQuery(lib, query({ read: 1 }), read))).toEqual([1, 2]);
+    expect(Array.from(runQuery(lib, query({ read: 0 }), read))).toEqual([0, 3]);
+    expect(Array.from(runQuery(lib, query({ read: 0, complete: 0 }), read))).toEqual([3]);
+  });
+
+  it("treats every work as unread without a read log", () => {
+    expect(Array.from(runQuery(lib, query({ read: 1 })))).toEqual([]);
+    expect(Array.from(runQuery(lib, query({ read: 0 })))).toEqual([0, 1, 2, 3]);
   });
 
   it("combines filters", () => {
@@ -102,5 +116,6 @@ describe("fandomCounts", () => {
 
   it("applies the other filters", () => {
     expect(Array.from(fandomCounts(lib, query({ complete: 1 })))).toEqual([2, 1]);
+    expect(Array.from(fandomCounts(lib, query({ read: 1 }), read))).toEqual([1, 2]);
   });
 });

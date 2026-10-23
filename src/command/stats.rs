@@ -1,13 +1,15 @@
 use super::Command;
-use crate::context::AppContext;
+use crate::context::{AppContext, BackendPurpose};
 use crate::error::Result;
 use crate::output::{format_bytes, format_number};
 use clap::Args;
 use console::Style;
 use rawr_config::models::FandomConfig;
 use rawr_output::{Line, Loudness, PALETTE, Piece, Pipe};
+use rawr_reads::ReadLog;
+use rawr_storage::ValidPath;
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::ExitCode;
 use time::UtcDateTime;
 
@@ -46,6 +48,30 @@ fn merge_fandom_aliases(all: Vec<(String, u64)>, config: &FandomConfig, top: u8)
     result.sort_unstable_by_key(|(_, c)| Reverse(*c));
     result.truncate(top as usize);
     (result, count)
+}
+
+/// Load the read log. Read tracking is optional, so the caller treats an
+/// error as a warning rather than failing the command.
+async fn load_reads(ctx: &AppContext) -> std::result::Result<ReadLog, String> {
+    let backend = match ctx.get_backend_by_purpose(BackendPurpose::Reads).await {
+        Ok(Some(backend)) => backend,
+        Ok(None) => return Ok(ReadLog::default()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let path = ValidPath::new(&ctx.config.library.reads).map_err(|e| e.to_string())?;
+    ReadLog::load(&backend, &path).await.map_err(|e| e.to_string())
+}
+
+/// Works read, full reads and chapter-update reads, counting only works
+/// that are in the library.
+fn read_counts(log: &ReadLog, library: &HashSet<u64>) -> (u64, u64, u64) {
+    let (mut works, mut full, mut updates) = (0, 0, 0);
+    for (_, summary) in log.summary().into_iter().filter(|(work_id, _)| library.contains(work_id)) {
+        works += 1;
+        full += u64::from(summary.full);
+        updates += u64::from(summary.updates);
+    }
+    (works, full, updates)
 }
 
 fn pieces_with_counts<'a>(items: &'a [(String, u64)], style: &'a Style) -> Vec<Piece<'a>> {
@@ -106,6 +132,27 @@ impl Command for StatsCommand {
             return Ok(ExitCode::SUCCESS);
         }
 
+        let reads = match load_reads(ctx).await {
+            Ok(log) if !log.entries().is_empty() => {
+                let library: HashSet<u64> = ctx.cache.list_all_work_ids_for_target(target).await?.into_iter().collect();
+                let (works, full, updates) = read_counts(&log, &library);
+                Some((works, library.len() as u64 - works, full, updates))
+            },
+            Ok(_) => None,
+            Err(message) => {
+                ctx.output.print_to(
+                    Pipe::Err,
+                    &Line::new([
+                        ("warning:", &PALETTE.warning).into(),
+                        Piece::space(),
+                        (format!("read history skipped: {message}"),).into(),
+                    ])
+                    .with_volume(Loudness::Shout),
+                );
+                None
+            },
+        };
+
         // Resolve fandoms: merge aliases if config has renames, otherwise take top-N directly
         let raw_fandom_count = stats.fandoms.len() as u64;
         let (display_fandoms, fandom_count, fandom_unique) = if !ctx.config.fandoms.renames.is_empty() {
@@ -127,6 +174,7 @@ impl Command for StatsCommand {
             "Words",
             "Storage",
             "Completion",
+            "Read",
             "Ratings",
             "Date range",
             "Languages",
@@ -200,6 +248,27 @@ impl Command for StatsCommand {
             ])
             .with_volume(Loudness::Shout),
         );
+
+        if let Some((works, unread, full, updates)) = reads {
+            ctx.output.print_to(
+                Pipe::Out,
+                &Line::new([
+                    Piece::fixed(label("Read", w), &PALETTE.label),
+                    Piece::fixed(format_number(works), &PALETTE.success),
+                    Piece::plain(" works"),
+                    middot(),
+                    Piece::fixed(format_number(unread), &PALETTE.warning),
+                    Piece::plain(" unread"),
+                    middot(),
+                    Piece::fixed(format_number(full), &PALETTE.highlight),
+                    Piece::plain(" full reads"),
+                    middot(),
+                    Piece::fixed(format_number(updates), &PALETTE.highlight),
+                    Piece::plain(" chapter updates"),
+                ])
+                .with_volume(Loudness::Shout),
+            );
+        }
 
         if !stats.ratings.is_empty() {
             let items = stats.ratings.iter().map(|(r, c)| (r.as_deref().unwrap_or("NR"), *c));

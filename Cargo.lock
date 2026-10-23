@@ -2802,6 +2802,7 @@ dependencies = [
  "rawr-extract",
  "rawr-library",
  "rawr-output",
+ "rawr-reads",
  "rawr-render",
  "rawr-storage",
  "similar",

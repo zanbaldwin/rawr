@@ -111,6 +111,7 @@ rawr-config = { workspace = true }
 rawr-extract = { workspace = true }
 rawr-library = { workspace = true }
 rawr-output = { workspace = true, features = ["progress", "confirm"] }
+rawr-reads = { workspace = true }
 rawr-render = { workspace = true, optional = true }
 rawr-storage = { workspace = true }
 similar = { workspace = true }

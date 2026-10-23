@@ -19,6 +19,7 @@ bzip2 = "^0.6.0"
 clap = "^4.6"
 console = "^0.16.2"
 crc32fast = "^1.5"
+csv = "^1.3"
 derive_more = "^2.1"
 dialoguer = { version = "^0.12.0", default-features = false }
 directories = "^6.0"
@@ -44,6 +45,7 @@ rawr-config = { path = "crates/config", default-features = false }
 rawr-extract = { path = "crates/extract", default-features = false }
 rawr-library = { path = "crates/library", default-features = false }
 rawr-output = { path = "crates/output", default-features = false }
+rawr-reads = { path = "crates/reads", default-features = false }
 rawr-render = { path = "crates/render", default-features = false }
 rawr-storage = { path = "crates/storage", default-features = false }
 rawr-xhtml = { path = "crates/xhtml", default-features = false }

@@ -1,0 +1,18 @@
+[package]
+name = "rawr-reads"
+description = "Read log (history of read works) for rawr"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+csv = { workspace = true }
+derive_more = { workspace = true, features = ["display", "error"] }
+exn = { workspace = true }
+rawr-storage = { workspace = true }
+time = { workspace = true, features = ["macros", "parsing"] }
+
+[dev-dependencies]
+rawr-storage = { workspace = true, features = ["mock"] }
+tokio = { workspace = true, features = ["macros", "rt"] }

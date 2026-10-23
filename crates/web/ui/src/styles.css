@@ -198,10 +198,6 @@ main {
   .filter-bar {
     grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
   }
-
-  .filter-bar input[type="search"] {
-    grid-column: auto;
-  }
 }
 
 .fandom-select {

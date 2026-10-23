@@ -30,6 +30,10 @@ pub struct LibraryConfig {
     /// against the config file's directory via figment's
     /// [`RelativePathBuf`].
     pub cache: RelativePathBuf,
+    /// Path to the read log (a CSV of read events) within the
+    /// [`reads`](LibraryTargets::reads) target. Defaults to `reads.csv`.
+    #[serde(default = "default_reads")]
+    pub reads: String,
     /// Compression algorithm applied during import/organize. Parsed from
     /// a string name (e.g. `"bzip2"`, `"zstd"`). Defaults to
     /// [`Compression::default`] (none).
@@ -47,7 +51,7 @@ pub struct LibraryConfig {
     pub styles: Styles,
 }
 
-/// Maps logical operations (import, export, trash) to named
+/// Maps logical operations (import, export, reads, trash) to named
 /// [`TargetConfig`](super::TargetConfig) entries defined in the
 /// top-level `targets` map.
 #[derive(Debug, Deserialize)]
@@ -57,6 +61,9 @@ pub struct LibraryTargets {
     /// Storage target for exported PDFs. Defaults to the import target
     /// via auto-configuration.
     pub export: String,
+    /// Storage target for the read log. Defaults to the import target
+    /// via auto-configuration.
+    pub reads: String,
     /// Optional "recycle bin" target for files overwritten during
     /// organize. `None` means overwritten files are discarded.
     pub trash: Option<String>,
@@ -94,6 +101,10 @@ where
 
 fn default_compression() -> Compression {
     Compression::default()
+}
+
+fn default_reads() -> String {
+    "reads.csv".to_string()
 }
 
 fn default_template_import() -> String {

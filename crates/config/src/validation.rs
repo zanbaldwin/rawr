@@ -42,6 +42,7 @@ fn validate_library_targets(config: &Config, errors: &mut Vec<ConstraintViolatio
     let library_targets = [
         ("import", Some(&config.library.targets.import)),
         ("export", Some(&config.library.targets.export)),
+        ("reads", Some(&config.library.targets.reads)),
         ("trash", config.library.targets.trash.as_ref()),
     ];
     for (key, target_name) in library_targets {
@@ -184,9 +185,11 @@ mod tests {
                 targets: LibraryTargets {
                     import: "local".to_string(),
                     export: "local".to_string(),
+                    reads: "local".to_string(),
                     trash: None,
                 },
                 cache: RelativePathBuf::from("/tmp/.rawr-test.db"),
+                reads: "reads.csv".to_string(),
                 compression: Compression::default(),
                 path_templates: PathTemplates {
                     import: "{{ fandom }}/{{ title }}.html".to_string(),

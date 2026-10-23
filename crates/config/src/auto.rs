@@ -5,14 +5,16 @@
 //! a [`Figment`] and implements [`Provider`], so the loader can slot it into
 //! the figment chain transparently.
 //!
-//! Three defaults are applied, in order:
+//! Four defaults are applied, in order:
 //!
 //! 1. **Import target** — if exactly one [`target`](crate::models::TargetConfig)
 //!    is defined and `library.targets.import` is unset, the lone target is used.
 //!    When multiple targets exist the choice is ambiguous, so nothing is inferred.
 //! 2. **Export target** — if `library.targets.export` is unset, it mirrors the
 //!    resolved import target (whether user-specified or auto-configured above).
-//! 3. **Cache database** — if `library.cache` is unset, it defaults to the
+//! 3. **Reads target** — if `library.targets.reads` is unset, it mirrors the
+//!    resolved import target in the same way.
+//! 4. **Cache database** — if `library.cache` is unset, it defaults to the
 //!    platform-specific data directory (via [`directories::ProjectDirs`]).
 
 use crate::APP_NAME;
@@ -48,7 +50,8 @@ impl Configurator {
         let source = figment.data().unwrap_or_default();
         let mut defaults: ProviderData = Map::new();
         let auto_import = Self::autoconfigure_library_target_import(&source, &mut defaults);
-        Self::autoconfigure_library_target_export(&source, auto_import.as_deref(), &mut defaults);
+        Self::autoconfigure_library_target_from_import(&source, "export", auto_import.as_deref(), &mut defaults);
+        Self::autoconfigure_library_target_from_import(&source, "reads", auto_import.as_deref(), &mut defaults);
         Self::autoconfigure_cache_database(&source, &mut defaults);
         Self { data: defaults }
     }
@@ -59,7 +62,7 @@ impl Configurator {
     /// because the intended target would be ambiguous.
     ///
     /// Returns the auto-configured import target name (if any) so that
-    /// [`autoconfigure_library_target_export`](Self::autoconfigure_library_target_export)
+    /// [`autoconfigure_library_target_from_import`](Self::autoconfigure_library_target_from_import)
     /// can use it without re-reading from `defaults`.
     fn autoconfigure_library_target_import(source: &ProviderData, defaults: &mut ProviderData) -> Option<String> {
         let mut target_names = BTreeSet::new();
@@ -94,22 +97,23 @@ impl Configurator {
         Some(singular_target_name)
     }
 
-    /// Sets `library.targets.export` to match the resolved import target when
-    /// the export target is not already specified. The import target is resolved
+    /// Sets `library.targets.{key}` to match the resolved import target when
+    /// that target is not already specified. The import target is resolved
     /// from the source data first, falling back to `auto_import` if the import
     /// target was itself auto-configured in the previous step.
-    fn autoconfigure_library_target_export(
+    fn autoconfigure_library_target_from_import(
         source: &ProviderData,
+        key: &str,
         auto_import: Option<&str>,
         defaults: &mut ProviderData,
     ) {
-        let is_export_target_specified = source.values().any(|dict| {
+        let is_target_specified = source.values().any(|dict| {
             get_dict(dict, "library")
                 .and_then(|(_, library)| get_dict(library, "targets"))
-                .map(|(_, targets)| is_value_set(targets, "export"))
+                .map(|(_, targets)| is_value_set(targets, key))
                 .unwrap_or(false)
         });
-        if is_export_target_specified {
+        if is_target_specified {
             return;
         }
         let import_from_source = source.values().fold(None, |carry, dict| {
@@ -126,8 +130,8 @@ impl Configurator {
             && let Some((_, library)) = get_or_insert_dict(default_profile, "library")
             && let Some((targets_tag, targets)) = get_or_insert_dict(library, "targets")
         {
-            tracing::debug!(setting = "library.targets.export", value = import_value, "Auto-configuring");
-            targets.insert("export".into(), Value::String(targets_tag, import_value.to_owned()));
+            tracing::debug!(setting = format!("library.targets.{key}"), value = import_value, "Auto-configuring");
+            targets.insert(key.into(), Value::String(targets_tag, import_value.to_owned()));
         }
     }
 

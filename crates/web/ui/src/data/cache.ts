@@ -1,9 +1,10 @@
-// The persistence port: two records in IndexedDB ('index' — the *decoded*
+// The persistence port: three records in IndexedDB ('index' — the *decoded*
 // Library, typed arrays structured-clone near-memcpy; 'meta' — sync
-// bookkeeping). Falls back to memory-only when IndexedDB won't open, so
+// bookkeeping; 'reads' — the read log and its ETag). Falls back to memory-only when IndexedDB won't open, so
 // the app degrades to "always first-run" rather than a white screen.
 
 import type { Library } from "../types";
+import type { ReadLogDto } from "../types/generated/ReadLogDto";
 import { deleteDb, kvGet, kvPut, openDb } from "./idb";
 
 export interface CachedMeta {
@@ -15,15 +16,24 @@ export interface CachedMeta {
   checkedAt: number;
 }
 
+export interface CachedReads {
+  schema: number;
+  etag: string;
+  log: ReadLogDto;
+}
+
 export interface CacheStore {
   read: () => Promise<{ library: Library; meta: CachedMeta } | null>;
   write: (library: Library, meta: CachedMeta) => Promise<void>;
   writeMeta: (meta: CachedMeta) => Promise<void>;
+  readReads: () => Promise<CachedReads | null>;
+  writeReads: (reads: CachedReads) => Promise<void>;
   clear: () => Promise<void>;
 }
 
 const INDEX_KEY = "index";
 const META_KEY = "meta";
+const READS_KEY = "reads";
 
 export function createCache(): CacheStore {
   const backend: Promise<CacheStore> = openDb().then(
@@ -34,6 +44,8 @@ export function createCache(): CacheStore {
     read: () => backend.then((b) => b.read()),
     write: (library, meta) => backend.then((b) => b.write(library, meta)),
     writeMeta: (meta) => backend.then((b) => b.writeMeta(meta)),
+    readReads: () => backend.then((b) => b.readReads()),
+    writeReads: (reads) => backend.then((b) => b.writeReads(reads)),
     clear: () => backend.then((b) => b.clear()),
   };
 }
@@ -57,6 +69,12 @@ function idbBacked(db: IDBDatabase): CacheStore {
     async writeMeta(meta) {
       await kvPut(db, META_KEY, meta);
     },
+    async readReads() {
+      return (await kvGet<CachedReads>(db, READS_KEY)) ?? null;
+    },
+    async writeReads(reads) {
+      await kvPut(db, READS_KEY, reads);
+    },
     async clear() {
       db.close();
       await deleteDb();
@@ -66,6 +84,7 @@ function idbBacked(db: IDBDatabase): CacheStore {
 
 export function memoryBacked(): CacheStore {
   let stored: { library: Library; meta: CachedMeta } | null = null;
+  let reads: CachedReads | null = null;
   return {
     read: () => Promise.resolve(stored),
     write(library, meta) {
@@ -76,8 +95,14 @@ export function memoryBacked(): CacheStore {
       if (stored) stored = { ...stored, meta };
       return Promise.resolve();
     },
+    readReads: () => Promise.resolve(reads),
+    writeReads(next) {
+      reads = next;
+      return Promise.resolve();
+    },
     clear() {
       stored = null;
+      reads = null;
       return Promise.resolve();
     },
   };

@@ -20,13 +20,14 @@ use std::sync::Arc;
 pub enum BackendPurpose {
     Import,
     Export,
+    Reads,
     Trash,
 }
 
 /// Resolve a backend by its logical purpose.
 ///
-/// `Trash` may be unconfigured, hence the `Option`; `Import` and `Export`
-/// are guaranteed present by config validation and auto-fill.
+/// `Trash` may be unconfigured, hence the `Option`; `Import`, `Export` and
+/// `Reads` are guaranteed present by config validation and auto-fill.
 pub async fn backend_by_purpose(
     config: &Config,
     purpose: BackendPurpose,
@@ -35,6 +36,7 @@ pub async fn backend_by_purpose(
     let target_name = match purpose {
         BackendPurpose::Import => Some(&config.library.targets.import),
         BackendPurpose::Export => Some(&config.library.targets.export),
+        BackendPurpose::Reads => Some(&config.library.targets.reads),
         BackendPurpose::Trash => config.library.targets.trash.as_ref(),
     };
     let Some(target_name) = target_name else {

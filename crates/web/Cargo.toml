@@ -47,11 +47,12 @@ rawr-compress = { workspace = true, features = ["brotli", "bzip3", "xz", "zstd"]
 rawr-config = { workspace = true }
 rawr-extract = { workspace = true, features = ["chapters", "serde"] }
 rawr-library = { workspace = true }
+rawr-reads = { workspace = true }
 rawr-render = { workspace = true, features = ["epub"] }
 rawr-storage = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-time = { workspace = true, features = ["formatting"] }
+time = { workspace = true, features = ["formatting", "macros", "parsing"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { workspace = true, features = ["compat", "io"] }
 tracing = { workspace = true }

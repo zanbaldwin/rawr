@@ -18,10 +18,12 @@ use crate::error::{ErrorKind, Result};
 use exn::{OptionExt, ResultExt};
 use rawr_config::models::FandomConfig;
 use rawr_extract::models::{Author, Rating, SeriesPosition, TagKind, Version, Warning};
+use rawr_reads::{ReadEntry, ReadLog};
 use rawr_storage::file::{FileInfo, Processed};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
 use time::{Date, OffsetDateTime, UtcDateTime};
 
 type File = FileInfo<Processed>;
@@ -781,6 +783,62 @@ pub struct UploadResponse {
 }
 
 /* ========= *\
+|  Read log   |
+\* ========= */
+
+/// The whole read log, columnar, in file order. One row per read event.
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(TS), ts(export))]
+pub struct ReadLogDto {
+    pub work_id: Vec<u32>,
+    /// Days since the Unix epoch (UTC midnight).
+    pub date: Vec<i32>,
+    /// `1` when only a new chapter was read; kept numeric for typed-array
+    /// parity.
+    pub chapter_update: Vec<u8>,
+}
+
+impl ReadLogDto {
+    pub fn build(log: &ReadLog) -> Result<Self> {
+        let entries = log.entries();
+        let mut dto = Self {
+            work_id: Vec::with_capacity(entries.len()),
+            date: Vec::with_capacity(entries.len()),
+            chapter_update: Vec::with_capacity(entries.len()),
+        };
+        for entry in entries {
+            dto.work_id.push(u32::try_from(entry.work_id).or_raise(|| ErrorKind::Reads)?);
+            dto.date.push(date_to_days(entry.date));
+            dto.chapter_update.push(u8::from(entry.chapter_update));
+        }
+        Ok(dto)
+    }
+}
+
+/// One read event, sent by the client to record a read or to undo one.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "ts", derive(TS), ts(export))]
+pub struct ReadEventDto {
+    pub work_id: u32,
+    /// `YYYY-MM-DD`, in the reader's own time zone.
+    pub date: String,
+    /// Only a new chapter was read, not the whole work.
+    pub chapter_update: bool,
+}
+
+impl ReadEventDto {
+    pub fn to_entry(&self) -> Result<ReadEntry> {
+        let date = Date::parse(&self.date, format_description!("[year]-[month]-[day]"))
+            .or_raise(|| ErrorKind::BadRequest("`date` must be a YYYY-MM-DD date"))?;
+        Ok(ReadEntry {
+            date,
+            work_id: u64::from(self.work_id),
+            chapter_update: self.chapter_update,
+        })
+    }
+}
+
+/* ========= *\
 |  Encoding   |
 \* ========= */
 
@@ -957,5 +1015,30 @@ mod tests {
         assert_eq!(best.metadata.published, "2020-02-29");
         assert_eq!(best.extracted_at, "2023-11-14T22:13:20Z");
         assert_eq!(best.epub_url, format!("/api/v1/versions/{}/download.epub", "b".repeat(64)));
+    }
+
+    #[test]
+    fn read_log_is_columnar_in_file_order() {
+        let log = ReadLog::parse(b"1970-01-02,7,\n1970-01-01,8,Y\n").unwrap();
+        let dto = ReadLogDto::build(&log).unwrap();
+        assert_eq!(dto.work_id, [7, 8]);
+        assert_eq!(dto.date, [1, 0]);
+        assert_eq!(dto.chapter_update, [0, 1]);
+    }
+
+    #[test]
+    fn read_event_parses_its_date() {
+        let event = ReadEventDto {
+            work_id: 7,
+            date: "2026-10-23".into(),
+            chapter_update: true,
+        };
+        let entry = event.to_entry().unwrap();
+        assert_eq!(entry.date, Date::from_calendar_date(2026, Month::October, 23).unwrap());
+        assert_eq!(entry.work_id, 7);
+        assert!(entry.chapter_update);
+
+        let bad = ReadEventDto { date: "23/10/2026".into(), ..event };
+        assert!(matches!(&*bad.to_entry().unwrap_err(), ErrorKind::BadRequest(_)));
     }
 }

@@ -2,6 +2,7 @@
 
 pub mod download;
 pub mod index;
+pub mod reads;
 pub mod scan;
 pub mod stats;
 pub mod upload;

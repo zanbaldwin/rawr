@@ -9,7 +9,7 @@ use rawr_config::Config;
 use rawr_config::models::{FandomConfig, StyleFormat};
 use rawr_library::{Context as LibraryContext, PathGenerator};
 use rawr_render::EpubRenderer;
-use rawr_storage::BackendHandle;
+use rawr_storage::{BackendHandle, ValidPath};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -48,6 +48,12 @@ pub struct Inner {
     pub epub_cache: tokio::sync::RwLock<Option<(String, axum::body::Bytes)>>,
     /// Single-flight library scan bookkeeping.
     pub scan: crate::handlers::scan::ScanTracker,
+    /// The reads target, which holds the read log.
+    pub reads: BackendHandle,
+    /// The read log's path within the reads target.
+    pub reads_path: ValidPath,
+    /// Serialises read log writes (load, change, save).
+    pub reads_lock: tokio::sync::Mutex<()>,
 }
 
 impl AppState {
@@ -61,6 +67,11 @@ impl AppState {
             .or_raise(|| ErrorKind::Storage)?;
         let styles = rawr_app::styles_for(config, StyleFormat::Epub).or_raise(|| ErrorKind::Render)?;
         let export_paths = rawr_app::export_path_generator(config).or_raise(|| ErrorKind::Index)?;
+        let reads = rawr_app::backend_by_purpose(config, BackendPurpose::Reads, dry_run)
+            .await
+            .or_raise(|| ErrorKind::Storage)?
+            .ok_or_raise(|| ErrorKind::BadRequest("no reads target configured"))?;
+        let reads_path = ValidPath::new(&config.library.reads).or_raise(|| ErrorKind::Reads)?;
         Ok(Self(Arc::new(Inner {
             cache,
             library,
@@ -73,6 +84,9 @@ impl AppState {
             index: IndexCache::new(),
             epub_cache: tokio::sync::RwLock::new(None),
             scan: crate::handlers::scan::ScanTracker::default(),
+            reads,
+            reads_path,
+            reads_lock: tokio::sync::Mutex::new(()),
         })))
     }
 }

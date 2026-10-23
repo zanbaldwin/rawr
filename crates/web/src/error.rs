@@ -51,23 +51,29 @@ pub enum ErrorKind {
     /// The work could not be converted for download.
     #[display("the work could not be converted for download")]
     Render,
+    /// The read log could not be loaded or saved; check the file by hand.
+    #[display("the read log could not be loaded or saved")]
+    Reads,
+    /// The read to undo is not in the read log.
+    #[display("that read is not in the read log")]
+    ReadNotFound,
 }
 
 impl ErrorKind {
     /// Returns `true` if retrying might succeed.
     pub fn is_retryable(&self) -> bool {
-        matches!(self, Self::Cache | Self::Storage)
+        matches!(self, Self::Cache | Self::Storage | Self::Reads)
     }
 
     /// HTTP status this kind maps to.
     pub fn status(&self) -> StatusCode {
         match self {
-            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::NotFound | Self::ReadNotFound => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::Upload(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::Index | Self::Cache | Self::Render => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Index | Self::Cache | Self::Render | Self::Reads => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Storage => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
@@ -84,6 +90,8 @@ impl ErrorKind {
             Self::Cache => "cache",
             Self::Storage => "storage",
             Self::Render => "render",
+            Self::Reads => "reads",
+            Self::ReadNotFound => "read_not_found",
         }
     }
 }

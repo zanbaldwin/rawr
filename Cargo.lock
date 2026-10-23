@@ -3065,6 +3065,7 @@ dependencies = [
  "rawr-config",
  "rawr-extract",
  "rawr-library",
+ "rawr-reads",
  "rawr-render",
  "rawr-storage",
  "rstest",

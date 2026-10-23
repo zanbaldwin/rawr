@@ -1,6 +1,7 @@
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Header } from "./components/Header";
 import { OfflineBanner } from "./components/OfflineBanner";
+import { ReadToast } from "./components/ReadToast";
 import { sync } from "./data/instance";
 import { formatBytes } from "./format";
 import { useStore } from "./hooks/useStore";
@@ -24,6 +25,7 @@ export function App() {
           <Screen />
         </ErrorBoundary>
       </main>
+      <ReadToast />
     </ErrorBoundary>
   );
 }

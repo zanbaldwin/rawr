@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatBytes, formatChapters, formatDay, formatWords } from "../format";
-import { useSyncState } from "../hooks/useSync";
+import { ReadControls } from "../components/ReadControls";
+import type { ReadSummary } from "../data/reads";
+import { formatBytes, formatChapters, formatDay, formatNumber, formatWords } from "../format";
+import { useReads, useSyncState } from "../hooks/useSync";
 import type { Library } from "../types";
 import type { WorkDetail } from "../types/generated/WorkDetail";
 
@@ -23,6 +25,7 @@ export function WorkScreen({ library, id }: Props) {
   const [detail, setDetail] = useState<WorkDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const online = useSyncState().online;
+  const readSummary = useReads().byWork.get(id);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +86,7 @@ export function WorkScreen({ library, id }: Props) {
         </a>
       </div>
       {online && <p className="hint">Downloads open outside the app; send the file to Books from the Share sheet.</p>}
+      <ReadControls workId={id} />
 
       <dl className="meta-table">
         <dt>Rating</dt>
@@ -102,6 +106,8 @@ export function WorkScreen({ library, id }: Props) {
         <dd>{formatDay(library.updated[row]!)}</dd>
         <dt>Language</dt>
         <dd>{library.dict.languages[library.language[row]!]?.name ?? "?"}</dd>
+        <dt>Read</dt>
+        <dd>{readSummary ? describeReads(readSummary) : "Not yet"}</dd>
       </dl>
 
       {summary !== null && summary !== undefined && (
@@ -178,6 +184,14 @@ export function WorkScreen({ library, id }: Props) {
       </section>
     </article>
   );
+}
+
+/** "2×, 5 chapter updates · last 12 Oct 2026". */
+function describeReads({ full, updates, last }: ReadSummary): string {
+  const parts: string[] = [];
+  if (full > 0) parts.push(`${formatNumber(full)}×`);
+  if (updates > 0) parts.push(`${formatNumber(updates)} chapter update${updates === 1 ? "" : "s"}`);
+  return `${parts.join(", ")} · last ${formatDay(last)}`;
 }
 
 function spans(csr: { offsets: Uint32Array; values: Uint32Array }, row: number): number[] {

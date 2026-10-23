@@ -553,6 +553,60 @@ main {
   min-height: 36px;
 }
 
+/* ---------- reads ---------- */
+
+.read-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.75rem 0 0.25rem;
+  flex-wrap: wrap;
+}
+
+.read-actions input[type="date"] {
+  min-height: 44px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.read-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+}
+
+.read-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  border-radius: var(--radius);
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+
+.read-toast button {
+  border: 1px solid var(--bg);
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius);
+  padding: 0.25rem 0.75rem;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
 /* ---------- upload ---------- */
 
 .upload {

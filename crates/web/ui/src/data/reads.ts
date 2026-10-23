@@ -7,6 +7,7 @@
 
 import { createStore } from "../store";
 import type { Store } from "../store";
+import type { ReadEventDto } from "../types/generated/ReadEventDto";
 import type { ReadLogDto } from "../types/generated/ReadLogDto";
 import type { CacheStore } from "./cache";
 import type { SyncState } from "./sync";
@@ -42,6 +43,24 @@ export interface Reads {
   boot: () => Promise<void>;
   /** Coalesced conditional fetch. Never throws. */
   revalidate: () => Promise<void>;
+  /** Append a read on the server, then to the local log. Throws with
+   * the server's message on failure. */
+  record: (event: ReadEventDto) => Promise<void>;
+  /** Remove the last matching read on the server, then locally. */
+  undo: (event: ReadEventDto) => Promise<void>;
+}
+
+/** Today's date in the reader's own time zone, as `YYYY-MM-DD`. */
+export function localToday(now = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** `YYYY-MM-DD` → days since the Unix epoch, matching the wire format. */
+export function isoToDays(iso: string): number {
+  const [year, month, day] = iso.split("-").map(Number);
+  return Date.UTC(year!, month! - 1, day!) / 86_400_000;
 }
 
 export function summarise(log: ReadLogDto): Map<number, ReadSummary> {
@@ -93,6 +112,50 @@ export function createReads(deps: ReadsDeps): Reads {
     }
   }
 
+  /** Apply a confirmed change to the local log. The stored ETag no
+   * longer matches the server's, so the next check refetches. */
+  function change(update: (log: ReadLogDto) => ReadLogDto): void {
+    const state = readsStore.get();
+    const log = update(state.log ?? { work_id: [], date: [], chapter_update: [] });
+    readsStore.set({ ...state, log, byWork: summarise(log), error: null });
+  }
+
+  async function send(method: "POST" | "DELETE", event: ReadEventDto): Promise<void> {
+    const response = await deps.fetchImpl("/api/v1/reads", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(event),
+      cache: "no-store",
+    });
+    if (response.ok) return;
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `server answered ${response.status}`);
+  }
+
+  async function record(event: ReadEventDto): Promise<void> {
+    await send("POST", event);
+    change((log) => ({
+      work_id: [...log.work_id, event.work_id],
+      date: [...log.date, isoToDays(event.date)],
+      chapter_update: [...log.chapter_update, event.chapter_update ? 1 : 0],
+    }));
+  }
+
+  async function undo(event: ReadEventDto): Promise<void> {
+    await send("DELETE", event);
+    const date = isoToDays(event.date);
+    const flag = event.chapter_update ? 1 : 0;
+    change((log) => {
+      let index = log.work_id.length - 1;
+      while (index >= 0 && !(log.work_id[index] === event.work_id && log.date[index] === date && log.chapter_update[index] === flag)) {
+        index--;
+      }
+      if (index < 0) return log;
+      const without = <T,>(values: T[]) => values.filter((_, i) => i !== index);
+      return { work_id: without(log.work_id), date: without(log.date), chapter_update: without(log.chapter_update) };
+    });
+  }
+
   function revalidate(): Promise<void> {
     if (inFlight) return inFlight;
     inFlight = doFetch().finally(() => {
@@ -101,7 +164,7 @@ export function createReads(deps: ReadsDeps): Reads {
     return inFlight;
   }
 
-  return { readsStore, boot, revalidate };
+  return { readsStore, boot, revalidate, record, undo };
 }
 
 /** Revalidate the read log whenever the index check succeeds, so it

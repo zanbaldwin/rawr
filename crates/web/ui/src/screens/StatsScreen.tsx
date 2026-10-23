@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { computeStats } from "../data/stats";
+import { computeReadStats, computeStats } from "../data/stats";
 import type { NamedCount } from "../data/stats";
 import { formatBytes, formatNumber, formatWords } from "../format";
-import { useSyncState } from "../hooks/useSync";
+import { useReads, useSyncState } from "../hooks/useSync";
 import type { Library } from "../types";
 import type { StorageStatsDto } from "../types/generated/StorageStatsDto";
 
@@ -12,6 +12,8 @@ interface Props {
 
 export function StatsScreen({ library }: Props) {
   const stats = useMemo(() => computeStats(library), [library]);
+  const { byWork } = useReads();
+  const reads = useMemo(() => computeReadStats(library, byWork), [library, byWork]);
   const online = useSyncState().online;
   const [sizes, setSizes] = useState<StorageStatsDto | null>(null);
 
@@ -40,6 +42,7 @@ export function StatsScreen({ library }: Props) {
         <Tile label="Versions" value={formatNumber(stats.versions)} />
         <Tile label="Words" value={formatWords(stats.totalWords)} />
         <Tile label="Complete" value={`${formatNumber(stats.complete)} / ${formatNumber(stats.works)}`} />
+        {reads && <Tile label="Read" value={`${formatNumber(reads.works)} / ${formatNumber(stats.works)}`} />}
         <Tile label="On disk" value={sizes ? formatBytes(sizes.file_size) : "—"} />
         <Tile
           label="Uncompressed"
@@ -56,6 +59,15 @@ export function StatsScreen({ library }: Props) {
       <CountTable title="Top tags" rows={stats.topFreeforms} />
 
       <dl className="meta-table">
+        {reads && (
+          <>
+            <dt>Reads</dt>
+            <dd>
+              {formatNumber(reads.full)} full · {formatNumber(reads.updates)} chapter updates ·{" "}
+              {formatNumber(reads.unread)} works unread
+            </dd>
+          </>
+        )}
         <dt>Tags</dt>
         <dd>
           {formatNumber(stats.tagRefs)} across {formatNumber(stats.uniqueTags)} unique

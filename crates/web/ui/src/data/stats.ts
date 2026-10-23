@@ -3,6 +3,7 @@
 // offline-capable. Only byte totals come from the server.
 
 import type { Library } from "../types";
+import type { ReadSummary } from "./reads";
 
 export interface NamedCount {
   name: string;
@@ -25,6 +26,14 @@ export interface LibraryStats {
   uniqueTags: number;
   seriesCount: number;
   worksInSeries: number;
+}
+
+/** Reads of works in the library only, matching `rawr stats`. */
+export interface ReadStats {
+  works: number;
+  unread: number;
+  full: number;
+  updates: number;
 }
 
 const TOP_N = 10;
@@ -102,4 +111,19 @@ export function computeStats(library: Library): LibraryStats {
     seriesCount: seriesSeen.size,
     worksInSeries,
   };
+}
+
+/** `null` when there is no read log, so the screen can leave it out. */
+export function computeReadStats(library: Library, byWork: ReadonlyMap<number, ReadSummary>): ReadStats | null {
+  if (byWork.size === 0) return null;
+  const stats: ReadStats = { works: 0, unread: 0, full: 0, updates: 0 };
+  for (let i = 0; i < library.count; i++) {
+    const summary = byWork.get(library.id[i]!);
+    if (!summary) continue;
+    stats.works++;
+    stats.full += summary.full;
+    stats.updates += summary.updates;
+  }
+  stats.unread = library.count - stats.works;
+  return stats;
 }

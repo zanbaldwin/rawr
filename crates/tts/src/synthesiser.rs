@@ -26,6 +26,18 @@ pub trait Synthesiser: Send + Sync {
     /// [`NoVoice`](crate::error::ErrorKind::NoVoice) if no voice is configured for the language.
     fn fingerprint(&self, language: Option<&str>) -> Result<Fingerprint>;
 
+    /// [`fingerprint`](Self::fingerprint) for a voice role. `None` gives the
+    /// same fingerprint as `fingerprint`. The default ignores roles: every
+    /// role speaks with the language's voice.
+    ///
+    /// # Errors
+    ///
+    /// [`NoVoice`](crate::error::ErrorKind::NoVoice) if no voice is configured for the language.
+    fn role_fingerprint(&self, language: Option<&str>, role: Option<&str>) -> Result<Fingerprint> {
+        let _ = role;
+        self.fingerprint(language)
+    }
+
     /// Send one request. The text must already be [`prepare`](Self::prepare)d.
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis>;
 
@@ -39,6 +51,16 @@ pub trait Synthesiser: Send + Sync {
     async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
         self.fingerprint(language)?;
         Ok(None)
+    }
+
+    /// [`voice_name`](Self::voice_name) for a voice role. The default ignores roles.
+    ///
+    /// # Errors
+    ///
+    /// As [`voice_name`](Self::voice_name).
+    async fn role_voice_name(&self, language: Option<&str>, role: Option<&str>) -> Result<Option<String>> {
+        let _ = role;
+        self.voice_name(language).await
     }
 }
 

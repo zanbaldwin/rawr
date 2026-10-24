@@ -14,4 +14,4 @@ pub mod script;
 pub mod store;
 pub mod timeline;
 
-pub use crate::export::export;
+pub use crate::export::{ExportOptions, export, export_with_options};

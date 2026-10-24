@@ -6,10 +6,11 @@
 //! again after it (without their `id`), so the markup stays well-formed and
 //! looks the same. Start tags are written lazily, when content first needs
 //! them, so splitting never leaves empty elements. Block elements are never
-//! split: a sentence never crosses one.
+//! split: a sentence never crosses one. Word spans, when asked for, nest
+//! inside their sentence's span in the same way.
 
 use super::xml;
-use crate::script::{Block, Script};
+use crate::script::{Block, Script, SourceRange};
 use scraper::{ElementRef, Html, Node};
 use std::collections::BTreeMap;
 
@@ -33,9 +34,35 @@ pub(super) fn sentence_ids(script: &Script, chapter: &str) -> BTreeMap<(usize, u
     ids
 }
 
+/// The `id` of each word of a script: `{sentence id}-w001`, … in sentence order.
+pub(super) fn word_ids(
+    script: &Script,
+    sentence_ids: &BTreeMap<(usize, usize), String>,
+) -> BTreeMap<(usize, usize, usize), String> {
+    let mut ids = BTreeMap::new();
+    for (block, paragraph) in script.blocks.iter().enumerate().filter_map(|(index, block)| match block {
+        Block::Paragraph(paragraph) => Some((index, paragraph)),
+        Block::SceneBreak => None,
+    }) {
+        for (sentence, words) in paragraph.words.iter().enumerate() {
+            for word in 0..words.len() {
+                ids.insert((block, sentence, word), format!("{}-w{:03}", sentence_ids[&(block, sentence)], word + 1));
+            }
+        }
+    }
+    ids
+}
+
+/// The order of events at the same offset: a word closes before its
+/// sentence, and a sentence opens before its first word.
+const WORD_CLOSE: u8 = 0;
+const SENTENCE_CLOSE: u8 = 1;
+const SENTENCE_OPEN: u8 = 2;
+const WORD_OPEN: u8 = 3;
+
 enum Event {
-    /// Open a span with this `id`, under this many ancestors of the text node.
-    Open(String, usize),
+    /// Open a span with this `id` and optional `class`, under this many ancestors of the text node.
+    Open(String, usize, Option<&'static str>),
     Close,
 }
 
@@ -53,13 +80,19 @@ struct Writer {
     stack: Vec<Open>,
     /// Text node index → events at byte offsets, closes before opens at the same offset.
     events: BTreeMap<usize, Vec<(usize, u8, Event)>>,
-    /// The level of the open span (number of ancestors it sits under).
-    span_level: Option<usize>,
+    /// The levels of the open spans (number of ancestors each sits under), innermost last.
+    spans: Vec<usize>,
     nodes: usize,
 }
 
-/// The body with a `<span id>` around every sentence of the script.
-pub(super) fn with_spans(body_xhtml: &str, script: &Script, ids: &BTreeMap<(usize, usize), String>) -> String {
+/// The body with a `<span id>` around every sentence of the script and, with
+/// `words`, a `<span id class="w">` around every word inside a `<span id class="s">`.
+pub(super) fn with_spans(
+    body_xhtml: &str,
+    script: &Script,
+    ids: &BTreeMap<(usize, usize), String>,
+    words: Option<&BTreeMap<(usize, usize, usize), String>>,
+) -> String {
     let fragment = Html::parse_fragment(body_xhtml);
     let mut chains = Vec::new();
     let mut serial = 0;
@@ -71,10 +104,28 @@ pub(super) fn with_spans(body_xhtml: &str, script: &Script, ids: &BTreeMap<(usiz
     }) {
         for (sentence, source) in paragraph.sources.iter().enumerate() {
             let id = ids[&(block, sentence)].clone();
-            let (start, end) = (&chains[source.start.node], &chains[source.end.node]);
-            let level = start.iter().zip(end).take_while(|(a, b)| a == b).count();
-            events.entry(source.start.node).or_default().push((source.start.offset, 1, Event::Open(id, level)));
-            events.entry(source.end.node).or_default().push((source.end.offset, 0, Event::Close));
+            let level = common_level(&chains, *source);
+            let class = words.map(|_| "s");
+            events.entry(source.start.node).or_default().push((
+                source.start.offset,
+                SENTENCE_OPEN,
+                Event::Open(id, level, class),
+            ));
+            events.entry(source.end.node).or_default().push((source.end.offset, SENTENCE_CLOSE, Event::Close));
+            let Some(word_ids) = words else {
+                continue;
+            };
+            for (word, source) in paragraph.word_sources[sentence].iter().enumerate() {
+                let id = word_ids[&(block, sentence, word)].clone();
+                let word_level = common_level(&chains, *source);
+                debug_assert!(word_level >= level, "a word sits under its sentence");
+                events.entry(source.start.node).or_default().push((
+                    source.start.offset,
+                    WORD_OPEN,
+                    Event::Open(id, word_level, Some("w")),
+                ));
+                events.entry(source.end.node).or_default().push((source.end.offset, WORD_CLOSE, Event::Close));
+            }
         }
     }
     for list in events.values_mut() {
@@ -84,11 +135,17 @@ pub(super) fn with_spans(body_xhtml: &str, script: &Script, ids: &BTreeMap<(usiz
         out: String::with_capacity(body_xhtml.len() + body_xhtml.len() / 8),
         stack: Vec::new(),
         events,
-        span_level: None,
+        spans: Vec::new(),
         nodes: 0,
     };
     writer.children(fragment.root_element());
     writer.out
+}
+
+/// The number of ancestors shared by both ends of a range.
+fn common_level(chains: &[Vec<usize>], source: SourceRange) -> usize {
+    let (start, end) = (&chains[source.start.node], &chains[source.end.node]);
+    start.iter().zip(end).take_while(|(a, b)| a == b).count()
 }
 
 /// Number every element in document order and record each text node's chain.
@@ -165,7 +222,7 @@ impl Writer {
                 at = offset;
             }
             match event {
-                Event::Open(id, level) => self.open_span(&id, level),
+                Event::Open(id, level, class) => self.open_span(&id, level, class),
                 Event::Close => self.close_span(),
             }
         }
@@ -204,7 +261,7 @@ impl Writer {
         }
     }
 
-    fn open_span(&mut self, id: &str, level: usize) {
+    fn open_span(&mut self, id: &str, level: usize, class: Option<&str>) {
         for open in &mut self.stack[..level] {
             if !open.written {
                 self.out.push('<');
@@ -216,12 +273,15 @@ impl Writer {
             }
         }
         self.close_above(level);
-        self.out.push_str(&format!("<span id=\"{}\">", xml::attribute(id)));
-        self.span_level = Some(level);
+        match class {
+            Some(class) => self.out.push_str(&format!("<span id=\"{}\" class=\"{class}\">", xml::attribute(id))),
+            None => self.out.push_str(&format!("<span id=\"{}\">", xml::attribute(id))),
+        }
+        self.spans.push(level);
     }
 
     fn close_span(&mut self) {
-        let level = self.span_level.take().unwrap_or(0);
+        let level = self.spans.pop().unwrap_or(0);
         self.close_above(level);
         self.out.push_str("</span>");
     }

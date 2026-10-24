@@ -8,6 +8,7 @@ use exn::ResultExt;
 use rawr_render::pages::chapter_heading;
 use rawr_source::{Document, Rating};
 use rawr_tts::{Fingerprint, Synthesiser};
+use std::collections::BTreeMap;
 use time::OffsetDateTime;
 
 /// The narration plan of one document.
@@ -19,6 +20,7 @@ pub struct Plan {
     /// Hash of the source the plan was made from, for the ledger: [`Document::source_hash`].
     pub source_hash: Option<String>,
     pub provider: String,
+    /// The fingerprint of the language's voice (no voice role).
     pub fingerprint: Fingerprint,
     pub language: Option<String>,
     /// [`DocumentMeta::rating`](rawr_source::DocumentMeta::rating).
@@ -41,6 +43,10 @@ pub struct SectionPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlannedBatch {
     pub key: BatchKey,
+    /// The voice role ([`NarrationBatch::voice`](crate::script::NarrationBatch::voice)).
+    pub voice: Option<String>,
+    /// The fingerprint of the batch's voice.
+    pub fingerprint: Fingerprint,
     /// The prepared text, exactly as it will be sent.
     pub text: String,
     pub chars: usize,
@@ -56,26 +62,60 @@ pub enum BatchState {
     Mismatched,
 }
 
+/// How to plan a document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanOptions {
+    /// Speak the chapter heading before each section of a multi-section document.
+    pub spoken_headings: bool,
+    /// Honour the `data-rawr-*` markers in the sections' XHTML ([`ScriptOptions::markers`]).
+    pub markers: bool,
+}
+
+impl Default for PlanOptions {
+    fn default() -> Self {
+        Self { spoken_headings: true, markers: false }
+    }
+}
+
 impl Plan {
+    /// Plan a document for a synthesiser, against the recordings in a store,
+    /// with the default [`PlanOptions`].
+    ///
+    /// # Errors
+    ///
+    /// As [`with_options`](Self::with_options).
+    pub async fn new(document: &Document, synthesiser: &dyn Synthesiser, store: &Store) -> Result<Self> {
+        Self::with_options(document, synthesiser, store, &PlanOptions::default()).await
+    }
+
     /// Plan a document for a synthesiser, against the recordings in a store.
     ///
     /// # Errors
     ///
     /// - [`Provider`](ErrorKind::Provider) if the synthesiser has no voice for
-    ///   the document's language (checked before anything else)
+    ///   the document's language (checked before anything else) or for a voice role
     /// - [`Storage`](ErrorKind::Storage) or [`CorruptRecording`](ErrorKind::CorruptRecording)
     ///   if the store cannot be read
-    pub async fn new(document: &Document, synthesiser: &dyn Synthesiser, store: &Store) -> Result<Self> {
+    pub async fn with_options(
+        document: &Document,
+        synthesiser: &dyn Synthesiser,
+        store: &Store,
+        options: &PlanOptions,
+    ) -> Result<Self> {
         let language = document.meta.language.clone();
         let fingerprint = synthesiser.fingerprint(language.as_deref()).or_raise(|| ErrorKind::Provider)?;
+        let mut fingerprints: BTreeMap<Option<String>, Fingerprint> = BTreeMap::from([(None, fingerprint.clone())]);
+        let spoken_headings = options.spoken_headings;
         let options = ScriptOptions {
             max_batch_chars: synthesiser.capabilities().max_batch_chars,
+            markers: options.markers,
         };
         let mut sections = Vec::new();
         let mut skipped = Vec::new();
         let multi_chapter = document.sections.len() > 1;
         for section in &document.sections {
-            let heading = chapter_heading(section.number, section.title.as_deref(), multi_chapter);
+            let heading =
+                chapter_heading(section.number, section.title.as_deref(), multi_chapter).filter(|_| spoken_headings);
             let script = match Script::new(section, heading.as_deref(), &options) {
                 Ok(script) => script,
                 Err(error) if matches!(*error, ErrorKind::EmptySection(_)) => {
@@ -87,6 +127,16 @@ impl Plan {
             let mut batches = Vec::with_capacity(script.batches.len());
             for batch in &script.batches {
                 let text = synthesiser.prepare(&batch.text);
+                let fingerprint = match fingerprints.get(&batch.voice) {
+                    Some(fingerprint) => fingerprint.clone(),
+                    None => {
+                        let fingerprint = synthesiser
+                            .role_fingerprint(language.as_deref(), batch.voice.as_deref())
+                            .or_raise(|| ErrorKind::Provider)?;
+                        fingerprints.insert(batch.voice.clone(), fingerprint.clone());
+                        fingerprint
+                    },
+                };
                 let key = BatchKey::new(&KeyInputs {
                     provider: synthesiser.name(),
                     fingerprint: &fingerprint,
@@ -101,6 +151,8 @@ impl Plan {
                 };
                 batches.push(PlannedBatch {
                     key,
+                    voice: batch.voice.clone(),
+                    fingerprint,
                     chars: text.chars().count(),
                     text,
                     state,
@@ -122,6 +174,14 @@ impl Plan {
         })
     }
 
+    /// The voice roles used by the planned batches, in order, without `None`.
+    pub fn roles(&self) -> Vec<&str> {
+        let mut roles: Vec<&str> = self.batches().filter_map(|batch| batch.voice.as_deref()).collect();
+        roles.sort_unstable();
+        roles.dedup();
+        roles
+    }
+
     /// Every planned batch, in section order.
     pub fn batches(&self) -> impl Iterator<Item = &PlannedBatch> {
         self.sections.iter().flat_map(|section| &section.batches)
@@ -141,7 +201,7 @@ impl Plan {
     pub fn key_inputs<'a>(&'a self, section: &'a SectionPlan, batch: &'a PlannedBatch) -> KeyInputs<'a> {
         KeyInputs {
             provider: &self.provider,
-            fingerprint: &self.fingerprint,
+            fingerprint: &batch.fingerprint,
             language: self.language.as_deref(),
             seed: section.script.seed,
             text: &batch.text,
@@ -156,6 +216,7 @@ impl Plan {
             source_hash: self.source_hash.clone(),
             planned_at,
             voice_name: None,
+            voices: BTreeMap::new(),
             sections: self
                 .sections
                 .iter()

@@ -43,7 +43,7 @@ insta = { workspace = true }
 quick-xml = { workspace = true }
 rawr-compress = { workspace = true }
 rawr-render = { workspace = true, features = ["metadata"] }
-rawr-source = { workspace = true, features = ["ao3"] }
+rawr-source = { workspace = true, features = ["ao3", "book"] }
 rawr-storage = { workspace = true, features = ["mock"] }
 rawr-tts = { workspace = true, features = ["fake", "elevenlabs"] }
 rstest = { workspace = true }

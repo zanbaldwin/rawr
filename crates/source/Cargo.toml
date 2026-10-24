@@ -9,11 +9,15 @@ version.workspace = true
 [features]
 default = []
 ao3 = ["dep:rawr-extract", "rawr-extract/chapters"]
+book = ["dep:rslug", "dep:serde", "dep:serde-saphyr"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "error"] }
 exn = { workspace = true }
 rawr-extract = { workspace = true, optional = true }
+rslug = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde-saphyr = { workspace = true, features = ["deserialize"], optional = true }
 
 [dev-dependencies]
 rawr-compress = { workspace = true }

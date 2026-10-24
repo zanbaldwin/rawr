@@ -18,6 +18,17 @@ Rules (taken from purr, unchanged):
 - Sentences follow UAX #29. A piece that starts with a lowercase letter joins the sentence before it (`“Why?” she asks.`).
 - Batches join paragraphs with one `\n`, because whitespace is billed. The heading is always its own batch. A scene break closes a batch. A paragraph longer than `max_batch_chars` is its own batch.
 - Summaries, notes and end notes are never spoken. Do not add an option for them, because they are addenda, not content.
+- A batch also closes before a paragraph with another voice (`Paragraph::voice`). `NarrationBatch::voice` is the voice of all its paragraphs.
+
+Words: `Paragraph::words` lists the words of each sentence (split at whitespace, punctuation stays on its word), and `word_sources` places them in the XHTML like `sources`. `word_chars()` gives them in characters. Words never change `text`, so they do not change seeds or keys. Scripts without spaces (Chinese, Japanese) get one word per sentence.
+
+### Markers (`ScriptOptions::markers`)
+
+Sources that write structured XHTML (`rawr_source::BookYaml`) mark it with three attributes. The script reads them only when `ScriptOptions::markers` is set (`PlanOptions::markers`). AO3 scripts never set it, so AO3 text can never switch the markers on, and AO3 scripts and keys stay the same.
+
+- `data-rawr-speak="never"`: the element's text is not spoken. Its text nodes are still counted, to keep the `TextPosition::node` invariant. A skipped block element also ends the paragraph before it. Skipped text is not a separator, so `漢<rt>かん</rt>字` stays one word.
+- `data-rawr-sentence`: the element's spoken text is exactly one sentence (trimmed, dropped when empty). No UAX #29 runs inside it, and it never joins a neighbour. Text outside the marked elements still follows UAX #29. A marked sentence of symbols only (`…`) is not a scene break.
+- `data-rawr-voice="{role}"` on a block element sets `Paragraph::voice` for its paragraphs. A nested block can set its own, and the outer voice comes back after it.
 
 ## `store`
 
@@ -34,13 +45,15 @@ ledgers/<blake3(identifier)>.json
 - `Store::write` writes the audio, then the metadata to `recording.json.tmp`, then renames it into place. Audio without metadata counts as "not recorded". `Store::delete` removes the metadata first for the same reason.
 - `RecordingMeta` is this crate's own serde form. `rawr-tts` stays serde-free. Times are RFC 3339 (`time::OffsetDateTime`, UTC).
 - `RecordingStatus::AlignmentMismatch` keeps paid audio that cannot be used. It is never paid for again without an explicit flag.
-- A **ledger** lists the keys of a document's latest plan. It also keeps the voice's display name (`voice_name`) for the narrator credit. Nothing reads it to resume. `delete_document` and `orphans` use it, and `delete_document` keeps keys that another ledger still uses.
+- A **ledger** lists the keys of a document's latest plan. It also keeps the display names for the narrator credit: `voice_name` for the language's voice, and `voices` (role → name) for the roles the plan uses. `voices` is left out of the JSON when it is empty, so ledgers without roles look as before. Nothing reads it to resume. `delete_document` and `orphans` use it, and `delete_document` keeps keys that another ledger still uses.
 
 ## `plan`
 
-`Plan::new(document, synthesiser, store)` scripts every section, prepares each batch's text with the provider, computes its batch key, and looks the key up in the store. It pays for nothing and writes nothing.
+`Plan::with_options(document, synthesiser, store, &PlanOptions { spoken_headings, markers })` scripts every section, prepares each batch's text with the provider, computes its batch key, and looks the key up in the store. It pays for nothing and writes nothing. `Plan::new` uses the defaults: headings spoken, markers off.
 
 - The fingerprint is checked first, so a missing voice fails the plan (`ErrorKind::Provider`, with the provider's `NoVoice` as the source) before anything else.
+- **Voices:** each `PlannedBatch` has its own `voice` and `fingerprint` (`Synthesiser::role_fingerprint`, once for each role), and its key uses that fingerprint. `Plan::fingerprint` stays the language's voice, which the CLI estimate and the narrator credit read. `Plan::roles()` lists the roles in use.
+- With `spoken_headings: false`, no section gets a spoken heading. The heading is still shown (see `epub3`).
 - `BatchState`: `Missing` (to be paid for), `Recorded`, or `Mismatched` (paid for, but the alignment did not match; never paid for again without an explicit flag).
 - Sections with nothing to speak are listed in `skipped`.
 - The spoken heading is `rawr_render::pages::chapter_heading()`, the same rule as rawr's text EPUB, so the spoken heading always equals the displayed one: "Chapter N: Title" (an AO3 "Chapter N" prefix is not doubled) in a multi-section document, and **no heading** for a single section.
@@ -55,10 +68,12 @@ ledgers/<blake3(identifier)>.json
 
 - **Graceful stop:** `NarrationOptions::stop` takes a `CancellationToken` (`tokio-util`). When it is cancelled, no new request starts, and a retry wait ends at once. A request in flight finishes and is stored, because it is paid for. Then the run sends `Stopped(Cancelled)` and `Finished`. Never stop a run by dropping its stream: a paid response in flight would be lost.
 
-- **Order:** the ledger is written first, with the voice name from `Synthesiser::voice_name()`. If that free lookup fails, the name from an earlier run is kept and narration continues. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
+- **Order:** the ledger is written first, with the voice names from `Synthesiser::voice_name()` and `role_voice_name()` (one lookup for each role). If a free lookup fails, the name from an earlier run is kept and narration continues.
+- **Sections:** `NarrationOptions::sections` limits which sections are paid for. The plan and the ledger always cover the whole document. Never plan a cut-down document instead: its ledger would orphan the recordings of the other sections.
+- **Voices:** each request carries its batch's `voice` as `SynthesisRequest::role`. Sections run at the same time, up to the concurrency (option, else the provider's default). The batches of one section run in order.
 - **Write order:** a recording is stored before the section's next request is sent. A store failure stops the whole run, so nothing more is paid for while recordings cannot be kept.
 - **Re-check:** each batch is looked up in the store again just before it is paid for, so a stale plan never pays twice.
-- **Continuity:** the previous request IDs come from the section's earlier recordings, including recordings from earlier runs, within the provider's age and count limits. The next text is the next batch's prepared text.
+- **Continuity:** the previous request IDs come from the section's earlier recordings with the same voice, including recordings from earlier runs, within the provider's age and count limits. The next text is the next batch's prepared text, only when that batch has the same voice. Stitching across voices is not safe.
 - **Errors:** retryable errors are retried with doubling delays. `QuotaExceeded` and `Unauthorised` stop the run. Other errors fail only their section.
 - **Mismatch:** the recording is stored with status `alignment_mismatch`, a `Mismatched` event is sent, and the section stops. Later runs skip the batch. Only `retry_mismatched` pays for it again.
 - **Budget:** `max_chars` is a character limit for the run. Characters are reserved before each attempt and released when the attempt fails. Real costs from receipts are only reported (`spent`).
@@ -88,22 +103,28 @@ ledgers/<blake3(identifier)>.json
 - **Silence before a batch, by `Boundary`:** `SectionStart` 0.5 s (the chapter's lead-in), `Heading` 1.0 s, `Paragraph` 0.45 s, `SceneBreak` 1.75 s. There is 1.0 s of lead-out after the last batch.
 - **Trim report** (dev and test builds only, `cfg(debug_assertions)`; tests that read it are gated the same way, so `cargo test --release` still builds): `ChapterAudio::trims` has one `TrimReport` per recording: its key, decoded length, kept range, `EndRule` (`LastTimestamp` or `TrailingSound`), the overshoot of the last timestamp past the audio, and where it starts in the chapter. It is purr's record of cuts (`end_rule`, `cut_seconds_before_file_end`). Use it to find and listen to bad joins. Release builds do not have the field.
 - **Sync map:** one `SyncUnit` for the heading and one for each sentence, in samples. A unit begins at the output time of its first character (`ParagraphRef` offset + `Paragraph::sentence_chars()`). Units are back to back: the first begins at 0, so it covers the lead-in, and the last ends at the end of the audio, so it covers the lead-out. Begins are strictly increasing. Readers play only clip ranges, so gaps would remove the pauses.
+- **Word map:** `ChapterAudio::words` has the words of each sentence unit, in order (`UnitRef::Word`). The sentence units are computed first and do not change. The words of a sentence fill its clip exactly: the first begins with the sentence, the last ends with it, and they are back to back. A word begins at its first character, but at least `MIN_WORD_SAMPLES` (1 ms) after the word before. Clip times are rounded down to whole milliseconds, so a shorter gap would give an empty clip. A word that does not fit gets no clip and plays inside the word before. The heading has no words.
 
 ## `epub3`
 
-`Package { document, chapters, styles, narrator, modified }.write(writer)` writes an EPUB 3.3 with Media Overlays (reflowable). A `Chapter` owns its sync units and encoded audio, but not the PCM. Drop each `ChapterAudio` after its audio is encoded, so only one chapter's PCM is in memory at a time. The crate has its own `zip` dependency (6.0, `deflate`, the same as epub-builder's), because the audiobook can be built without rawr's `epub` feature.
+`Package { document, chapters, styles, narrator, modified, sync, identifier }.write(writer)` writes an EPUB 3.3 with Media Overlays (reflowable). A `Chapter` owns its sync units and encoded audio, but not the PCM. Drop each `ChapterAudio` after its audio is encoded, so only one chapter's PCM is in memory at a time. The crate has its own `zip` dependency (6.0, `deflate`, the same as epub-builder's), because the audiobook can be built without rawr's `epub` feature.
 
 - **Layout:** `mimetype` (first, stored, no extra field), `META-INF/container.xml`, and `OEBPS/` with `content.opf`, `nav.xhtml`, `stylesheet.css` (the `StyleConfig`), `title.xhtml`, then `cNNN.xhtml`, `cNNN.smil` and `audio/cNNN.mp4` for each narrated section. A section with nothing to speak is a text-only page, with no overlay.
-- **Text:** `chapter_body()` writes the section's rawr-xhtml output again with a `<span id="cNNN-sNNNN">` around each sentence. Each span sits under the deepest element that holds both ends of its sentence. Inline elements are split only where a sentence crosses them, and they are reopened without their `id`. Start tags are written lazily, so a split never leaves an empty element. The text and the block elements are exactly those of the source. Attributes come out in the parser's order. The spoken heading is `<h2 class="chapter-title"><span id="cNNN-h">`.
-- **Overlays:** one `<par>` per `SyncUnit`. Clip times are whole milliseconds, rounded down, written as `12.340s`. Clips are back to back, and the last one ends at the audio's length. `media:duration` (`h:mm:ss.fff`) is given per overlay and in total, and the total is their exact sum.
-- **No highlight colour:** `media:active-class` (`-epub-media-overlay-active`) is declared, but the book has no rule for it. Reading apps such as Readest, and user stylesheets, choose the highlight.
+- **Text:** `chapter_body()` writes the section's rawr-xhtml output again with a `<span id="cNNN-sNNNN">` around each sentence. Each span sits under the deepest element that holds both ends of its sentence. Inline elements are split only where a sentence crosses them, and they are reopened without their `id`. Start tags are written lazily, so a split never leaves an empty element. The text and the block elements are exactly those of the source. Attributes come out in the parser's order. The spoken heading is `<h2 class="chapter-title"><span id="cNNN-h">`. A narrated section without a spoken heading still shows `chapter_heading()` as a plain `<h2 class="chapter-title">`.
+- **`SyncLevel`:** `Sentence` (the default) or `Word`. It parses from `sentence`/`word` (any case, plurals too) for flags and config. `chapter_body_at(…, SyncLevel::Word)` puts `class="s"` on each sentence span and a `<span id="cNNN-sNNNN-wNNN" class="w">` around each word inside it. `chapter_body` is the sentence level, unchanged. The level is chosen at export, so one narration gives both.
+- **Nested spans (`body.rs`):** the open spans are a stack. A word's level (the number of shared ancestors of its ends) is always at least its sentence's level (`debug_assert`). Events at the same offset run in a fixed order: word close, sentence close, sentence open, word open.
+- **Overlays:** one `<par>` per `SyncUnit`. With `SyncLevel::Word`, each sentence is a `<seq epub:textref="cNNN.xhtml#cNNN-sNNNN">` with one `<par>` per word clip. Clip times are whole milliseconds, rounded down, written as `12.340s`. Clips are back to back, and the last one ends at the audio's length. `media:duration` (`h:mm:ss.fff`) is given per overlay and in total, and the total is their exact sum.
+- **No highlight colour:** `media:active-class` (`-epub-media-overlay-active`) is declared, but the crate adds no rule for it. Reading apps such as Readest, the caller's `StyleConfig` (`rawr-book` adds its own), and user stylesheets choose the highlight. Apple Books shows no highlight without a rule. Readest uses its own highlight on the active element, so it shows the word, not the sentence, in word mode.
+- **Identifier:** `Package::identifier` replaces the OPF `dc:identifier` when it is set, for example for a second edition of the same narration.
 - **Title page:** with the `ao3` feature, an AO3 work gets `rawr_render::pages::title_page_body()`, as in rawr's text EPUB. Otherwise a minimal page is built from `DocumentMeta`. Both add "Narrated by …".
-- **Narrator:** `narrator_credit(provider, fingerprint, voice_name)` gives "{voice name} ({provider} {model})", for example "Amelia - Enthusiastic and Expressive (ElevenLabs eleven_v4)". The voice name comes from the ledger.
+- **Narrator:** `narrator_credit(provider, fingerprint, voice_name)` gives "{voice name} ({provider} {model})", for example "Amelia - Enthusiastic and Expressive (ElevenLabs eleven_v4)". The voice name comes from the ledger. With role voices, `export` passes "{voice}, {voice} as {role}, …" as the voice name.
 - **Escaping:** `epub3/xml.rs` uses the same rules as rawr-xhtml (`&`, `<`, `>`, the no-break space as `&#160;`, and `"` in attributes), so text written again comes out the same.
 
 ## `export`
 
-`rawr_audiobook::export(document, plan, store, codec, styles)` builds the `Package` from stored recordings. It never pays. For each planned section it reads the recordings, calls `assemble`, encodes the audio, and drops the PCM before the next section. A batch with no recording gives `MissingRecording`. It does not use the plan's `BatchState`s, so a plan made before narration still works. The narrator credit uses the ledger's voice name, and `modified` is the current time (tests set it after the call). Decoding and encoding run on the caller's task.
+`rawr_audiobook::export(document, plan, store, codec, styles)` builds the `Package` from stored recordings. It never pays. For each planned section it reads the recordings, calls `assemble`, encodes the audio, and drops the PCM before the next section. A batch with no recording gives `MissingRecording`. It does not use the plan's `BatchState`s, so a plan made before narration still works. The narrator credit uses the ledger's voice names, and `modified` is the current time (tests set it after the call). Decoding and encoding run on the caller's task.
+
+`export_with_options(…, &ExportOptions { sync, identifier, sections })` is the full form, and `export` uses the defaults. `sync` and `identifier` go to the `Package`. The ledger is still found by `plan.identifier`, so a second edition with its own `identifier` keeps the narrator credit. `sections` narrates only those sections. The others are text-only pages, so a partly recorded book can be exported.
 
 ## Invariants to keep
 
@@ -112,6 +133,7 @@ ledgers/<blake3(identifier)>.json
 - **Change a rule, bump `SCRIPT_RECIPE`.** Any change to the output text changes seeds and batch keys. The recipe version stops old recordings from being mistaken for current ones.
 - **The script is provider-neutral.** Provider-specific cleaning (for example ElevenLabs and `[`/`]`) belongs to the provider. That cleaning must keep the character count. `ParagraphRef` offsets and `Paragraph::sentence_chars()` count characters, because provider alignment is per character.
 - **The caller gives the spoken heading.** `Plan::new` uses `chapter_heading()` so it matches the displayed heading. AO3 chapter titles from rawr-extract often already include the "Chapter N: " prefix.
+- **AO3 keys never move.** `tests/keys.rs` pins one ElevenLabs fingerprint, one fake fingerprint, one `BatchKey` and the keys of a small planned document. If it fails, a change would orphan paid recordings. Fix the change, or bump a recipe on purpose.
 
 ## Tests
 
@@ -127,6 +149,10 @@ ledgers/<blake3(identifier)>.json
 - `fixture_invariants` checks every fixture section. It checks offsets, order, the batch size limit, sentence coverage, and the seed.
 - `fixture_sources_point_at_each_sentence` cuts each sentence's source range out of the real text nodes, normalises it, and compares it with the sentence.
 - Small rule cases build `Section` values in the test file.
+- `tests/keys.rs` pins fingerprints and batch keys (see "AO3 keys never move").
+- `tests/markers.rs` checks the markers on `BookYaml` sections: they are ignored when off, sentences, words and voices, node counting past skipped `<rt>`, and the same text, sentences, words and voices for both editions.
+- `tests/voices.rs` checks voice-split batches and fingerprints, spoken headings on and off, the same keys for both editions, ElevenLabs roles, continuity by voice, ledger voices, and `NarrationOptions::sections`.
+- `tests/words.rs` checks word bodies for every fixture and both book editions, nested spans across an `<em>`, words in a ruby base, `SyncLevel` parsing, word clips that fill each sentence clip, a word-level package, and `ExportOptions::sections`.
 
 ## Checks
 

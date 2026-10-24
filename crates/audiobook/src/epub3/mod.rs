@@ -2,7 +2,8 @@
 //!
 //! One XHTML page, one SMIL overlay and one audio file per narrated section.
 //! The page text is the section's XHTML exactly as rawr-xhtml wrote it,
-//! with a `<span id>` around every sentence (see [`chapter_body`]).
+//! with a `<span id>` around every sentence (see [`chapter_body`]), and
+//! around every word with [`SyncLevel::Word`].
 
 mod body;
 mod xml;
@@ -20,8 +21,9 @@ use rawr_source::Document;
 use rawr_source::Origin;
 use rawr_tts::Fingerprint;
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
+use std::fmt::{Display, Formatter, Result as FmtResult, Write as _};
 use std::io::{Seek, Write};
+use std::str::FromStr;
 use time::{OffsetDateTime, UtcOffset};
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
@@ -29,6 +31,39 @@ use zip::write::{SimpleFileOptions, ZipWriter};
 /// The class a reading system puts on the sentence being read. The book has
 /// no rule for it: reading apps (and user stylesheets) choose the highlight.
 pub const ACTIVE_CLASS: &str = "-epub-media-overlay-active";
+
+/// What the reading system highlights while the audio plays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum SyncLevel {
+    /// One clip per sentence.
+    #[default]
+    Sentence,
+    /// One clip per word, grouped by sentence. Sentences are `<span class="s">`
+    /// and words `<span class="w">`, so a stylesheet can mark both, for example
+    /// `.s:has(.-epub-media-overlay-active)` for the sentence being read.
+    Word,
+}
+
+impl Display for SyncLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(match self {
+            Self::Sentence => "sentence",
+            Self::Word => "word",
+        })
+    }
+}
+
+impl FromStr for SyncLevel {
+    type Err = String;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "sentence" | "sentences" => Ok(Self::Sentence),
+            "word" | "words" => Ok(Self::Word),
+            other => Err(format!("unknown sync level \"{other}\" (expected \"sentence\" or \"word\")")),
+        }
+    }
+}
 
 /// One narrated section: its plan, its sync map, and its encoded audio.
 ///
@@ -38,6 +73,8 @@ pub struct Chapter<'a> {
     pub section: &'a SectionPlan,
     /// [`ChapterAudio::units`](crate::timeline::ChapterAudio::units).
     pub units: Vec<SyncUnit>,
+    /// [`ChapterAudio::words`](crate::timeline::ChapterAudio::words). Used with [`SyncLevel::Word`].
+    pub words: Vec<SyncUnit>,
     pub encoded: EncodedAudio,
 }
 
@@ -52,6 +89,11 @@ pub struct Package<'a> {
     pub narrator: Option<String>,
     /// `dcterms:modified`.
     pub modified: OffsetDateTime,
+    /// What is highlighted.
+    pub sync: SyncLevel,
+    /// The `dc:identifier`, when it differs from the document's (for example
+    /// a second edition of the same narration).
+    pub identifier: Option<String>,
 }
 
 /// "{voice name} ({provider} {model})", or "{provider} {model}" when the name is not known.
@@ -76,7 +118,18 @@ pub fn narrator_credit(provider: &str, fingerprint: &Fingerprint, voice_name: Op
 /// sentence of its script. The text and block structure are unchanged;
 /// inline elements are split only where a sentence crosses them.
 pub fn chapter_body(script: &Script, body_xhtml: &str, chapter: &str) -> String {
-    body::with_spans(body_xhtml, script, &body::sentence_ids(script, chapter))
+    chapter_body_at(script, body_xhtml, chapter, SyncLevel::Sentence)
+}
+
+/// [`chapter_body`] at a [`SyncLevel`]. With [`SyncLevel::Word`], each
+/// sentence span has `class="s"` and holds a `<span id="{sentence}-w001"
+/// class="w">` around every word.
+pub fn chapter_body_at(script: &Script, body_xhtml: &str, chapter: &str, sync: SyncLevel) -> String {
+    let ids = body::sentence_ids(script, chapter);
+    match sync {
+        SyncLevel::Sentence => body::with_spans(body_xhtml, script, &ids, None),
+        SyncLevel::Word => body::with_spans(body_xhtml, script, &ids, Some(&body::word_ids(script, &ids))),
+    }
 }
 
 struct Page {
@@ -122,9 +175,12 @@ impl Package<'_> {
                             xml::text(&heading.text)
                         )
                         .expect("writing to a String");
+                    } else if let Some(heading) = &heading {
+                        writeln!(body, "<h2 class=\"chapter-title\">{}</h2>", xml::text(heading))
+                            .expect("writing to a String");
                     }
-                    body.push_str(&chapter_body(script, &section.body_xhtml, &id));
-                    (body, Some(overlay(&id, chapter)))
+                    body.push_str(&chapter_body_at(script, &section.body_xhtml, &id, self.sync));
+                    (body, Some(overlay(&id, chapter, self.sync)))
                 },
                 None => {
                     let mut body = String::new();
@@ -222,7 +278,8 @@ impl Package<'_> {
             metadata.push_str(&text);
             metadata.push('\n');
         };
-        line(format!("<dc:identifier id=\"uid\">{}</dc:identifier>", xml::text(&meta.identifier)));
+        let identifier = self.identifier.as_ref().unwrap_or(&meta.identifier);
+        line(format!("<dc:identifier id=\"uid\">{}</dc:identifier>", xml::text(identifier)));
         line(format!("<dc:title>{}</dc:title>", xml::text(&meta.title)));
         line(format!("<dc:language>{}</dc:language>", xml::text(language)));
         let authors = if meta.authors.is_empty() { vec!["Anonymous".to_string()] } else { meta.authors.clone() };
@@ -317,27 +374,55 @@ fn nav(language: &str, pages: &[Page]) -> String {
     )
 }
 
-fn overlay(id: &str, chapter: &Chapter<'_>) -> Overlay {
+fn overlay(id: &str, chapter: &Chapter<'_>, sync: SyncLevel) -> Overlay {
     let ids = body::sentence_ids(&chapter.section.script, id);
+    let word_ids = body::word_ids(&chapter.section.script, &ids);
     let audio_href = format!("audio/{id}.{}", chapter.encoded.extension);
     let milliseconds = milliseconds_of(chapter.encoded.samples);
     let mut pars = String::new();
-    for (index, unit) in chapter.units.iter().enumerate() {
-        let target = match unit.target {
-            UnitRef::Heading => format!("{id}-h"),
-            UnitRef::Sentence { block, sentence } => ids[&(block, sentence)].clone(),
-        };
+    let mut number = 0;
+    let mut par = |pars: &mut String, indent: &str, target: &str, unit: &SyncUnit| {
+        number += 1;
         let begin = milliseconds_of(unit.begin);
         let end = milliseconds_of(unit.end).min(milliseconds);
         writeln!(
             pars,
-            "    <par id=\"{id}-p{:04}\">\n      <text src=\"{id}.xhtml#{target}\"/>\n      <audio src=\"{}\" clipBegin=\"{}\" clipEnd=\"{}\"/>\n    </par>",
-            index + 1,
+            "{indent}<par id=\"{id}-p{number:04}\">\n{indent}  <text src=\"{id}.xhtml#{target}\"/>\n{indent}  <audio src=\"{}\" clipBegin=\"{}\" clipEnd=\"{}\"/>\n{indent}</par>",
             xml::attribute(&audio_href),
             seconds(begin),
             seconds(end)
         )
         .expect("writing to a String");
+    };
+    let mut words = chapter.words.iter().peekable();
+    for (index, unit) in chapter.units.iter().enumerate() {
+        let target = match unit.target {
+            UnitRef::Heading => format!("{id}-h"),
+            UnitRef::Sentence { block, sentence } | UnitRef::Word { block, sentence, .. } => {
+                ids[&(block, sentence)].clone()
+            },
+        };
+        let mut sentence_words = Vec::new();
+        if let (SyncLevel::Word, UnitRef::Sentence { block, sentence }) = (sync, unit.target) {
+            while let Some(word) = words.next_if(|word| {
+                matches!(word.target, UnitRef::Word { block: b, sentence: s, .. } if (b, s) == (block, sentence))
+            }) {
+                sentence_words.push(word);
+            }
+        }
+        if sentence_words.is_empty() {
+            par(&mut pars, "    ", &target, unit);
+            continue;
+        }
+        writeln!(pars, "    <seq id=\"{id}-q{:04}\" epub:textref=\"{id}.xhtml#{target}\">", index + 1)
+            .expect("writing to a String");
+        for word in sentence_words {
+            let UnitRef::Word { block, sentence, word: index } = word.target else {
+                continue;
+            };
+            par(&mut pars, "      ", &word_ids[&(block, sentence, index)], word);
+        }
+        pars.push_str("    </seq>\n");
     }
     let smil = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<smil xmlns=\"http://www.w3.org/ns/SMIL\" xmlns:epub=\"http://www.idpf.org/2007/ops\" version=\"3.0\">\n<body>\n  <seq id=\"{id}-seq\" epub:textref=\"{id}.xhtml\" epub:type=\"chapter\">\n{pars}  </seq>\n</body>\n</smil>\n"

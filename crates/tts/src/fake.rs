@@ -79,25 +79,34 @@ impl Synthesiser for FakeSynthesiser {
     }
 
     fn fingerprint(&self, language: Option<&str>) -> Result<Fingerprint> {
+        self.role_fingerprint(language, None)
+    }
+
+    /// A role speaks with a voice named after it.
+    fn role_fingerprint(&self, language: Option<&str>, role: Option<&str>) -> Result<Fingerprint> {
         if let Some(languages) = &self.languages
             && !language.is_some_and(|language| languages.iter().any(|known| known == language))
         {
             exn::bail!(ErrorKind::NoVoice(language.map(String::from)));
         }
         Ok(Fingerprint::new([
-            ("voice", self.voice.as_str()),
+            ("voice", role.unwrap_or(&self.voice)),
             ("ms_per_character", &MS_PER_CHARACTER.to_string()),
             ("format", &format!("pcm_{SAMPLE_RATE}")),
         ]))
     }
 
     async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
-        self.fingerprint(language)?;
-        Ok(Some(self.voice.clone()))
+        self.role_voice_name(language, None).await
+    }
+
+    async fn role_voice_name(&self, language: Option<&str>, role: Option<&str>) -> Result<Option<String>> {
+        self.role_fingerprint(language, role)?;
+        Ok(Some(role.unwrap_or(&self.voice).to_string()))
     }
 
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis> {
-        self.fingerprint(request.language.as_deref())?;
+        self.role_fingerprint(request.language.as_deref(), request.role.as_deref())?;
         let samples_per_character = (SAMPLE_RATE * MS_PER_CHARACTER / 1_000) as usize;
         let mut bytes = Vec::with_capacity(request.text.chars().count() * samples_per_character * 2);
         let mut characters = Vec::new();

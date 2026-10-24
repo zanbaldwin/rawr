@@ -1,0 +1,24 @@
+[package]
+name = "rawr-book"
+description = "Narrate structured YAML books into EPUB 3 audiobooks"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "rawr-book"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+directories = { workspace = true }
+exn = { workspace = true }
+futures = { workspace = true, features = ["std"] }
+rawr-audiobook = { workspace = true, features = ["libopus"] }
+rawr-render = { workspace = true }
+rawr-source = { workspace = true, features = ["book"] }
+rawr-storage = { workspace = true }
+rawr-tts = { workspace = true, features = ["elevenlabs", "fake"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true }

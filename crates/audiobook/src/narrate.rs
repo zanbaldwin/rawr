@@ -2,7 +2,7 @@
 //!
 //! Sections run at the same time, up to the provider's concurrency. The
 //! batches of one section run in order, so each request can refer to the
-//! ones before it (continuity). Progress is reported as a stream of
+//! ones before it with the same voice (continuity). Progress is reported as a stream of
 //! [`NarrationEvent`]s.
 
 use crate::plan::{BatchState, Plan, PlannedBatch, SectionPlan};
@@ -37,6 +37,9 @@ pub struct NarrationOptions {
     /// request starts. Requests in flight finish and are stored, because
     /// they are paid for.
     pub stop: Option<CancellationToken>,
+    /// Pay only for these sections ([`Section::number`](rawr_source::Section::number)).
+    /// `None` pays for all. The ledger always lists the whole plan.
+    pub sections: Option<Vec<u32>>,
 }
 
 impl Default for NarrationOptions {
@@ -49,6 +52,7 @@ impl Default for NarrationOptions {
             max_attempts: 4,
             base_delay: Duration::from_secs(5),
             stop: None,
+            sections: None,
         }
     }
 }
@@ -167,20 +171,47 @@ impl Run<'_> {
 
     async fn pay(&self) {
         let mut ledger = self.plan.ledger(OffsetDateTime::now_utc());
-        ledger.voice_name = match self.synthesiser.voice_name(self.plan.language.as_deref()).await {
+        let language = self.plan.language.as_deref();
+        let previous = self.store.ledger(&self.plan.identifier).await.ok().flatten();
+        ledger.voice_name = match self.synthesiser.voice_name(language).await {
             Ok(Some(name)) => Some(name),
-            _ => self.store.ledger(&self.plan.identifier).await.ok().flatten().and_then(|previous| previous.voice_name),
+            _ => previous.as_ref().and_then(|previous| previous.voice_name.clone()),
         };
+        for role in self.plan.roles() {
+            let name = match self.synthesiser.role_voice_name(language, Some(role)).await {
+                Ok(Some(name)) => Some(name),
+                _ => previous.as_ref().and_then(|previous| previous.voices.get(role).cloned()),
+            };
+            if let Some(name) = name {
+                ledger.voices.insert(role.to_string(), name);
+            }
+        }
         if self.store.write_ledger(&ledger).await.is_err() {
             self.stop(StopReason::Storage);
         } else {
-            let to_pay = self.plan.batches().filter(|batch| self.to_pay(batch));
+            let to_pay = self
+                .plan
+                .sections
+                .iter()
+                .filter(|section| self.included(section))
+                .flat_map(|section| &section.batches)
+                .filter(|batch| self.to_pay(batch));
             let (batches, chars) = to_pay.fold((0, 0), |(count, chars), batch| (count + 1, chars + batch.chars));
             self.emit(NarrationEvent::Started { batches, chars });
             let concurrency = self.options.concurrency.unwrap_or(self.synthesiser.capabilities().concurrency).max(1);
-            let sections: Vec<_> = self.plan.sections.iter().map(|section| self.section(section)).collect();
+            let sections: Vec<_> = self
+                .plan
+                .sections
+                .iter()
+                .filter(|section| self.included(section))
+                .map(|section| self.section(section))
+                .collect();
             stream::iter(sections).buffer_unordered(concurrency).collect::<Vec<()>>().await;
         }
+    }
+
+    fn included(&self, section: &SectionPlan) -> bool {
+        self.options.sections.as_ref().is_none_or(|sections| sections.contains(&section.script.section))
     }
 
     fn to_pay(&self, batch: &PlannedBatch) -> bool {
@@ -193,7 +224,7 @@ impl Run<'_> {
 
     async fn section(&self, section: &SectionPlan) {
         let number = section.script.section;
-        let mut previous: Vec<(String, OffsetDateTime)> = Vec::new();
+        let mut previous: Vec<(String, OffsetDateTime, Option<String>)> = Vec::new();
         for (index, batch) in section.batches.iter().enumerate() {
             if self.stopped.load(Ordering::SeqCst) {
                 return;
@@ -206,14 +237,15 @@ impl Run<'_> {
                 && (meta.status == RecordingStatus::Ok || !self.options.retry_mismatched)
             {
                 if let Some(request_id) = meta.receipt.request_id {
-                    previous.push((request_id, meta.created_at));
+                    previous.push((request_id, meta.created_at, batch.voice.clone()));
                 }
                 continue;
             }
-            let continuity = self.continuity(&previous, section.batches.get(index + 1));
+            let continuity = self.continuity(&previous, batch, section.batches.get(index + 1));
             let request = SynthesisRequest {
                 text: batch.text.clone(),
                 language: self.plan.language.clone(),
+                role: batch.voice.clone(),
                 seed: Some(section.script.seed),
                 continuity: continuity.clone(),
             };
@@ -251,7 +283,7 @@ impl Run<'_> {
                 cost,
             });
             if let Some(request_id) = request_id {
-                previous.push((request_id, created_at));
+                previous.push((request_id, created_at, batch.voice.clone()));
             }
         }
     }
@@ -312,19 +344,29 @@ impl Run<'_> {
         }
     }
 
-    fn continuity(&self, previous: &[(String, OffsetDateTime)], next: Option<&PlannedBatch>) -> Continuity {
+    /// Continuity for a batch: only earlier recordings and the next batch with the same voice.
+    fn continuity(
+        &self,
+        previous: &[(String, OffsetDateTime, Option<String>)],
+        batch: &PlannedBatch,
+        next: Option<&PlannedBatch>,
+    ) -> Continuity {
         let Some(limits) = self.synthesiser.capabilities().continuity else {
             return Continuity::default();
         };
         let now = OffsetDateTime::now_utc();
         let recent: Vec<String> = previous
             .iter()
-            .filter(|(_, created_at)| (now - *created_at).unsigned_abs() < limits.max_age)
-            .map(|(request_id, _)| request_id.clone())
+            .filter(|(_, created_at, voice)| {
+                *voice == batch.voice && (now - *created_at).unsigned_abs() < limits.max_age
+            })
+            .map(|(request_id, _, _)| request_id.clone())
             .collect();
         Continuity {
             previous_request_ids: recent[recent.len().saturating_sub(limits.max_previous)..].to_vec(),
-            next_text: next.map(|batch| batch.text.chars().take(limits.max_next_chars).collect()),
+            next_text: next
+                .filter(|next| next.voice == batch.voice)
+                .map(|next| next.text.chars().take(limits.max_next_chars).collect()),
         }
     }
 

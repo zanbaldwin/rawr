@@ -1,5 +1,5 @@
 //! One chapter's audio: a section's recordings, trimmed and joined with
-//! pauses, and the sync map that ties each sentence to its clip.
+//! pauses, and the sync maps that tie each sentence, and each word, to its clip.
 
 use crate::audio::{Codec, Pcm, SAMPLE_RATE, TrailingSound, fade};
 use crate::error::{ErrorKind, Result};
@@ -7,6 +7,7 @@ use crate::plan::SectionPlan;
 use crate::script::{Boundary, ParagraphRef};
 use crate::store::{Recording, RecordingStatus};
 use rawr_tts::Alignment;
+use std::collections::BTreeMap;
 
 /// Audio kept before the first aligned character, in milliseconds.
 const MARGIN_BEFORE_MS: u32 = 50;
@@ -16,6 +17,9 @@ const MARGIN_AFTER_MS: u32 = 100;
 const TRAILING_MARGIN_MS: u32 = 50;
 /// Fade at each edge of a recording: 5 ms.
 const FADE_SAMPLES: usize = 240;
+/// The shortest word clip: one millisecond, so that clips rounded down to
+/// whole milliseconds never collapse.
+const MIN_WORD_SAMPLES: u64 = SAMPLE_RATE as u64 / 1_000;
 /// Silence at the start and end of every chapter, in milliseconds.
 const LEAD_IN_MS: u32 = 500;
 const LEAD_OUT_MS: u32 = 1_000;
@@ -39,6 +43,10 @@ pub struct ChapterAudio {
     /// Back to back: the first begins at 0, each ends where the next begins,
     /// and the last ends at the end of the audio.
     pub units: Vec<SyncUnit>,
+    /// The words of each sentence unit, in order. Each sentence's words are
+    /// back to back and cover exactly its clip; a word too close to the one
+    /// before it has no clip of its own (it plays within the one before).
+    pub words: Vec<SyncUnit>,
     /// How each recording was trimmed, in batch order. Dev and test builds only.
     #[cfg(debug_assertions)]
     pub trims: Vec<TrimReport>,
@@ -86,6 +94,13 @@ pub enum UnitRef {
         block: usize,
         sentence: usize,
     },
+    /// A word of a sentence: indices into `Script::blocks`, `Paragraph::sentences`
+    /// and `Paragraph::words`.
+    Word {
+        block: usize,
+        sentence: usize,
+        word: usize,
+    },
 }
 
 /// Where one recording's kept audio sits in the chapter.
@@ -115,6 +130,7 @@ impl Placement {
 pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Codec) -> Result<ChapterAudio> {
     let mut output: Vec<i16> = Vec::new();
     let mut units: Vec<SyncUnit> = Vec::new();
+    let mut word_begins: BTreeMap<(usize, usize), Vec<u64>> = BTreeMap::new();
     #[cfg(debug_assertions)]
     let mut trims = Vec::new();
     for (index, (planned, batch)) in section.batches.iter().zip(&section.script.batches).enumerate() {
@@ -164,8 +180,11 @@ pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Cod
                         .script
                         .paragraph(*reference)
                         .ok_or_else(|| exn::Exn::new(ErrorKind::MissingRecording(planned.key.to_string())))?;
+                    let words = paragraph.word_chars();
                     for (sentence, range) in paragraph.sentence_chars().into_iter().enumerate() {
                         units.push(unit(UnitRef::Sentence { block, sentence }, at_character(offset + range.start)));
+                        let begins = words[sentence].iter().map(|word| at_character(offset + word.start)).collect();
+                        word_begins.insert((block, sentence), begins);
                     }
                 },
             }
@@ -184,13 +203,46 @@ pub fn assemble(section: &SectionPlan, recordings: &[Recording], codec: &dyn Cod
     for index in 0..units.len() {
         units[index].end = units.get(index + 1).map_or(total, |next| next.begin);
     }
+    let words = units
+        .iter()
+        .flat_map(|unit| match unit.target {
+            UnitRef::Sentence { block, sentence } => {
+                words(unit, block, sentence, word_begins.get(&(block, sentence)).map_or(&[][..], Vec::as_slice))
+            },
+            _ => Vec::new(),
+        })
+        .collect();
     Ok(ChapterAudio {
         section: section.script.section,
         pcm: Pcm::new(output, SAMPLE_RATE),
         units,
+        words,
         #[cfg(debug_assertions)]
         trims,
     })
+}
+
+/// The word clips of one sentence clip. The first word begins with the
+/// sentence; each later word begins at its first character, at least
+/// [`MIN_WORD_SAMPLES`] after the word before. A word that would leave less
+/// than that before the sentence ends gets no clip.
+fn words(sentence_unit: &SyncUnit, block: usize, sentence: usize, begins: &[u64]) -> Vec<SyncUnit> {
+    let mut words: Vec<SyncUnit> = Vec::with_capacity(begins.len());
+    for (word, &begin) in begins.iter().enumerate() {
+        let target = UnitRef::Word { block, sentence, word };
+        let Some(previous) = words.last() else {
+            words.push(unit(target, sentence_unit.begin));
+            continue;
+        };
+        let begin = begin.max(previous.begin + MIN_WORD_SAMPLES);
+        if begin + MIN_WORD_SAMPLES <= sentence_unit.end {
+            words.push(unit(target, begin));
+        }
+    }
+    for index in 0..words.len() {
+        words[index].end = words.get(index + 1).map_or(sentence_unit.end, |next| next.begin);
+    }
+    words
 }
 
 fn unit(target: UnitRef, begin: u64) -> SyncUnit {

@@ -10,11 +10,15 @@
 
 #[cfg(feature = "ao3")]
 mod ao3;
+#[cfg(feature = "book")]
+mod book;
 mod document;
 pub mod error;
 mod source;
 
 #[cfg(feature = "ao3")]
 pub use crate::ao3::Ao3Html;
+#[cfg(feature = "book")]
+pub use crate::book::{BookSettings, BookYaml, Voice};
 pub use crate::document::{Document, DocumentMeta, Origin, Rating, Section};
 pub use crate::source::Source;

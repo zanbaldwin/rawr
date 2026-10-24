@@ -78,6 +78,8 @@ pub struct ElevenLabsSettings {
     pub similarity_boost: f32,
     /// Language code → voice ID.
     pub voices: BTreeMap<String, String>,
+    /// Voice role → voice ID. A role not listed uses the language's voice.
+    pub roles: BTreeMap<String, String>,
     /// Overrides the default of 3 requests at the same time.
     pub concurrency: Option<usize>,
 }
@@ -93,6 +95,7 @@ impl ElevenLabsSettings {
             stability: 0.35,
             similarity_boost: 0.75,
             voices,
+            roles: BTreeMap::new(),
             concurrency: None,
         }
     }
@@ -185,9 +188,18 @@ impl ElevenLabs {
     ///
     /// [`NoVoice`](ErrorKind::NoVoice) if no voice is configured for the language.
     pub fn request_url(&self, language: Option<&str>) -> Result<String> {
+        self.role_request_url(language, None)
+    }
+
+    /// The request URL for a voice role in a language.
+    ///
+    /// # Errors
+    ///
+    /// [`NoVoice`](ErrorKind::NoVoice) if the role has no voice and the language has none either.
+    pub fn role_request_url(&self, language: Option<&str>, role: Option<&str>) -> Result<String> {
         Ok(format!(
             "{BASE_URL}/v1/text-to-speech/{}/with-timestamps?output_format={}",
-            self.voice(language)?,
+            self.voice(language, role)?,
             self.settings.output_format.as_query()
         ))
     }
@@ -198,7 +210,16 @@ impl ElevenLabs {
     ///
     /// [`NoVoice`](ErrorKind::NoVoice) if no voice is configured for the language.
     pub fn voice_url(&self, language: Option<&str>) -> Result<String> {
-        Ok(format!("{BASE_URL}/v1/voices/{}", self.voice(language)?))
+        self.role_voice_url(language, None)
+    }
+
+    /// The URL that describes the voice for a voice role in a language (`GET`, free).
+    ///
+    /// # Errors
+    ///
+    /// [`NoVoice`](ErrorKind::NoVoice) if the role has no voice and the language has none either.
+    pub fn role_voice_url(&self, language: Option<&str>, role: Option<&str>) -> Result<String> {
+        Ok(format!("{BASE_URL}/v1/voices/{}", self.voice(language, role)?))
     }
 
     /// The voice name from a `GET /v1/voices/{voice_id}` response, without any network.
@@ -293,7 +314,10 @@ impl ElevenLabs {
         Ok(synthesis)
     }
 
-    fn voice(&self, language: Option<&str>) -> Result<&str> {
+    fn voice(&self, language: Option<&str>, role: Option<&str>) -> Result<&str> {
+        if let Some(voice) = role.and_then(|role| self.settings.roles.get(role)) {
+            return Ok(voice);
+        }
         language
             .and_then(|language| self.settings.voices.get(language))
             .map(String::as_str)
@@ -325,9 +349,13 @@ impl Synthesiser for ElevenLabs {
     }
 
     fn fingerprint(&self, language: Option<&str>) -> Result<Fingerprint> {
+        self.role_fingerprint(language, None)
+    }
+
+    fn role_fingerprint(&self, language: Option<&str>, role: Option<&str>) -> Result<Fingerprint> {
         Ok(Fingerprint::new([
             ("model", self.settings.model.clone()),
-            ("voice", self.voice(language)?.to_string()),
+            ("voice", self.voice(language, role)?.to_string()),
             ("stability", self.settings.stability.to_string()),
             ("similarity_boost", self.settings.similarity_boost.to_string()),
             ("output_format", self.settings.output_format.as_query()),
@@ -335,9 +363,13 @@ impl Synthesiser for ElevenLabs {
     }
 
     async fn voice_name(&self, language: Option<&str>) -> Result<Option<String>> {
+        self.role_voice_name(language, None).await
+    }
+
+    async fn role_voice_name(&self, language: Option<&str>, role: Option<&str>) -> Result<Option<String>> {
         let response = self
             .client
-            .get(self.voice_url(language)?)
+            .get(self.role_voice_url(language, role)?)
             .header("xi-api-key", &self.settings.api_key.0)
             .send()
             .await
@@ -349,7 +381,7 @@ impl Synthesiser for ElevenLabs {
     }
 
     async fn synthesise(&self, request: &SynthesisRequest) -> Result<Synthesis> {
-        let url = self.request_url(request.language.as_deref())?;
+        let url = self.role_request_url(request.language.as_deref(), request.role.as_deref())?;
         let response = self
             .client
             .post(url)

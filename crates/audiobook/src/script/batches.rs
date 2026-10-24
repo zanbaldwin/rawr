@@ -3,8 +3,8 @@ use super::{Block, Boundary, NarrationBatch, PARAGRAPH_SEPARATOR, Paragraph, Par
 /// Groups the heading and paragraphs into narration batches.
 ///
 /// The heading is always a batch of its own, and every scene break closes the
-/// current batch. Otherwise a batch closes before a paragraph that would take
-/// it over `max_chars`. A paragraph longer than `max_chars` is a batch of its own.
+/// current batch. Otherwise a batch closes before a paragraph with another
+/// voice, or one that would take it over `max_chars`. A paragraph longer than `max_chars` is a batch of its own.
 pub(super) fn batches(heading: Option<&Paragraph>, blocks: &[Block], max_chars: usize) -> Vec<NarrationBatch> {
     let mut batches = Vec::new();
     let mut next = Boundary::SectionStart;
@@ -13,6 +13,7 @@ pub(super) fn batches(heading: Option<&Paragraph>, blocks: &[Block], max_chars: 
             text: heading.text.clone(),
             boundary: next,
             paragraphs: vec![ParagraphRef::Heading { offset: 0 }],
+            voice: heading.voice.clone(),
         });
         next = Boundary::Heading;
     }
@@ -25,10 +26,12 @@ pub(super) fn batches(heading: Option<&Paragraph>, blocks: &[Block], max_chars: 
             },
             Block::Paragraph(paragraph) => {
                 let length = paragraph.text.chars().count();
-                if !current.is_empty() && current.length + PARAGRAPH_SEPARATOR.chars().count() + length > max_chars {
+                let too_long = current.length + PARAGRAPH_SEPARATOR.chars().count() + length > max_chars;
+                if !current.is_empty() && (too_long || current.voice != paragraph.voice) {
                     current.close(&mut batches, next);
                     next = Boundary::Paragraph;
                 }
+                current.voice.clone_from(&paragraph.voice);
                 current.push(index, &paragraph.text, length);
             },
         }
@@ -42,6 +45,7 @@ struct Batch {
     text: String,
     length: usize,
     paragraphs: Vec<ParagraphRef>,
+    voice: Option<String>,
 }
 
 impl Batch {
@@ -68,6 +72,7 @@ impl Batch {
             text: batch.text,
             boundary,
             paragraphs: batch.paragraphs,
+            voice: batch.voice,
         });
     }
 }

@@ -67,6 +67,9 @@ pub struct SynthesisRequest {
     pub text: String,
     /// ISO 639 / BCP 47 language code.
     pub language: Option<String>,
+    /// The voice role (for example a character's name). `None` is the
+    /// language's voice; providers use it too for roles they do not know.
+    pub role: Option<String>,
     pub seed: Option<u32>,
     pub continuity: Continuity,
 }

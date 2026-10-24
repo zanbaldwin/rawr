@@ -1,5 +1,6 @@
 use super::key::BatchKey;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use time::OffsetDateTime;
 
 /// Which recordings the latest plan of a document uses.
@@ -17,6 +18,9 @@ pub struct Ledger {
     /// The voice's display name, for the narrator credit, when the provider knows it.
     #[serde(default)]
     pub voice_name: Option<String>,
+    /// Voice role → the display name of its voice, for the roles the plan uses.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub voices: BTreeMap<String, String>,
     pub sections: Vec<LedgerSection>,
 }
 

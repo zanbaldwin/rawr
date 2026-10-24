@@ -29,11 +29,23 @@ pub const SCRIPT_RECIPE: u32 = 2;
 /// Joins paragraphs in a batch. One newline, not a blank line: whitespace is billed.
 pub const PARAGRAPH_SEPARATOR: &str = "\n";
 
-/// Options that come from the text-to-speech provider.
+/// Marks an element whose text is never spoken (its text nodes still count).
+pub const SPEAK_ATTRIBUTE: &str = "data-rawr-speak";
+/// Marks an inline element whose spoken text is exactly one sentence.
+pub const SENTENCE_ATTRIBUTE: &str = "data-rawr-sentence";
+/// Names the voice role of a block element's paragraphs.
+pub const VOICE_ATTRIBUTE: &str = "data-rawr-voice";
+
+/// Options for building a script.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptOptions {
-    /// Maximum characters in one batch. A single longer paragraph still forms one batch.
+    /// Maximum characters in one batch, from the text-to-speech provider. A
+    /// single longer paragraph still forms one batch.
     pub max_batch_chars: usize,
+    /// Honour the `data-rawr-*` markers ([`SPEAK_ATTRIBUTE`],
+    /// [`SENTENCE_ATTRIBUTE`], [`VOICE_ATTRIBUTE`]). Only sources that write
+    /// them set this, so other XHTML is never read differently.
+    pub markers: bool,
 }
 
 /// The spoken form of one section.
@@ -68,6 +80,13 @@ pub struct Paragraph {
     /// Where each sentence is in the section's XHTML, one per sentence. Empty
     /// for the spoken heading, which is not part of the body.
     pub sources: Vec<SourceRange>,
+    /// The words of each sentence (split at whitespace): byte ranges in
+    /// [`text`](Self::text), one list per sentence.
+    pub words: Vec<Vec<Range<usize>>>,
+    /// Where each word is in the section's XHTML, like [`sources`](Self::sources).
+    pub word_sources: Vec<Vec<SourceRange>>,
+    /// The voice role ([`VOICE_ATTRIBUTE`]); `None` is the default voice.
+    pub voice: Option<String>,
 }
 
 /// A sentence's place in the section's XHTML body, from its first source
@@ -98,6 +117,8 @@ pub struct NarrationBatch {
     pub boundary: Boundary,
     /// The paragraphs in this batch, in order.
     pub paragraphs: Vec<ParagraphRef>,
+    /// The voice role of every paragraph in this batch ([`Paragraph::voice`]).
+    pub voice: Option<String>,
 }
 
 /// What comes before a batch.
@@ -127,12 +148,18 @@ impl Script {
     ///
     /// [`EmptySection`](ErrorKind::EmptySection) if the section has no paragraphs.
     pub fn new(section: &Section, heading: Option<&str>, options: &ScriptOptions) -> Result<Self> {
-        let heading = heading.map(blocks::clean).filter(|text| !text.is_empty()).map(|text| Paragraph {
-            sentences: std::iter::once(0..text.len()).collect(),
-            sources: Vec::new(),
-            text,
+        let heading = heading.map(blocks::clean).filter(|text| !text.is_empty()).map(|text| {
+            let sentences: Vec<_> = std::iter::once(0..text.len()).collect();
+            Paragraph {
+                words: sentences::words(&text, &sentences),
+                word_sources: Vec::new(),
+                sentences,
+                sources: Vec::new(),
+                voice: None,
+                text,
+            }
         });
-        let blocks = blocks::blocks(&section.body_xhtml);
+        let blocks = blocks::blocks(&section.body_xhtml, options.markers);
         if !blocks.iter().any(|block| matches!(block, Block::Paragraph(_))) {
             exn::bail!(ErrorKind::EmptySection(section.number));
         }
@@ -166,6 +193,24 @@ impl Paragraph {
             .map(|range| {
                 let start = self.text[..range.start].chars().count();
                 start..start + self.text[range.clone()].chars().count()
+            })
+            .collect()
+    }
+}
+
+impl Paragraph {
+    /// [`words`](Self::words) as character ranges, to match provider alignment.
+    pub fn word_chars(&self) -> Vec<Vec<Range<usize>>> {
+        self.words
+            .iter()
+            .map(|words| {
+                words
+                    .iter()
+                    .map(|range| {
+                        let start = self.text[..range.start].chars().count();
+                        start..start + self.text[range.clone()].chars().count()
+                    })
+                    .collect()
             })
             .collect()
     }
